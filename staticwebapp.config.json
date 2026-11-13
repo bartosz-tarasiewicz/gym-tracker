@@ -26,6 +26,15 @@
       ]
     },
     {
+      "route": "/api/workouts-health",
+      "methods": [
+        "GET"
+      ],
+      "allowedRoles": [
+        "anonymous"
+      ]
+    },
+    {
       "route": "/api/*",
       "allowedRoles": [
         "authenticated"
