@@ -191,7 +191,8 @@ try{
  await p2.locator('#trend-exercise').selectOption('legpress');
  await p2.locator('#trend-machine').selectOption('MG-PL70');
  assert.ok(await p2.locator('.trend-chart').count(),'Two Friday training dates provide a weight trend');
- assert.match(await p2.locator('.trend-stats').innerText(),/56,5/);
+ assert.match(await p2.locator('.trend-chart').innerHTML(),/56,5/,'Historic 56.5 kg point is included in the graph');
+ assert.match(await p2.locator('.trend-stats').innerText(),/54 kg/,'Most recent dated session is the last point');
  await p2.locator('[data-trend-metric="reps"]').click();
  assert.ok(await p2.locator('.trend-chart').count(),'Rep trend renders independently');
  log('History shows per-machine weight and rep trends from completed sets');
