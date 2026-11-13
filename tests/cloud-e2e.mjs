@@ -51,6 +51,26 @@ try{
   pass('First device authenticated and automatically uploads edited workout');
   const initialRevision=revision;
   assert.ok(initialRevision>0);
+  // Fresh device already contains the exact same workout, but the local
+  // savedAt, session-start timestamps and empty navigation drafts differ.
+  // This must not trigger a destructive conflict.
+  const equivalent=structuredClone(remote);
+  Object.values(equivalent.sessions)[0].started='2001-01-01T01:01:01Z';
+  equivalent.savedAt=135;
+  equivalent.sessions['2000-01-01-5']={
+    date:'2000-01-01',day:5,started:'2000-01-01T00:00:00Z',
+    notes:'',coreEnabled:{},exercises:{}
+  };
+  const sameData=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
+  await sameData.addInitScript(data=>localStorage.setItem('zenek-gym-v1',JSON.stringify(data)),equivalent);
+  const samePage=await sameData.newPage();samePage.on('pageerror',e=>errors.push(e.message));
+  await samePage.goto(url,{waitUntil:'domcontentloaded'});
+  await samePage.locator('[data-view="settings"]').click();
+  await samePage.waitForFunction(()=>document.querySelector('#cloud-info')?.textContent?.includes('Dane treningowe zgodne'));
+  assert.equal(revision,initialRevision,'Equivalent records must not be rewritten in cloud');
+  assert.equal(await samePage.locator('#cloud-download').count(),0,'No conflict controls');
+  pass('Equivalent workout data ignores technical draft/timestamp differences without overwriting');
+  await sameData.close();
   const second=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
   await second.addInitScript(()=>{
     // Reproduce browser UI navigation from before login: savedAt and pristine
