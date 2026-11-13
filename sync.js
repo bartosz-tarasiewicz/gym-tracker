@@ -340,5 +340,15 @@ window.GymCloud=(()=>{
   window.addEventListener('online',()=>{if(principal)void sync();else void login();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(principal)void sync();else void login();}});
  }
- return {init,schedule,markDeleted,action,html,getStatus:()=>flag};
+ async function prepareHistoryImport(){
+  if(!principal)return {ready:false,reason:'Zaloguj się do Azure przez GitHub w sekcji chmury.'};
+  if(blocked)return {ready:false,reason:'W Azure jest konflikt danych. Najpierw rozwiąż konflikt synchronizacji.'};
+  if(!initialized||busy||flushBusy)return {ready:false,reason:'Trwa synchronizacja. Spróbuj ponownie, gdy zostanie zakończona.'};
+  // Refresh from Azure before computing which dates are already present.
+  await sync();
+  if(!principal||blocked||!initialized||busy||flushBusy||pending.size||flag!=='synced')
+   return {ready:false,reason:'Azure nie jest aktualnie zsynchronizowane. Nie importowano niczego.'};
+  return {ready:true};
+ }
+ return {init,schedule,markDeleted,action,html,prepareHistoryImport,getStatus:()=>flag};
 })();
