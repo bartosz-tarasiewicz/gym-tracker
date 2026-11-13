@@ -298,11 +298,38 @@ window.GymCloud=(()=>{
     '<p class="hint">'+(pending.size?'Lokalne zmiany oczekujące na wysłanie: '+pending.size+'.':'Brak oczekujących zmian.')+'</p>')+
    '<p class="hint">W przypadku błędu offline nadal zapisujemy każdą zmianę lokalnie. Eksport JSON pozostaje dostępny.</p></div>';
  }
+ async function recoverPendingCache(){
+  // The write-ahead journal is independent of IndexedDB/localStorage's
+  // snapshot selection. If a stale IndexedDB snapshot wins on restart, replay
+  // unsent changes before asking Azure for anything.
+  if(!pending.size)return;
+  const current=workoutRecords(getState());
+  const recovered=new Map(current);
+  let count=0;
+  for(const op of pending.values()){
+   const now=current.get(op.id),known=base.get(op.id);
+   if(op.method==='PUT'){
+    if(now?.sig===op.sig)continue;
+    // If the local cache contains a *different* unsent user edit, keep it:
+    // the write-ahead journal must never overwrite newer local input.
+    if(now&&now.sig!==known?.sig&&!now.isEmpty)continue;
+    recovered.set(op.id,{id:op.id,kind:op.kind,record:clone(op.record),sig:op.sig});
+    count++;
+   }else if(op.method==='DELETE'){
+    if(now&&now.sig!==known?.sig&&!now.isEmpty)continue;
+    recovered.delete(op.id);count++;
+   }
+  }
+  if(count){
+   await hydrate(cloudState(recovered));
+   status('queued','⏳ Przywrócono '+count+' niewysłanych zmian z dziennika awaryjnego');
+  }
+ }
  async function init(options){
   ({getState,applySnapshot,backup,onStatusChange,workoutRecords,cloudState,
     meaningfulSignature,hasWorkoutData,workoutDetails}=options);
   owner=localStorage.getItem(LAST_OWNER)||null;
-  if(owner)restore();
+  if(owner){restore();await recoverPendingCache();}
   await login();
   window.addEventListener('online',()=>{if(principal)void sync();else void login();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(principal)void sync();else void login();}});
