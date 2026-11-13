@@ -388,7 +388,7 @@ function trainHTML(){
  const preview=oldRows.length?'<div class="previous-results"><strong>Poprzednio · '+esc(previous.date)+'</strong><span>'+oldRows.map(x=>esc(x.kg||'BW')+' × '+esc(x.reps)).join(' · ')+'</span></div>':
   '<p class="hint">Wpisane liczby są propozycją. Nie są zaliczone, dopóki nie potwierdzisz serii.</p>';
  const switcher=old.length>1?'<div class="panel"><label class="label" for="session-picker">Kilka treningów tego dnia — wybierz do edycji</label><select class="equipment" id="session-picker">'+old.map((h,i)=>'<option value="'+esc(h.syncId||'')+'" '+(s===h?'selected':'')+'>Sesja '+(i+1)+' · '+esc(h.started?.slice(11,16)||h.date)+'</option>').join('')+'</select></div>':'';
- const todayBlock='<section class="hero compact-hero"><div class="eyebrow">'+esc(state.selectedDate)+' · '+(saved?'Istniejący zapis':'Nowy trening')+'</div><h1>'+esc(day.name)+'</h1><p class="muted">'+(saved?'Edytujesz zapis z wybranego dnia. Zmiany są zapisywane automatycznie.':'Wartości startowe są podpowiedzią. Dopiero wpisana zmiana lub potwierdzona seria utworzy zapis.')+'</p></section>';
+ const todayBlock='<section class="hero compact-hero"><div class="eyebrow">'+esc(state.selectedDate)+' · '+(saved?'Istniejący zapis':'Nowy trening')+'</div><h1>'+esc(day.name)+'</h1><p class="muted">'+(savedHistoryRecord()?'Popraw wyniki i wybierz „Zapisz zmiany”. Zastąpisz istniejący wpis bez duplikatu.':saved?'Rozpoczęte serie zapisują się automatycznie.':'Wartości startowe są podpowiedzią. Dopiero wpisana zmiana lub potwierdzona seria utworzy zapis.')+'</p></section>';
  const overview='<div class="panel workout-overview"><div class="flex"><div><div class="eyebrow">Wykonane serie</div><div class="title">'+sum.done+'<span class="muted"> / '+sum.planned+'</span></div></div><span class="chip">'+esc(state.selectedDate)+'</span></div><div class="meter"><div style="width:'+(sum.planned?Math.round(100*sum.done/sum.planned):0)+'%"></div></div><p class="hint">Główne: '+sum.mainDone+' · CORE: '+sum.coreDone+'</p></div>';
  const chooseArea='<div class="inline-actions"><button class="btn '+(coreActive?'secondary':'')+'" data-area="main">🏋️ Trening</button><button class="btn '+(!coreActive?'secondary':'')+'" data-area="core">🧱 CORE BONUS</button></div>';
  const chooser=coreActive?'<div class="panel"><div class="eyebrow">Wybierz ćwiczenie CORE</div><p class="hint">Ćwiczenia opcjonalne. Nieaktywne nie są liczone do planu.</p><div class="core-chooser">'+coreTabs+'</div></div>':'<div class="exercise-strip">'+tabs+'</div>';
@@ -403,7 +403,10 @@ function trainHTML(){
   (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
   selectedVariants+photoSection+(coreActive&&!enabled?'<p class="hint">Zaznacz „Dodaj do treningu”, by wpisywać serie. Zdjęcie i warianty są widoczne bez włączania ćwiczenia.</p>':sets)+
   '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Wstecz</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
- const notes='<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, ból, uwagi…">'+esc(s.notes||'')+'</textarea><p class="hint">Zapis automatyczny w Azure po zmianach. Nie trzeba kończyć treningu ani tworzyć drugiego wpisu.</p></div>';
+ const isHistory=!!savedHistoryRecord();
+ const notes='<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, ból, uwagi…">'+esc(s.notes||'')+'</textarea>'+
+  '<button type="button" id="save-training" class="btn full save-training-btn">'+(isHistory?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+
+  '<p class="hint">'+(isHistory?'Zapis nadpisuje wyniki tego treningu w Azure, zachowując jego identyfikator. Do kliknięcia „Zapisz zmiany” korekty nie są wysyłane.':'Nowe wyniki są również zapisywane automatycznie, żeby nie stracić serii przy utracie połączenia.')+'</p></div>';
  return calendar+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
 }
 function allLogged(s){const items=[...(PLAN[s.day]?.items||[]),...CORE];return Object.entries(s.exercises||{}).map(([id,log])=>({item:items.find(x=>x.id===id)||{id,title:'Ćwiczenie archiwalne: '+id,mode:'reps'},log}));}
@@ -423,12 +426,13 @@ function changeArea(area){state.activeArea=area;save(false);render()}
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
  if(window.GymProgress?.handleClick?.(b,render))return;
+ if(b.id==='save-training'){await saveSelectedWorkout();return;}
  if(b.dataset.week!==undefined){selectDate(b.dataset.week==='today'?dateKey():GymWeek.shift(state.selectedDate,Number(b.dataset.week)));return}
  if(b.dataset.date!==undefined){selectDate(b.dataset.date);return}
  if(b.dataset.machine!==undefined){switchVariant(currentItem().item,b.dataset.machine);save();render();return}
  if(b.dataset.nudge!==undefined){const {item}=currentItem(),v=currentVariant(item,true),row=(b.dataset.type==='warm'?v.warmups:v.sets)[Number(b.dataset.set)];if(!row)return;const n=Number(row.reps)||0;row.reps=String(Math.max(0,n+Number(b.dataset.nudge)*(item.mode?.startsWith('sec')?5:1)));save();render();return}
   if(b.id&&b.id.startsWith('cloud-')){try{await GymCloud.action(b.id)}catch(e){console.warn('Cloud action:',e);toast('Błąd synchronizacji — lokalne dane zachowane')}render();return;}
- if(b.dataset.view){state.view=b.dataset.view;save(false);render();return}
+ if(b.dataset.view){if(state.view==='train'&&b.dataset.view!=='train'&&!abandonHistoryEdit())return;state.view=b.dataset.view;save(false);render();return}
  if(b.dataset.day!==undefined){const date=b.dataset.date;if(date)selectDate(date);return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
  if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);save(false);render();return}
@@ -444,11 +448,11 @@ document.addEventListener('click',async event=>{
 document.addEventListener('change',async event=>{const el=event.target;
  if(window.GymProgress?.handleChange?.(el,render))return;
  if(el.id==='week-date'){selectDate(el.value);return}
- if(el.id==='session-picker'){state.selectedRecordId=el.value;save(false);render();return}
+ if(el.id==='session-picker'){if(!abandonHistoryEdit()){render();return}state.selectedRecordId=el.value;save(false);render();return}
  if(el.id==='machine'){switchVariant(currentItem().item,el.value);save();render()}
  else if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;save()}
  else if(el.id==='enable-core'){activeSession(true).coreEnabled[currentItem().item.id]=el.checked;save();render()}
- else if(el.id==='import'){const file=el.files?.[0];if(!file)return;try{if(file.size>10*1024*1024)throw Error('Backup too large');const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object')throw Error('Invalid structure');if(!confirm('Import zastąpi lokalny dziennik. Kontynuować?'))return;state=normalize(data);save();await GymStorage.flush();render();toast('Kopia przywrócona')}catch(e){console.error(e);toast('Błąd importu JSON')}}
+ else if(el.id==='import'){const file=el.files?.[0];if(!file)return;try{pendingHistoryEdit=null;if(file.size>10*1024*1024)throw Error('Backup too large');const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object')throw Error('Invalid structure');if(!confirm('Import zastąpi lokalny dziennik. Kontynuować?'))return;state=normalize(data);save();await GymStorage.flush();render();toast('Kopia przywrócona')}catch(e){console.error(e);toast('Błąd importu JSON')}}
 });
 document.addEventListener('input',event=>{const t=event.target;
  if(t.dataset.field){mutateSet(t.dataset.field,Number(t.dataset.set),t.dataset.type,t.value)}
