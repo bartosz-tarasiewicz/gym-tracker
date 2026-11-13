@@ -20,6 +20,26 @@ const MACHINE={
  'KB':{label:'Kettlebell · jeden odważnik',type:'kb'},'BODY':{label:'Masa ciała',type:'body'},'AB-WHEEL':{label:'Ab Wheel',type:'body'},
  'PLATE':{label:'Talerz (jeden)',type:'plate'},'BAND':{label:'Guma oporowa',type:'band'}
 };
+// Product photos are matched to specific Matrix models. Generic equipment is not
+// represented as a different machine. These URLs are presentation-only data.
+const MACHINE_PHOTOS={
+ 'MG-PL70':{image:'https://fitnesswarehousecommercial.com.au/cdn/shop/files/Matrix_Magnum_Leg_Press_419ed4c9-8ed7-4116-8a0d-c09c564045fc.png?v=1711060353'},
+ 'G7-S70':{image:'https://img.archiexpo.de/images_ae/photo-g/141371-20457171.webp'},
+ 'MG-PL78':{image:'https://images.jhtassets.com/85183176a238980371eff92b0ef5308d1b94be66/'},
+ 'MG-PL77':{image:'https://images.jhtassets.com/4c3ad01082f528c7c7e1db5c8211f27c2eb09cdf/'},
+ 'G7-S71':{image:'https://www.prfitnessequipment.com/sites/default/files/commerce/product/cool%20sh.jpg'},
+ 'LEG-CURL':{image:'https://cdn-next.cybassets.com/media/W1siZiIsIjMwNjI2L3Byb2R1Y3RzLzUyNDAxOTEzLzE3MzQ1OTQzMjNfNTlmMWVhOTVlYzEwNGNiMzU2NGMucG5nIl0sWyJwIiwidGh1bWIiLCIyMDQ4eDIwNDgiXV0.png?sha=65794504bb4234fd',imageNote:'Zdjęcie poglądowe Matrix G7-S72. Dokładny model maszyny na siłowni nie jest potwierdzony.'},
+ 'MG-PL33':{image:'https://images.jhtassets.com/48132d53452a8ff93195f2c486da00a579294af3/'},
+ 'MG-PL34':{image:'https://assets.jhtbrand.co/files/product/617ea4b9339f1319abc366b4534d9caff9232b1c/'},
+ 'MG-PL23':{image:'https://tshop.r10s.jp/ifitness-shop/cabinet/06830920/06908620/07010130/matrix-mg-pl23-1.jpg'},
+ 'G7-S21':{image:'https://www.renewfit.com/photos_grd/ph1671718286621.jpg'},
+ 'MG-PL41':{image:'https://gigaplus.makeshop.jp/ifitness/img/matrix-for-gym/strength/magnum/mg-pl41/mg-pl41-2.jpg'},
+ 'G3-S45':{image:'https://centraledachats.lorangebleue.fr/media/cache/main_image/assets/fileuploads/5a/85/5a85a1ac429a1.PNG'},
+ 'G3-S12':{image:'https://static-data2.manualslib.com/product-images/264/26383/2638217/raw.jpg'},
+ 'G3-S22':{image:'https://static-data2.manualslib.com/product-images/892/2340529/matrix-g3-s22.jpg'}
+};
+for(const [id,photo] of Object.entries(MACHINE_PHOTOS))Object.assign(MACHINE[id],photo);
+const DISPLAY_DAYS=[0,1,2,3,5]; // Preserve Friday's existing day=5 IDs in Azure and backups.
 const make=(id,title,work,options,tip='',warm=[])=>({id,title,work,options,tip,warm});
 const ARMS=[
  make('laterals','Lateral Raise',[[45,12],[45,12],[45,10]],['G7-S21','DUMBBELL','CABLE'],'RIR 1–2; z 50 kg przy RIR 0 schodzimy niżej.',[[32,12]]),
@@ -44,8 +64,9 @@ const PLAN=[
   make('back-extension','Back Extension',[[63,13],[63,13]],['BACK-EXT','ROMAN','BODY'],'Bez przeprostu lędźwi.',[[40,8]])
  ]},
  {day:'Śr',name:'Barki, biceps, triceps',items:ARMS},
- {day:'Czw',name:'Les Mills GRIT Strength',items:[make('grit','GRIT Strength — zajęcia',[[0,1]],['BODY'],'Zapisz 1 jako ukończoną jednostkę treningową; szczegóły w notatkach.')]},
- {day:'Czw siła',name:'Barki i ramiona zamiast GRIT',items:ARMS},
+ {day:'Czw',name:'Czwartek — poza dziennikiem',items:[]},
+ // Kept only for reading existing day=4 records. Hidden from day navigation.
+ {day:'Archiwum',name:'Archiwalny trening siłowy (czwartek)',items:ARMS},
  {day:'Pt',name:'Nogi, pośladki i core',items:[
   make('legpress','Leg Press',[[50,12],[50,12],[50,12]],['MG-PL70','G7-S70'],'Talerze łącznie w MG-PL70; stos w G7-S70.',[[10,12],[20,6],[30,4]]),
   make('legcurl','Seated Leg Curl',[[70,12],[70,11],[70,11]],['LEG-CURL'],'Kontrolowana faza opuszczania.'),
@@ -78,7 +99,7 @@ function normalize(data){if(!data||typeof data!=='object'||!Array.isArray(data.h
   s.history=s.history.map(h=>({...h,day:h.day===4?5:h.day}));
   const moved={};for(const [key,x] of Object.entries(s.sessions)){const originalDay=x.day;if(originalDay===4)x.day=5;const newKey=originalDay===4&&key.endsWith('-4')?key.slice(0,-1)+'5':key;moved[newKey]=x} s.sessions=moved;
  }
- s.version=2;s.activeDay=Math.max(0,Math.min(PLAN.length-1,Number(s.activeDay)||0));s.activeExercise=Math.max(0,Number(s.activeExercise)||0);s.activeCore=Math.max(0,Math.min(9,Number(s.activeCore)||0));return s;
+ s.version=2;s.activeDay=Math.max(0,Math.min(PLAN.length-1,Number(s.activeDay)||0));if(s.activeDay===4)s.activeDay=3;s.activeExercise=Math.max(0,Number(s.activeExercise)||0);s.activeCore=Math.max(0,Math.min(9,Number(s.activeCore)||0));return s;
 }
 function activeSession(){const key=dateKey()+'-'+state.activeDay;if(!state.sessions[key])state.sessions[key]={date:dateKey(),day:state.activeDay,started:new Date().toISOString(),exercises:{},coreEnabled:{},notes:''};return state.sessions[key]}
 function exerciseLog(item){const s=activeSession();if(!s.exercises[item.id])s.exercises[item.id]={machine:item.options[0],sets:item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),rir:'',variants:{}};
@@ -220,16 +241,20 @@ function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA ST
 function currentItem(){const list=state.activeArea==='core'?CORE:PLAN[state.activeDay].items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
 function render(){document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():settingsHTML()}
 function setsHTML(list,type,item){const l=exerciseLog(item),machine=l.machine,v=currentVariant(item);return list.map((s,j)=>`<div class="set-row ${s.done?'done':''}"><strong>${type==='warm'?'R'+(j+1):j+1}</strong><input aria-label="Ciężar ${type} ${j+1}" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="${type}" data-field="kg" data-set="${j}" value="${esc(s.kg)}"><input aria-label="${measure(item)} ${type} ${j+1}" inputmode="decimal" type="number" min="0" step="any" placeholder="${item.mode?.startsWith('sec')?'s': 'powt.'}" data-type="${type}" data-field="reps" data-set="${j}" value="${esc(s.reps)}"><button class="done-button ${s.done?'checked':''}" data-done="${j}" data-type="${type}" aria-label="Seria ${j+1} ${s.done?'wykonana':'niewykonana'}">${s.done?'✓':'○'}</button></div>`).join('')}
-function trainHTML(){const s=activeSession(),d=state.activeDay,day=PLAN[d],{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
+function dayTabsHTML(d){return `<div class="tabs day-tabs">${DISPLAY_DAYS.map(i=>`<button class="tab day-tab ${d===i?'active':''}" data-day="${i}">${esc(PLAN[i].day)}</button>`).join('')}</div>`}
+function trainHTML(){
+ const d=state.activeDay;
+ if(d===3)return `<section class="hero"><div class="eyebrow">Gym Tracker · Azure Primary</div><h1>Czwartek</h1><p class="muted">Dziś GRIT Strength — tych zajęć nie rejestrujemy w Gym Trackerze.</p></section>${dayTabsHTML(d)}<div class="panel"><div class="title">Dzień poza dziennikiem</div><p class="hint">Brak serii, licznika postępu i zapisu treningu. Wróć do aplikacji na kolejny trening siłowy.</p></div>`;
+ const s=activeSession(),day=PLAN[d],{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
  const mainTabs=day.items.map((e,i)=>`<button class="tab ${state.activeArea==='main'&&index===i?'active':''}" data-item="${i}">${i+1}</button>`).join('');
  const coreTabs=CORE.map((e,i)=>`<button class="core-choice ${state.activeArea==='core'&&index===i?'active':''}" data-core="${i}">${isCoreEnabled(e)?'✓ ':'＋ '}${esc(e.title)}</button>`).join('');
  const selected=item.options.map(k=>`<option value="${esc(k)}" ${log.machine===k?'selected':''}>${esc(machineName(k))}</option>`).join('');
- const photo=m.image?`<img class="machine-img" loading="lazy" alt="${esc(m.label)}" src="${esc(m.image)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><div class="image-error" hidden>Zdjęcie niedostępne</div>`:`<div class="image-error">${esc(m.label)}<br>Zdjęcie tego wariantu nie jest jeszcze dostępne.</div>`;
+ const photo=m.image?`<img class="machine-img" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="${esc(m.label)}" src="${esc(m.image)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><div class="image-error" hidden>Zdjęcie chwilowo niedostępne</div>${m.imageNote?`<p class="photo-note">${esc(m.imageNote)}</p>`:''}`:`<div class="image-error">${esc(m.label)}<br>Zdjęcie tego wariantu nie jest jeszcze dostępne.</div>`;
  const last=[...state.history].reverse().find(h=>h.exercises?.[item.id]);const previous=last?.exercises[item.id];
  const preview=previous?`Poprzednio (${esc(last.date)}): ${(previous.sets||[]).filter(x=>x.done).map(x=>esc(x.kg)+' × '+esc(x.reps)).join(' · ')||'brak potwierdzonych serii'}`:'Wypełnione wartości to PROPOZYCJA, nie wykonany trening.';
  const coreActive=state.activeArea==='core',enabled=isCoreEnabled(item);
  return `<section class="hero"><div class="eyebrow">Gym Tracker · Azure-ready</div><h1>${esc(day.name)}</h1><p class="muted">Wpisy są automatycznie zapisywane lokalnie. Wszystkie serie zaczynają jako niewykonane.</p></section>
- <div class="tabs">${PLAN.map((p,i)=>`<button class="tab ${d===i?'active':''}" data-day="${i}">${esc(p.day)}</button>`).join('')}</div>
+ ${dayTabsHTML(d)}
  <div class="panel"><div class="flex"><div><div class="eyebrow">Postęp</div><div class="title">${sum.done}<span class="muted"> / ${sum.planned} serii</span></div></div><span class="chip">${esc(dateKey())}</span></div><div class="meter"><div style="width:${sum.planned?Math.min(100,Math.round(sum.done/sum.planned*100)):0}%"></div></div><p class="hint">Główne: ${sum.mainDone} · CORE BONUS: ${sum.coreDone}</p></div>
  <div class="inline-actions"><button class="btn ${coreActive?'secondary':''}" data-area="main">🏋️ Trening</button><button class="btn ${!coreActive?'secondary':''}" data-area="core">🧱 CORE BONUS (${CORE.length})</button></div>
  ${coreActive?`<div class="panel"><div class="eyebrow">10 ćwiczeń do wyboru</div><p class="hint">Włącz 1–2. Pozostałe nie liczą się do planu.</p><div class="core-chooser">${coreTabs}</div></div>`:`<div class="tabs">${mainTabs}</div>`}
@@ -262,7 +287,7 @@ document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
   if(b.id&&b.id.startsWith('cloud-')){try{await GymCloud.action(b.id)}catch(e){console.warn('Cloud action:',e);toast('Błąd synchronizacji — lokalne dane zachowane')}render();return;}
  if(b.dataset.view){state.view=b.dataset.view;save(false);render();return}
- if(b.dataset.day!==undefined){state.activeDay=Number(b.dataset.day);state.activeArea='main';state.activeExercise=0;save(false);render();return}
+ if(b.dataset.day!==undefined){const day=Number(b.dataset.day);if(!DISPLAY_DAYS.includes(day))return;state.activeDay=day;state.activeArea='main';state.activeExercise=0;save(false);render();return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
  if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);save(false);render();return}
  if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);save(false);render();return}
