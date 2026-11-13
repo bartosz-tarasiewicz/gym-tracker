@@ -5,7 +5,7 @@ window.GymCloud=(()=>{
  const META='zenek-gym-cloud-v04-',LAST_OWNER='zenek-gym-cloud-last-owner-v04';
  let getState=()=>({sessions:{},history:[]}),applySnapshot=async()=>{},backup=()=>{},onStatusChange=()=>{};
  let workoutRecords=()=>new Map(),cloudState=()=>({sessions:{},history:[]}),meaningfulSignature=()=>'',hasWorkoutData=()=>false,workoutDetails=()=>({});
- let principal=null,owner=null,base=new Map(),pending=new Map(),remote=new Map();
+ let principal=null,owner=null,base=new Map(),pending=new Map(),remote=new Map(),tombstones=new Set();
  let initialized=false,busy=false,blocked=false,backedUp=false,flushTimer=null,flushBusy=false,flag='offline',message='Zapis lokalny aktywny';
  const clone=o=>JSON.parse(JSON.stringify(o));
  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -20,16 +20,16 @@ window.GymCloud=(()=>{
   try {
    localStorage.setItem(key(),JSON.stringify({version:4,
     base:[...base].map(([id,x])=>[id,{etag:x.etag,sig:x.sig,kind:x.kind}]),
-    pending:[...pending].map(([id,x])=>[id,x])}));
+    pending:[...pending].map(([id,x])=>[id,x]),tombstones:[...tombstones]}));
   }catch(e){status('offline','⚠ Brak miejsca na kolejkę zmian — pobierz kopię JSON');console.error('Cloud queue persistence',e);}
  }
  function restore(){
-  base=new Map();pending=new Map();
+  base=new Map();pending=new Map();tombstones=new Set();
   if(!owner)return false;
   try{
    const raw=JSON.parse(localStorage.getItem(key())||'null');
    if(raw?.version!==4)return false;
-   base=new Map(raw.base||[]);pending=new Map(raw.pending||[]);
+   base=new Map(raw.base||[]);pending=new Map(raw.pending||[]);tombstones=new Set(raw.tombstones||[]);
    return true;
   }catch(e){console.warn('Invalid cloud sync cache',e);return false;}
  }
@@ -99,14 +99,21 @@ window.GymCloud=(()=>{
    next.set(id,{id,kind:item.kind,method:'PUT',record:clone(item.record),
     sig:item.sig,expectedEtag:known?.etag||null});
   }
-  for(const [id,known] of base){
-   if(!desired.has(id))next.set(id,{id,kind:known.kind,method:'DELETE',
+  // Never infer a destructive cloud delete merely because this browser has
+  // an incomplete/stale cache. Only explicitly finished drafts are deleted.
+  for(const id of tombstones){
+   const known=base.get(id);
+   if(known&&!desired.has(id))next.set(id,{id,kind:known.kind,method:'DELETE',
     sig:null,expectedEtag:known.etag});
   }
   // Edits made while the first request was still in flight may already be
   // waiting; use the newest local record and preserve its original ETag.
   pending=next;
   persist();
+ }
+ function markDeleted(id){
+  if(!/^draft:[a-zA-Z0-9:_-]+$/.test(id))return;
+  if(owner){tombstones.add(id);persist();}
  }
  function schedule(){
   if(!owner)return; // unpaired anonymous browser: local backup only
@@ -146,7 +153,7 @@ window.GymCloud=(()=>{
      pending.delete(operation.id);persist();continue;
     }
     if(operation.method==='DELETE'&&!onServer){
-     base.delete(operation.id);pending.delete(operation.id);persist();continue;
+     base.delete(operation.id);pending.delete(operation.id);tombstones.delete(operation.id);persist();continue;
     }
     if((onServer?.etag||null)!==(operation.expectedEtag||null)){
      blocked=true;status('conflict','⚠ Ten trening zmienił się w Azure — zachowano obie wersje');return;
@@ -156,7 +163,7 @@ window.GymCloud=(()=>{
       operation.method==='PUT'?{record:operation.record,expectedEtag:operation.expectedEtag}:{expectedEtag:operation.expectedEtag});}
     catch(e){if(e.message==='REVISION_CONFLICT'){blocked=true;status('conflict','⚠ Równoczesna edycja treningu — bez nadpisywania');return;}throw e;}
     if(operation.method==='DELETE'){
-     base.delete(operation.id);remote.delete(operation.id);
+     base.delete(operation.id);remote.delete(operation.id);tombstones.delete(operation.id);
     }else{
      base.set(operation.id,{etag:response.etag,sig:operation.sig,kind:operation.kind});
      remote.set(operation.id,{...operation,etag:response.etag});
@@ -261,7 +268,7 @@ window.GymCloud=(()=>{
   if(name==='cloud-download'){
    if(!confirm('Przyjąć dane z Azure? Kopia obu dzienników powinna być już pobrana.'))return;
    const recent=serverRows(await request());
-   remote=recent;rowVersions(recent);pending.clear();persist();blocked=false;
+   remote=recent;rowVersions(recent);pending.clear();tombstones.clear();persist();blocked=false;
    await hydrate(cloudState(remote));status('synced','✓ Przywrócono dane z Azure');return;
   }
   if(name==='cloud-upload'){
@@ -300,5 +307,5 @@ window.GymCloud=(()=>{
   window.addEventListener('online',()=>{if(principal)void sync();else void login();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(principal)void sync();else void login();}});
  }
- return {init,schedule,action,html,getStatus:()=>flag};
+ return {init,schedule,markDeleted,action,html,getStatus:()=>flag};
 })();
