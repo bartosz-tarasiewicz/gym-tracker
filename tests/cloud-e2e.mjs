@@ -52,13 +52,37 @@ try{
   const initialRevision=revision;
   assert.ok(initialRevision>0);
   const second=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
+  await second.addInitScript(()=>{
+    // Reproduce browser UI navigation from before login: savedAt and pristine
+    // workout templates exist locally but no actual training was recorded.
+    if(!localStorage.getItem('zenek-gym-v1')){
+      const date='2026-11-01';
+      const blank={
+        version:2,savedAt:Date.now(),history:[],sessions:{
+          [date+'-0']:{
+            date,day:0,started:new Date().toISOString(),coreEnabled:{},notes:'',
+            exercises:{
+              flat:{
+                machine:'MG-PL13',rir:'',
+                sets:[{kg:'70',reps:'11',done:false},{kg:'65',reps:'11',done:false},
+                      {kg:'65',reps:'10',done:false},{kg:'60',reps:'10',done:false}],
+                warmups:[{kg:'30',reps:'8',done:false},{kg:'45',reps:'5',done:false},{kg:'55',reps:'3',done:false}],
+                variants:{}
+              }
+            }
+          }
+        }
+      };
+      localStorage.setItem('zenek-gym-v1',JSON.stringify(blank));
+    }
+  });
   const p2=await second.newPage();p2.on('pageerror',e=>errors.push(e.message));
   await p2.goto(url,{waitUntil:'domcontentloaded'});
   await p2.locator('[data-day="2"]').click();
   await p2.locator('[data-item="1"]').click();
   await p2.waitForFunction(()=>document.querySelector('.set-row input[data-type="work"][data-field="kg"]')?.value==='42.5');
   assert.equal(await input(p2).inputValue(),'42.5');
-  pass('Second device restores edited workout from Azure');
+  pass('Second device restores cloud data despite navigation-only local templates');
   await input(page).fill('47.5');
   await waitForRemote('47.5');
   pass('First device publishes a newer version');
