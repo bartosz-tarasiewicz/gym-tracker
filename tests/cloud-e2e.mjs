@@ -172,12 +172,21 @@ try{
  assert.equal(await input(p2).inputValue(),'50','Imported historic workout should open directly in Train');
  assert.match(await p2.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/);
  const existingIds=[...store.keys()].sort();
+ const beforeSave=JSON.stringify(store.get(historicId).record);
+ assert.equal(await p2.locator('#save-training').innerText(),'✓ Zapisz zmiany');
  await input(p2).fill('56.5');
  await p2.locator('#rir').selectOption('2');
- await until(()=>JSON.stringify(store.get(historicId)?.record).includes('"kg":"56.5"'),'in-place historic correction');
- assert.deepEqual([...store.keys()].sort(),existingIds,'Existing history record corrected without new draft or duplicate');
+ await pause(1550);
+ assert.equal(JSON.stringify(store.get(historicId).record),beforeSave,'Editing finished session must NOT upload before clicking Save');
+ assert.deepEqual([...store.keys()].sort(),existingIds,'Editing cannot create a duplicate');
+ p2.once('dialog',dialog=>{assert.match(dialog.message(),/niezapisane zmiany/);dialog.dismiss();});
+ await p2.locator('[data-week="7"]').click();
+ assert.equal(await input(p2).inputValue(),'56.5','Canceling navigation keeps the unsaved correction');
+ await p2.locator('#save-training').click();
+ await until(()=>JSON.stringify(store.get(historicId)?.record).includes('"kg":"56.5"'),'explicit Save overwrites historic training');
+ assert.deepEqual([...store.keys()].sort(),existingIds,'Explicit Save updates same history record without extra rows');
  assert.ok(JSON.stringify(store.get(historicId).record).includes('"rir":"2"'));
- log('Editing a completed imported workout updates the original Azure syncId');
+ log('Existing history edits stay pending until Save, then overwrite original Azure syncId without duplicates');
 
  await p2.locator('[data-area="core"]').click();
  await p2.locator('[data-core="5"]').click();
