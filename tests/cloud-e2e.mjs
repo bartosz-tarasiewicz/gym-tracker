@@ -52,13 +52,37 @@ try{
   const initialRevision=revision;
   assert.ok(initialRevision>0);
   const second=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
+  await second.addInitScript(()=>{
+    // Reproduce browser UI navigation from before login: savedAt and pristine
+    // workout templates exist locally but no actual training was recorded.
+    if(!localStorage.getItem('zenek-gym-v1')){
+      const date='2026-11-01';
+      const blank={
+        version:2,savedAt:Date.now(),history:[],sessions:{
+          [date+'-0']:{
+            date,day:0,started:new Date().toISOString(),coreEnabled:{},notes:'',
+            exercises:{
+              flat:{
+                machine:'MG-PL13',rir:'',
+                sets:[{kg:'70',reps:'11',done:false},{kg:'65',reps:'11',done:false},
+                      {kg:'65',reps:'10',done:false},{kg:'60',reps:'10',done:false}],
+                warmups:[{kg:'30',reps:'8',done:false},{kg:'45',reps:'5',done:false},{kg:'55',reps:'3',done:false}],
+                variants:{}
+              }
+            }
+          }
+        }
+      };
+      localStorage.setItem('zenek-gym-v1',JSON.stringify(blank));
+    }
+  });
   const p2=await second.newPage();p2.on('pageerror',e=>errors.push(e.message));
   await p2.goto(url,{waitUntil:'domcontentloaded'});
   await p2.locator('[data-day="2"]').click();
   await p2.locator('[data-item="1"]').click();
   await p2.waitForFunction(()=>document.querySelector('.set-row input[data-type="work"][data-field="kg"]')?.value==='42.5');
   assert.equal(await input(p2).inputValue(),'42.5');
-  pass('Second device restores edited workout from Azure');
+  pass('Second device restores cloud data despite navigation-only local templates');
   await input(page).fill('47.5');
   await waitForRemote('47.5');
   pass('First device publishes a newer version');
@@ -68,12 +92,25 @@ try{
   assert.equal(await input(page).inputValue(),'47.5');
   assert.ok(JSON.stringify(remote).includes('"kg":"47.5"'));
   pass('Concurrent stale edit is protected by conflict, not overwritten');
-  p2.on('console',message=>{if(message.type()==='warning'||message.type()==='error')console.log('P2 CONSOLE:',message.type(),message.text())});
-  p2.once('dialog',dialog=>{console.log('DIALOG:',dialog.message());void dialog.accept()});
-  p2.on('download',download=>console.log('DOWNLOAD:',download.suggestedFilename()));
+  const info=await p2.locator('#cloud-info').textContent();
+  assert.match(info,/Konflikt/);
+  assert.match(await p2.locator('#app').innerText(),/Na tym urządzeniu/);
+  assert.match(await p2.locator('#app').innerText(),/W Azure/);
+  assert.equal(await p2.locator('#cloud-download').isDisabled(),true);
+  assert.equal(await p2.locator('#cloud-upload').isDisabled(),true);
+  pass('Conflict shows side-by-side journal summaries and disables destructive choices');
+  const pairDownload=p2.waitForEvent('download',{timeout:8000});
+  await p2.locator('#cloud-backup-both').click();
+  const pairFile=await pairDownload;
+  const pairBackup=JSON.parse(fs.readFileSync(await pairFile.path(),'utf8'));
+  assert.equal(pairBackup.kind,'gym-tracker-compare-backup');
+  assert.ok(JSON.stringify(pairBackup.local).includes('"kg":"50"'));
+  assert.ok(JSON.stringify(pairBackup.cloud).includes('"kg":"47.5"'));
+  assert.equal(await p2.locator('#cloud-download').isEnabled(),true);
+  pass('Both local and cloud versions export in one JSON before overwriting');
+  p2.once('dialog',dialog=>dialog.accept());
   const dl=p2.waitForEvent('download',{timeout:8000});
   await p2.locator('#cloud-download').click();
-  console.log('AFTER CLICK:',(await p2.locator('#cloud-info').textContent()),'ERRORS',errors);
   const file=await dl;
   const backup=JSON.parse(fs.readFileSync(await file.path(),'utf8'));
   assert.ok(JSON.stringify(backup).includes('"kg":"50"'));
