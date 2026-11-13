@@ -19,4 +19,4 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --prefix api --no-audit --no-fund
-      - run: node --test api/tests/snapshot.test.cjs
+      - run: node --test api/tests/*.test.cjs

@@ -1,183 +1,344 @@
-/* Azure sync: explicit authentication, optimistic concurrency, offline-first. */
+/* Gym Tracker 0.4: Azure-authoritative records, durable offline write queue.
+   Local storage is a cache + journal of unsent edits, not another master. */
 'use strict';
 window.GymCloud=(()=>{
-  let getState=()=>({}),applySnapshot=async()=>{},backup=()=>{},onStatusChange=()=>{},hasWorkoutData=()=>true;
-  let principal=null,flag='offline',label='Tylko zapis lokalny',remote=null,busy=false,dirty=false,timer=null,bothBackedUp=false;
-  const META_PREFIX='zenek-gym-cloud-v1-';
-  function dataset(data){
-    return {version:2,history:Array.isArray(data.history)?data.history:[],sessions:data.sessions&&typeof data.sessions==='object'&&!Array.isArray(data.sessions)?data.sessions:{}};
+ const META='zenek-gym-cloud-v04-',LAST_OWNER='zenek-gym-cloud-last-owner-v04';
+ let getState=()=>({sessions:{},history:[]}),applySnapshot=async()=>{},backup=()=>{},onStatusChange=()=>{};
+ let workoutRecords=()=>new Map(),cloudState=()=>({sessions:{},history:[]}),meaningfulSignature=()=>'',hasWorkoutData=()=>false,workoutDetails=()=>({});
+ let principal=null,owner=null,base=new Map(),pending=new Map(),remote=new Map(),tombstones=new Set();
+ let initialized=false,busy=false,blocked=false,backedUp=false,flushTimer=null,flushBusy=false,flag='offline',message='Zapis lokalny aktywny';
+ const clone=o=>JSON.parse(JSON.stringify(o));
+ const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const key=()=>META+encodeURIComponent(owner||'');
+ function status(next,label){
+  flag=next;message=label;
+  const el=document.getElementById('cloud-info');if(el)el.textContent=label;
+  onStatusChange();
+ }
+ function persist(){
+  if(!owner)return;
+  try {
+   localStorage.setItem(key(),JSON.stringify({version:4,
+    base:[...base].map(([id,x])=>[id,{etag:x.etag,sig:x.sig,kind:x.kind}]),
+    pending:[...pending].map(([id,x])=>[id,x]),tombstones:[...tombstones]}));
+  }catch(e){status('offline','⚠ Brak miejsca na kolejkę zmian — pobierz kopię JSON');console.error('Cloud queue persistence',e);}
+ }
+ function restore(){
+  base=new Map();pending=new Map();tombstones=new Set();
+  if(!owner)return false;
+  try{
+   const raw=JSON.parse(localStorage.getItem(key())||'null');
+   if(raw?.version!==4)return false;
+   base=new Map(raw.base||[]);pending=new Map(raw.pending||[]);tombstones=new Set(raw.tombstones||[]);
+   return true;
+  }catch(e){console.warn('Invalid cloud sync cache',e);return false;}
+ }
+ async function request(method='GET',id=null,data=null){
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),15000);
+  try{
+   const url=id===null?'/api/workouts':'/api/workouts/'+encodeURIComponent(id);
+   const resp=await fetch(url,{method,credentials:'same-origin',cache:'no-store',signal:ctrl.signal,
+    headers:{accept:'application/json',...(data?{'content-type':'application/json'}:{})},
+    body:data?JSON.stringify(data):undefined});
+   let body={};try{body=await resp.json()}catch{}
+   if(resp.status===401||resp.status===403)throw Error('AUTH_REQUIRED');
+   if(resp.status===409)throw Error('REVISION_CONFLICT');
+   if(!resp.ok)throw Error('HTTP_'+resp.status+':'+(body.error||'server_error'));
+   return body;
+  }finally{clearTimeout(timer);}
+ }
+ function recordSignature(id,kind,record){
+  const single=kind==='draft'
+   ?{sessions:{[id.slice(6)]:record},history:[]}
+   :{sessions:{},history:[{...record,syncId:id}]};
+  return workoutRecords(single).get(id)?.sig||'';
+ }
+ function serverRows(data){
+  if(!Array.isArray(data.workouts))throw Error('Invalid Azure reply');
+  const map=new Map();
+  for(const x of data.workouts){
+   if(!x.id||!['draft','history'].includes(x.kind)||!x.record)throw Error('Invalid cloud workout');
+   map.set(x.id,{...x,sig:recordSignature(x.id,x.kind,x.record),isEmpty:false});
   }
-  // FNV-1a based fingerprint; for change detection only, never for security/authentication.
-  function fingerprint(data){
-    const str=JSON.stringify(dataset(data));let h=2166136261;
-    for(let i=0;i<str.length;i++)h=Math.imul(h^str.charCodeAt(i),16777619);
-    return str.length+':'+(h>>>0).toString(16);
+  return map;
+ }
+ function dataSignature(state){return meaningfulSignature(state);}
+ function stats(state){
+  const history=state?.history||[],drafts=Object.values(state?.sessions||{});
+  let confirmed=0,rows=0;
+  for(const session of [...history,...drafts])for(const log of Object.values(session?.exercises||{})){
+   const variants=log?.variants&&Object.keys(log.variants).length?Object.values(log.variants):[log];
+   for(const v of variants)for(const set of v?.sets||[]){rows++;if(set?.done)confirmed++;}
   }
-  function localMeta(){try{return JSON.parse(localStorage.getItem(META_PREFIX+principal.identityProvider+'-'+principal.userId)||'null')}catch{return null}}
-  function storeMeta(etag,hash){localStorage.setItem(META_PREFIX+principal.identityProvider+'-'+principal.userId,JSON.stringify({etag,hash}));}
-  function meaningful(d){return hasWorkoutData(d);}
-  function stats(d){
-    const h=Array.isArray(d?.history)?d.history:[];
-    const drafts=d?.sessions&&typeof d.sessions==='object'?Object.values(d.sessions):[];
-    const all=[...h,...drafts];
-    let done=0,rows=0;
-    for(const session of all)for(const log of Object.values(session?.exercises||{})){
-      const vars=log?.variants&&Object.keys(log.variants).length?Object.values(log.variants):[log];
-      for(const v of vars)for(const entry of (v?.sets||[])){
-        rows++;if(entry?.done)done++;
-      }
+  const d=workoutDetails(state);
+  return {history:history.length,drafts:drafts.length,confirmed,modified:d.modifiedRows||0,
+    notes:d.notes||0,equipment:d.equipment||0};
+ }
+ function preview(){
+  const a=stats(getState()),b=stats(cloudState(remote));
+  const card=(title,d)=>'<div class="panel" style="margin:0;padding:12px;flex:1;min-width:170px"><strong>'+title+'</strong>'+
+    '<p class="hint">Zakończone: '+d.history+'<br>Rozpoczęte: '+d.drafts+
+    '<br>Potwierdzone serie: '+d.confirmed+'<br>Zmodyfikowane wiersze: '+d.modified+
+    '<br>Notatki: '+d.notes+'<br>Zmiany sprzętu: '+d.equipment+'</p></div>';
+  return '<div class="flex flex-wrap" style="align-items:stretch;margin:10px 0">'+
+   card('Lokalny dziennik',a)+card('Dane w Azure',b)+'</div>';
+ }
+ function describePending(){
+  const n=pending.size;
+  return n?('⏳ '+n+' trening'+(n===1?' czekający':'ów czekających')+' na wysłanie'):'✓ Dane w Azure aktualne';
+ }
+ function pendingSnapshot(){
+  const desired=workoutRecords(getState());
+  // Workouts already written in Azure are compared by their meaningful
+  // content, not by generated timestamps or navigation-created templates.
+  const next=new Map();
+  for(const [id,item] of desired){
+   const known=base.get(id);
+   if(!known&&item.isEmpty)continue; // opening an exercise is not a cloud write
+   if(known?.sig===item.sig)continue;
+   next.set(id,{id,kind:item.kind,method:'PUT',record:clone(item.record),
+    sig:item.sig,expectedEtag:known?.etag||null});
+  }
+  // Never infer a destructive cloud delete merely because this browser has
+  // an incomplete/stale cache. Only explicitly finished drafts are deleted.
+  for(const id of tombstones){
+   const known=base.get(id);
+   if(known&&!desired.has(id))next.set(id,{id,kind:known.kind,method:'DELETE',
+    sig:null,expectedEtag:known.etag});
+  }
+  // Edits made while the first request was still in flight may already be
+  // waiting; use the newest local record and preserve its original ETag.
+  pending=next;
+  persist();
+ }
+ function markDeleted(id){
+  if(!/^draft:[a-zA-Z0-9:_-]+$/.test(id))return;
+  if(owner){
+   tombstones.add(id);persist();
+   if(initialized&&!blocked){
+    pendingSnapshot();
+    clearTimeout(flushTimer);flushTimer=setTimeout(()=>void sync(),1100);
+   }
+  }
+ }
+ function schedule(){
+  if(!owner)return; // unpaired anonymous browser: local backup only
+  if(initialized&&!blocked){
+   pendingSnapshot();
+   status(pending.size?'queued':'synced',describePending());
+   clearTimeout(flushTimer);
+   if(pending.size)flushTimer=setTimeout(()=>void sync(),1100);
+  }
+ }
+ function rowVersions(map){
+  base=new Map([...map].map(([id,x])=>[id,{etag:x.etag,sig:x.sig,kind:x.kind}]));
+  persist();
+ }
+ function overlayState(server,pendingRecords=pending){
+  const combined=new Map(server);
+  for(const op of pendingRecords.values()){
+   if(op.method==='DELETE')combined.delete(op.id);
+   else combined.set(op.id,{id:op.id,kind:op.kind,record:clone(op.record),sig:op.sig,etag:op.expectedEtag});
+  }
+  return cloudState(combined);
+ }
+ async function hydrate(source){
+  await applySnapshot(source);
+ }
+ async function flushQueue(){
+  if(flushBusy||blocked||!principal||!pending.size)return;
+  flushBusy=true;status('syncing','Wysyłanie zmian do Azure…');
+  try {
+   for(const operation of [...pending.values()].sort((a,b)=>(a.method==='DELETE')-(b.method==='DELETE'))){
+    // A newer user edit may supersede this record while the network is busy.
+    const latest=pending.get(operation.id);
+    if(!latest||latest.sig!==operation.sig||latest.method!==operation.method)continue;
+    const onServer=remote.get(operation.id);
+    if(operation.method==='PUT'&&onServer?.sig===operation.sig){
+     base.set(operation.id,{etag:onServer.etag,sig:operation.sig,kind:operation.kind});
+     pending.delete(operation.id);persist();continue;
     }
-    const dates=all.map(x=>x?.date).filter(x=>typeof x==='string').sort();
-    return {finished:h.length,drafts:drafts.length,confirmed:done,entries:rows,lastDate:dates.at(-1)||'—'};
-  }
-  function conflictPanel(){
-    const local=stats(getState()),cloud=stats(remote?.snapshot);
-    const line=(title,d)=>'<div class="panel" style="margin:0;padding:12px;flex:1;min-width:165px"><strong>'+title+'</strong>'+
-      '<div class="hint" style="margin-bottom:0">Zakończone treningi: '+d.finished+
-      '<br>Rozpoczęte: '+d.drafts+
-      '<br>Potwierdzone serie: '+d.confirmed+
-      '<br>Ostatnia data: '+enc(d.lastDate)+'</div></div>';
-    return '<div class="flex flex-wrap" style="align-items:stretch;margin:10px 0">'+
-      line('Na tym urządzeniu',local)+line('W Azure',cloud)+
-      '</div><div class="inline-actions"><button class="btn secondary" id="cloud-backup-both">'+
-      '↓ Pobierz obie kopie JSON (jeden plik)</button></div>'+
-      (bothBackedUp?'<p class="hint" style="color:#83d9b2">✓ Kopia porównawcza została przygotowana. Możesz bezpieczniej zdecydować, którą wersję zachować.</p>':
-      '<p class="hint">Najpierw pobierz obie kopie. Nie wybieraj wersji, dopóki nie porównasz liczby treningów i serii.</p>');
-  }
-  function viewStatus(f,s){flag=f;label=s;let n=document.getElementById('cloud-info');if(n)n.textContent=s;onStatusChange();}
-  const enc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  async function api(method='GET',data){
-    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
-    try {
-      const res=await fetch('/api/snapshot',{method,credentials:'same-origin',cache:'no-store',
-        headers:{'accept':'application/json',...(data?{'content-type':'application/json'}:{})},
-        body:data?JSON.stringify(data):undefined,signal:controller.signal});
-      let payload={};try{payload=await res.json()}catch{}
-      if(res.status===503)throw Error(payload.error==='storage_not_configured'?'NOT_CONFIGURED':'SERVER_UNAVAILABLE');
-      if(res.status===401||res.status===403)throw Error('NOT_AUTHENTICATED');
-      if(res.status===409)throw Error('CONFLICT');
-      if(!res.ok)throw Error(payload.error||('HTTP_'+res.status));
-      return payload;
-    }finally{clearTimeout(timeout)}
-  }
-  async function apply(cloud){
-    const before=fingerprint(getState());await applySnapshot(cloud.snapshot);
-    storeMeta(cloud.etag,fingerprint(cloud.snapshot));
-    viewStatus('synced','✓ Chmura zsynchronizowana');
-    // Rendering may instantiate an empty draft; it is not a user edit and should not write to cloud.
-  }
-  async function push(snapshot,etag){
-    const hash=fingerprint(snapshot);
-    const result=await api('PUT',{snapshot,expectedEtag:etag});
-    if(!result.etag)throw Error('NO_CLOUD_REVISION');
-    storeMeta(result.etag,hash);
-    viewStatus('synced','✓ Chmura zsynchronizowana');
-    if(fingerprint(getState())!==hash) schedule();
-  }
-  async function reconcile(){
-    if(!principal || busy){dirty=true;return;}
-    busy=true;dirty=false;viewStatus('syncing','Synchronizacja z Azure…');
-    try{
-      const before=getState(),local=dataset(before),hash=fingerprint(local),meta=localMeta();
-      const cloud=await api();
-      if(remote?.etag!==cloud?.etag)bothBackedUp=false;
-      remote=cloud;
-      if(!cloud.snapshot){
-        if(meta&&meta.etag){viewStatus('conflict','⚠ Brak poprzedniej kopii w chmurze — wybierz sposób odzyskania');return;}
-        if(meaningful(before))await push(local,null);
-        else viewStatus('ready','Zalogowano · brak treningów w chmurze');
-        return;
-      }
-      const cloudHash=fingerprint(cloud.snapshot);
-      if(cloudHash===hash){storeMeta(cloud.etag,hash);viewStatus('synced','✓ Chmura zsynchronizowana');return;}
-      // A fresh browser can contain auto-created template exercises. They are not logged
-      // workouts. Restore the cloud version rather than uploading blank templates or conflicting.
-      if(!meaningful(before)){
-        if(fingerprint(getState())!==hash){dirty=true;return;}
-        await apply(cloud);return;
-      }
-      if(!meta){
-        if(!meaningful(before)){if(fingerprint(getState())!==hash){viewStatus('conflict','⚠ Nowe zmiany lokalne — wymagane scalenie');return;}await apply(cloud);}
-        else viewStatus('conflict','⚠ Dane lokalne i chmurowe różnią się — wybierz wersję');
-        return;
-      }
-      if(meta.etag===cloud.etag){
-        if(fingerprint(getState())!==hash){dirty=true;return;}
-        await push(local,cloud.etag);
-      } else if(meta.hash===hash) {
-        if(fingerprint(getState())!==hash){dirty=true;return;}
-        await apply(cloud);
-      } else {
-        viewStatus('conflict','⚠ Konflikt zmian na urządzeniach — dane pozostają lokalnie');
-      }
-    }catch(e){
-      if(e.message==='CONFLICT'){viewStatus('conflict','⚠ Chmura zmieniła się podczas zapisu — wybierz wersję');}
-      else if(e.message==='NOT_CONFIGURED')viewStatus('unconfigured','Azure Storage nie jest jeszcze skonfigurowany · lokalne dane są bezpieczne');
-      else if(e.message==='NOT_AUTHENTICATED')viewStatus('offline','Zaloguj się ponownie, aby synchronizować');
-      else {viewStatus('offline','⚠ Synchronizacja niedostępna · zapis lokalny działa');console.warn('Gym Tracker cloud:',e.message);}
-    } finally {busy=false;if(dirty&&flag!=='conflict'&&flag!=='unconfigured'){dirty=false;schedule();}}
-  }
-  function schedule(){if(!principal)return;clearTimeout(timer);timer=setTimeout(()=>{if(flag==='conflict'||flag==='unconfigured')return;void reconcile()},1400)}
-  async function action(name){
-    if(name==='cloud-sync'){await reconcile();return;}
-    if(name==='cloud-backup-both'){
-      // One file, one user gesture. No silent remote overwrite, and no multiple-download permission required.
-      const cloud=remote?.snapshot||null;
-      const local=dataset(getState());
-      backup('gym-tracker-dwie-kopie-'+new Date().toISOString().slice(0,10)+'.json',{
-        kind:'gym-tracker-compare-backup',version:1,createdAt:new Date().toISOString(),
-        local,cloud,
-        cloudRevision:remote?.etag||null
-      });
-      bothBackedUp=true;viewStatus('conflict',label);return;
+    if(operation.method==='DELETE'&&!onServer){
+     base.delete(operation.id);pending.delete(operation.id);tombstones.delete(operation.id);persist();continue;
     }
-    if(name==='cloud-download'){
-      if(!bothBackedUp){viewStatus('conflict','⚠ Najpierw pobierz obie kopie JSON');return;}
-      if(!confirm('Wczytać dane z Azure? Bieżące dane lokalne zostaną najpierw pobrane jako kopia JSON.'))return;
-      // Download must be initiated synchronously from the user's click (browser activation).
-      backup('gym-tracker-local-before-cloud.json',getState());
-      const cloud=await api();
-      if(!cloud.snapshot){viewStatus('conflict','Nie ma kopii w chmurze');return;}
-      await apply(cloud);
-      return;
+    if((onServer?.etag||null)!==(operation.expectedEtag||null)){
+     blocked=true;status('conflict','⚠ Ten trening zmienił się w Azure — zachowano obie wersje');return;
     }
-    if(name==='cloud-upload'){
-      if(!bothBackedUp){viewStatus('conflict','⚠ Najpierw pobierz obie kopie JSON');return;}
-      if(!confirm('Zastąpić dane w Azure lokalnym dziennikiem? Najpierw pobierzemy automatycznie kopię danych chmurowych.'))return;
-      const previous=remote;
-      if(previous?.snapshot)backup('gym-tracker-cloud-before-replace.json',previous.snapshot);
-      const cloud=await api();
-      if(previous?.snapshot && cloud.etag!==previous.etag){
-        remote=cloud;viewStatus('conflict','⚠ Chmura ponownie się zmieniła — odśwież konflikt');return;
-      }
-      await push(dataset(getState()),cloud.etag||null);
-      return;
+    let response;
+    try{response=await request(operation.method,operation.id,
+      operation.method==='PUT'?{record:operation.record,expectedEtag:operation.expectedEtag}:{expectedEtag:operation.expectedEtag});}
+    catch(e){if(e.message==='REVISION_CONFLICT'){blocked=true;status('conflict','⚠ Równoczesna edycja treningu — bez nadpisywania');return;}throw e;}
+    if(operation.method==='DELETE'){
+     base.delete(operation.id);remote.delete(operation.id);tombstones.delete(operation.id);
+    }else{
+     base.set(operation.id,{etag:response.etag,sig:operation.sig,kind:operation.kind});
+     remote.set(operation.id,{...operation,etag:response.etag});
     }
+    const still=pending.get(operation.id);
+    if(still&&still.sig===operation.sig&&still.method===operation.method)pending.delete(operation.id);
+    else if(still)still.expectedEtag=response.etag||null;
+    persist();
+   }
+   status('synced',describePending());
+  }catch(e){
+   status('offline','⚠ Azure niedostępny · zmiany zapisane lokalnie, czekają');
+   console.warn('Workout upload deferred',e.message);
+  }finally{
+   flushBusy=false;
+   if(pending.size&&!blocked&&flag!=='offline'){
+    clearTimeout(flushTimer);flushTimer=setTimeout(()=>void sync(),900);
+   }
   }
-  function html(){
-    const signed=!!principal;
-    return '<div class="panel"><h2>☁️ Synchronizacja Azure</h2>'+
-      '<p class="muted">Zapis lokalny działa niezależnie od internetu. Po zalogowaniu synchronizujemy historię między urządzeniami. Przy konflikcie żadna kopia nie jest automatycznie nadpisywana.</p>'+
-      '<div id="cloud-info" class="detail" role="status">'+enc(label)+'</div>'+
-      (signed?'<p class="hint">Zalogowano: '+enc(principal.userDetails||principal.identityProvider)+'</p><div class="inline-actions"><button class="btn secondary" id="cloud-sync">↻ Synchronizuj teraz</button><a class="btn ghost" style="text-decoration:none" href="/.auth/logout?post_logout_redirect_uri=/">Wyloguj</a></div>':
-       '<div class="inline-actions"><a class="btn" style="text-decoration:none" href="/.auth/login/github?post_login_redirect_uri=/">Zaloguj przez GitHub</a></div>')+
-      (signed&&flag==='conflict'?'<div class="warning"><strong>Konflikt danych.</strong> Żadna wersja nie została nadpisana. Porównaj dzienniki i pobierz wspólną kopię JSON, zanim wybierzesz źródło.</div>'+
-        conflictPanel()+
-        '<div class="inline-actions"><button class="btn secondary" id="cloud-download" '+(!bothBackedUp?'disabled':'')+'>Użyj danych z Azure</button>'+
-        '<button class="btn ghost" id="cloud-upload" '+(!bothBackedUp?'disabled':'')+'>Wyślij lokalne do Azure</button></div>':'')+
-      '<p class="hint">Wszystkie treningi pozostają lokalnie do czasu potwierdzonego zapisu w Azure. Przy błędach nie usuwamy lokalnej kopii.</p></div>';
+ }
+ async function sync(){
+  if(!principal||busy||blocked)return;
+  busy=true;
+  try {
+   const snapshotBefore=dataSignature(getState());
+   const response=await request();
+   const now=serverRows(response);
+   remote=now;
+   if(!initialized){
+    const hadMeta=restore();
+    if(hadMeta){
+     // Offline edits performed since the last completed read must be queued
+     // against the previously known per-workout revisions.
+     pendingSnapshot();
+    } else {
+     const own=getState(),cloud=cloudState(now);
+     const ownSignature=dataSignature(own),cloudSignature=dataSignature(cloud);
+     if(hasWorkoutData(own)&&hasWorkoutData(cloud)&&ownSignature!==cloudSignature){
+      blocked=true;status('conflict','⚠ Pierwsze połączenie: dwa różne dzienniki — nic nie nadpisano');return;
+     }
+     if(hasWorkoutData(own)&&!hasWorkoutData(cloud)){
+      rowVersions(now);initialized=true;pendingSnapshot();await flushQueue();return;
+     }
+     rowVersions(now);initialized=true;await hydrate(cloud);status('synced','✓ Dane treningowe odczytane z Azure');return;
+    }
+    initialized=true;
+   } else {
+    pendingSnapshot();
+   }
+   // If another device changed a record with no pending local changes, Azure
+   // wins. Pending local changes stay overlaid until their per-row ETag passes.
+   for(const [id,row] of now){if(!pending.has(id))base.set(id,{etag:row.etag,sig:row.sig,kind:row.kind});}
+   for(const id of [...base.keys()])if(!now.has(id)&&!pending.has(id))base.delete(id);
+   persist();
+   if(snapshotBefore!==dataSignature(getState())){
+    pendingSnapshot(); // incoming local edits won the race with the GET
+   }
+   const merged=overlayState(now);
+   if(dataSignature(merged)!==dataSignature(getState()))await hydrate(merged);
+   if(pending.size)await flushQueue();
+   else status('synced','✓ Aktualne dane pobrane z Azure');
+  }catch(e){
+   status('offline',e.message==='AUTH_REQUIRED'
+    ?'⚠ Zaloguj się ponownie; lokalne zmiany są zachowane'
+    :'⚠ Brak połączenia z Azure — zmiany zapisują się lokalnie');
+   console.warn('Gym Cloud:',e.message);
+  }finally{busy=false;}
+ }
+ async function login(){
+  try {
+   const resp=await fetch('/.auth/me',{credentials:'same-origin',cache:'no-store'});
+   if(!resp.ok)throw Error('auth');
+   const p=(await resp.json()).clientPrincipal;
+   if(!p?.userId)throw Error('anonymous');
+   const id=p.identityProvider+':'+p.userId;
+   if(owner&&owner!==id){
+    blocked=true;status('conflict','⚠ Inne konto niż ostatnio: dane lokalne pozostają bez zmian');return;
+   }
+   principal=p;owner=id;
+   localStorage.setItem(LAST_OWNER,owner);
+   await sync();
+  }catch{
+   status('offline','Dane zapisane lokalnie · chmura niedostępna lub brak logowania');
   }
-  async function init(options){
-    getState=options.getState;applySnapshot=options.applySnapshot;backup=options.backup;hasWorkoutData=options.hasWorkoutData||hasWorkoutData;onStatusChange=options.onStatusChange||onStatusChange;
-    try{
-      const response=await fetch('/.auth/me',{credentials:'same-origin',cache:'no-store'});
-      if(!response.ok)throw Error('auth unavailable');
-      const data=await response.json();principal=data.clientPrincipal?.userId?data.clientPrincipal:null;
-      if(!principal){viewStatus('offline','Nie zalogowano · treningi są lokalne');return;}
-      await reconcile();
-    }catch(e){viewStatus('offline','Azure niedostępne · zapis lokalny nadal działa');}
-    window.addEventListener('online',()=>schedule());
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')schedule()});
+ }
+ async function action(name){
+  if(name==='cloud-sync'){
+   if(!principal)await login();
+   else if(blocked){ // refresh only the read-only preview
+    try{remote=serverRows(await request());status('conflict','⚠ Wybierz sposób rozwiązania konfliktu');}
+    catch{status('offline','Nie można odczytać Azure · lokalna kopia nadal istnieje');}
+   }else await sync();
+   return;
   }
-  return {init,schedule,action,html,getStatus:()=>flag};
+  if(name==='cloud-backup-both'){
+   backup('gym-tracker-obie-kopie-'+new Date().toISOString().slice(0,10)+'.json',{
+    format:'gym-tracker-safety-backup-v04',time:new Date().toISOString(),
+    local:getState(),cloud:cloudState(remote),pending:[...pending.values()]});
+   backedUp=true;status('conflict',message);return;
+  }
+  if(!backedUp){status('conflict','⚠ Najpierw pobierz obie kopie JSON');return;}
+  if(name==='cloud-download'){
+   if(!confirm('Przyjąć dane z Azure? Kopia obu dzienników powinna być już pobrana.'))return;
+   const recent=serverRows(await request());
+   remote=recent;rowVersions(recent);pending.clear();tombstones.clear();persist();blocked=false;
+   await hydrate(cloudState(remote));status('synced','✓ Przywrócono dane z Azure');return;
+  }
+  if(name==='cloud-upload'){
+   if(!confirm('Przesłać lokalny dziennik do Azure? Dane, które zostaną zastąpione, są w pobranej kopii JSON.'))return;
+   const recent=serverRows(await request());
+   // Re-confirm if Azure was edited since the backup was downloaded.
+   if([...recent].some(([id,x])=>remote.get(id)?.etag!==x.etag)||[...remote.keys()].some(id=>!recent.has(id))){
+    remote=recent;backedUp=false;status('conflict','⚠ Azure zmieniło się po pobraniu kopii; pobierz aktualne kopie');return;
+   }
+   remote=recent;rowVersions(recent);initialized=true;blocked=false;
+   pendingSnapshot();await flushQueue();return;
+  }
+ }
+ function html(){
+  const signed=!!principal,disabled=backedUp?'':'disabled';
+  return '<div class="panel"><h2>☁️ Treningi w Azure</h2>'+
+   '<p class="muted">Azure jest głównym źródłem danych. Urządzenie przechowuje cache i kolejkę zmian bez internetu; zapis pojedynczego treningu nie zastępuje całego dziennika.</p>'+
+   '<div class="detail" id="cloud-info" role="status">'+esc(message)+'</div>'+
+   (signed?'<p class="hint">Zalogowano: '+esc(principal.userDetails||principal.identityProvider)+'</p>'+
+    '<div class="inline-actions"><button class="btn secondary" id="cloud-sync">↻ Odśwież Azure</button>'+
+    '<a class="btn ghost" href="/.auth/logout?post_logout_redirect_uri=/" style="text-decoration:none">Wyloguj</a></div>':
+    '<div class="inline-actions"><a class="btn" href="/.auth/login/github?post_login_redirect_uri=/" style="text-decoration:none">Zaloguj przez GitHub</a></div>')+
+   (blocked?'<div class="warning" style="margin-top:12px"><strong>Rozbieżne dane.</strong> Żadne zmiany nie zostały automatycznie nadpisane. Porównaj i zapisz obie kopie, zanim wybierzesz źródło.</div>'+
+    preview()+'<div class="inline-actions"><button class="btn secondary" id="cloud-backup-both">↓ Pobierz obie kopie JSON</button></div>'+
+    '<div class="inline-actions"><button class="btn secondary" id="cloud-download" '+disabled+'>Przyjmij z Azure</button>'+
+    '<button class="btn ghost" id="cloud-upload" '+disabled+'>Wyślij lokalne zmiany</button></div>':
+    '<p class="hint">'+(pending.size?'Lokalne zmiany oczekujące na wysłanie: '+pending.size+'.':'Brak oczekujących zmian.')+'</p>')+
+   '<p class="hint">W przypadku błędu offline nadal zapisujemy każdą zmianę lokalnie. Eksport JSON pozostaje dostępny.</p></div>';
+ }
+ async function recoverPendingCache(){
+  // The write-ahead journal is independent of IndexedDB/localStorage's
+  // snapshot selection. If a stale IndexedDB snapshot wins on restart, replay
+  // unsent changes before asking Azure for anything.
+  if(!pending.size)return;
+  const current=workoutRecords(getState());
+  const recovered=new Map(current);
+  let count=0;
+  for(const op of pending.values()){
+   const now=current.get(op.id),known=base.get(op.id);
+   if(op.method==='PUT'){
+    if(now?.sig===op.sig)continue;
+    // If the local cache contains a *different* unsent user edit, keep it:
+    // the write-ahead journal must never overwrite newer local input.
+    if(now&&now.sig!==known?.sig&&!now.isEmpty)continue;
+    recovered.set(op.id,{id:op.id,kind:op.kind,record:clone(op.record),sig:op.sig});
+    count++;
+   }else if(op.method==='DELETE'){
+    if(now&&now.sig!==known?.sig&&!now.isEmpty)continue;
+    recovered.delete(op.id);count++;
+   }
+  }
+  if(count){
+   await hydrate(cloudState(recovered));
+   status('queued','⏳ Przywrócono '+count+' niewysłanych zmian z dziennika awaryjnego');
+  }
+ }
+ async function init(options){
+  ({getState,applySnapshot,backup,onStatusChange,workoutRecords,cloudState,
+    meaningfulSignature,hasWorkoutData,workoutDetails}=options);
+  owner=localStorage.getItem(LAST_OWNER)||null;
+  if(owner){restore();await recoverPendingCache();}
+  await login();
+  window.addEventListener('online',()=>{if(principal)void sync();else void login();});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(principal)void sync();else void login();}});
+ }
+ return {init,schedule,markDeleted,action,html,getStatus:()=>flag};
 })();

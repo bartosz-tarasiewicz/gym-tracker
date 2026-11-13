@@ -96,25 +96,121 @@ function switchVariant(item,newMachine){const l=exerciseLog(item);currentVariant
 function counted(item){const l=exerciseLog(item);currentVariant(item);return Object.values(l.variants).reduce((n,v)=>n+(v.sets||[]).filter(x=>x.done).length,0)}
 function isCoreEnabled(item){const s=activeSession();return !!(s.coreEnabled?.[item.id]||counted(item)>0)}
 function summary(){const d=state.activeDay;const mainDone=PLAN[d].items.reduce((n,x)=>n+counted(x),0);const coreDone=CORE.reduce((n,x)=>n+counted(x),0);const planned=PLAN[d].items.reduce((n,x)=>n+x.work.length,0)+CORE.filter(isCoreEnabled).reduce((n,x)=>n+x.work.length,0);return {mainDone,coreDone,planned,done:mainDone+coreDone}}
-function hasWorkoutData(data){
-  if(data?.history?.length)return true;
+// Extract only meaningful workout data. Navigation, timestamps and untouched
+// exercise templates must never create conflicts or authorize overwrites.
+function workoutProjection(data){
   const byId=new Map([...PLAN.flatMap(p=>p.items),...CORE].map(i=>[i.id,i]));
-  const differs=(rows,defaults)=>!Array.isArray(rows)||rows.length!==defaults.length||
-    rows.some((x,j)=>x.done||String(x.kg??'')!==String(defaults[j][0])||String(x.reps??'')!==String(defaults[j][1]));
-  for(const session of Object.values(data?.sessions||{})){
-    if(String(session?.notes||'').trim()||Object.values(session?.coreEnabled||{}).some(Boolean))return true;
-    for(const [id,log] of Object.entries(session?.exercises||{})){
+  const drafts=[];
+  const changedRows=(rows,defaults)=>{
+    const expected=defaults||[];
+    const actual=Array.isArray(rows)?rows:[];
+    const changed=[];
+    if(actual.length!==expected.length)changed.push(['length',actual.length]);
+    for(let j=0;j<actual.length;j++){
+      const x=actual[j]||{};
+      const kg=String(x.kg??''),reps=String(x.reps??''),done=!!x.done;
+      const old=expected[j];
+      if(!old||done||kg!==String(old[0])||reps!==String(old[1]))
+        changed.push([j,kg,reps,done]);
+    }
+    return changed;
+  };
+  for(const [key,session] of Object.entries(data?.sessions||{}).sort(([x],[y])=>x.localeCompare(y))){
+    if(!session||typeof session!=='object'){drafts.push({key,unknown:session});continue;}
+    const record={key};
+    if(String(session.notes||'').trim())record.notes=String(session.notes);
+    const core=Object.entries(session.coreEnabled||{}).filter(([,enabled])=>!!enabled).map(([id])=>id).sort();
+    if(core.length)record.core=core;
+    const exerciseChanges=[];
+    for(const [id,log] of Object.entries(session.exercises||{}).sort(([x],[y])=>x.localeCompare(y))){
       const item=byId.get(id);
-      if(!item||log?.machine!==item.options[0]||String(log?.rir||'').trim())return true;
-      const variants=log?.variants||{};
-      if(Object.keys(variants).some(k=>k!==item.options[0]))return true;
-      const selected=variants[item.options[0]]||log;
-      if(String(selected?.rir||'').trim()||
-         differs(selected?.sets,item.work)||
-         differs(selected?.warmups||[],item.warm||[]))return true;
+      if(!item||!log||typeof log!=='object'){
+        exerciseChanges.push({id,unknown:log});continue;
+      }
+      const machine=String(log.machine||item.options[0]);
+      const variants=log.variants&&Object.keys(log.variants).length
+        ?log.variants:{[machine]:log};
+      const result={id};
+      if(machine!==item.options[0])result.machine=machine;
+      if(String(log.rir||'').trim())result.rir=String(log.rir);
+      const edits=[];
+      for(const [variantId,v] of Object.entries(variants).sort(([x],[y])=>x.localeCompare(y))){
+        const setChanges=changedRows(v?.sets,item.work);
+        const warmChanges=changedRows(v?.warmups||[],item.warm||[]);
+        const rir=String(v?.rir||'').trim();
+        if(variantId!==item.options[0]||setChanges.length||warmChanges.length||rir){
+          const variant={variant:variantId};
+          if(setChanges.length)variant.sets=setChanges;
+          if(warmChanges.length)variant.warmups=warmChanges;
+          if(rir)variant.rir=rir;
+          edits.push(variant);
+        }
+      }
+      if(edits.length)result.variants=edits;
+      if(Object.keys(result).length>1)exerciseChanges.push(result);
+    }
+    if(exerciseChanges.length)record.exercises=exerciseChanges;
+    if(Object.keys(record).length>1)drafts.push(record);
+  }
+  return {history:Array.isArray(data?.history)?data.history:[],drafts};
+}
+function hasWorkoutData(data){
+  const p=workoutProjection(data);
+  return !!(p.history.length||p.drafts.length);
+}
+function workoutSignature(data){return JSON.stringify(workoutProjection(data))}
+function workoutDetails(data){
+  const p=workoutProjection(data);
+  let modified=0,notes=0,equipment=0,core=0;
+  for(const session of p.drafts){
+    if(session.notes)notes++;
+    core+=(session.core||[]).length;
+    for(const exercise of session.exercises||[]){
+      const original=[...PLAN.flatMap(p=>p.items),...CORE].find(item=>item.id===exercise.id)?.options?.[0];
+      const alternativeMachines=new Set(exercise.machine?[exercise.machine]:[]);
+      for(const variant of exercise.variants||[]){
+        modified+=(variant.sets||[]).filter(row=>row[0]!=='length').length;
+        modified+=(variant.warmups||[]).filter(row=>row[0]!=='length').length;
+        if(variant.variant!==original)alternativeMachines.add(variant.variant);
+      }
+      equipment+=alternativeMachines.size;
     }
   }
-  return false;
+  return {draftsWithChanges:p.drafts.length,modifiedRows:modified,notes,equipment,core};
+}
+
+const stableHash=x=>{let h=2166136261;for(const c of String(x))h=Math.imul(h^c.charCodeAt(0),16777619);return (h>>>0).toString(16);};
+function workoutRecords(data){
+  const map=new Map();
+  for(const [key,record] of Object.entries(data?.sessions||{})){
+    const id='draft:'+key;
+    const p=workoutProjection({sessions:{[key]:record},history:[]});
+    const sig=JSON.stringify(p.drafts);
+    map.set(id,{id,kind:'draft',record,sig,isEmpty:p.drafts.length===0});
+  }
+  for(let i=0;i<(data?.history||[]).length;i++){
+    const record=data.history[i];
+    if(!record.syncId)record.syncId='history:old-'+i+'-'+stableHash(JSON.stringify(record));
+    const id=record.syncId;
+    const {syncId,...withoutId}=record;
+    map.set(id,{id,kind:'history',record,sig:JSON.stringify(withoutId),isEmpty:false});
+  }
+  return map;
+}
+function cloudState(rows){
+  const sessions={},history=[];
+  for(const entry of rows.values()){
+    const copy=JSON.parse(JSON.stringify(entry.record));
+    if(entry.kind==='draft')sessions[entry.id.slice(6)]=copy;
+    else if(entry.kind==='history')history.push({...copy,syncId:entry.id});
+  }
+  history.sort((a,b)=>(String(a.date||'')+'|'+String(a.started||'')+'|'+a.syncId).localeCompare(String(b.date||'')+'|'+String(b.started||'')+'|'+b.syncId));
+  return {sessions,history};
+}
+function meaningfulSignature(data){
+  const p=workoutProjection(data);
+  const h=p.history.map(({syncId,...record})=>JSON.stringify(record)).sort();
+  return JSON.stringify({history:h,drafts:p.drafts});
 }
 function save(sync=true){state.savedAt=Date.now();GymStorage.save(state);if(sync)window.GymCloud?.schedule?.()}
 function status(str,level){const n=document.getElementById('storage-status');if(n){n.textContent=str;n.classList.toggle('warn',level==='warn')}}
@@ -175,7 +271,7 @@ document.addEventListener('click',async event=>{
  if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
  if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession().coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
  if(b.id==='finish'){const s=activeSession(),sum=summary();if(!sum.done){toast('Najpierw potwierdź choć jedną serię');return}if(!confirm(`Zakończyć trening? Potwierdzone serie: ${sum.done}.`))return;
-  state.history.push(JSON.parse(JSON.stringify({...s,source:'Wpisane w aplikacji'})));delete state.sessions[dateKey()+'-'+state.activeDay];state.view='history';save();await GymStorage.flush();render();toast('Trening w historii, zapis lokalny wykonany');return}
+  state.history.push(JSON.parse(JSON.stringify({...s,source:'Wpisane w aplikacji',syncId:'history:'+(crypto.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2))})));delete state.sessions[dateKey()+'-'+state.activeDay];state.view='history';save();window.GymCloud?.markDeleted?.('draft:'+dateKey()+'-'+state.activeDay);await GymStorage.flush();render();toast('Trening w historii, zapis lokalny wykonany');return}
  if(b.id==='export'){download('gym-tracker-backup-'+dateKey()+'.json',JSON.stringify(state,null,2),'application/json');return}
  if(b.id==='exportcsv'){download('gym-tracker-series-'+dateKey()+'.csv',csv(),'text/csv;charset=utf-8');return}
  if(b.id==='copy-report'){const t=document.getElementById('report');t.focus();t.select();try{await navigator.clipboard.writeText(t.value);toast('Skopiowano raport')}catch{toast('Raport zaznaczony — skopiuj ręcznie')}return}
@@ -191,5 +287,5 @@ document.addEventListener('input',event=>{const t=event.target;
  else if(t.id==='notes'){activeSession().notes=t.value;save()}
 });
 (async()=>{try{state=normalize(await GymStorage.load(status));}catch(e){console.error(e);status('⚠ Nie można wczytać danych','warn')}render();
-  if(window.GymCloud)void GymCloud.init({getState:()=>state,hasWorkoutData,applySnapshot:async data=>{state=normalize({...state,history:data.history,sessions:data.sessions,savedAt:Date.now()});GymStorage.save(state);await GymStorage.flush();render()},backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{if(state.view==='settings')render()}});
+  if(window.GymCloud)void GymCloud.init({getState:()=>state,hasWorkoutData,workoutRecords,cloudState,meaningfulSignature,workoutDetails,applySnapshot:async data=>{state=normalize({...state,history:data.history,sessions:data.sessions,savedAt:Date.now()});GymStorage.save(state);await GymStorage.flush();render()},backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{if(state.view==='settings')render()}});
   if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW:',e))})();
