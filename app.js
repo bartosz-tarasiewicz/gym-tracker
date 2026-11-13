@@ -166,12 +166,14 @@ function workoutDetails(data){
     if(session.notes)notes++;
     core+=(session.core||[]).length;
     for(const exercise of session.exercises||[]){
-      if(exercise.machine)equipment++;
+      const original=[...PLAN.flatMap(p=>p.items),...CORE].find(item=>item.id===exercise.id)?.options?.[0];
+      const alternativeMachines=new Set(exercise.machine?[exercise.machine]:[]);
       for(const variant of exercise.variants||[]){
         modified+=(variant.sets||[]).filter(row=>row[0]!=='length').length;
         modified+=(variant.warmups||[]).filter(row=>row[0]!=='length').length;
-        if(variant.variant!==(exercise.machine||'')&&variant.variant)equipment++;
+        if(variant.variant!==original)alternativeMachines.add(variant.variant);
       }
+      equipment+=alternativeMachines.size;
     }
   }
   return {draftsWithChanges:p.drafts.length,modifiedRows:modified,notes,equipment,core};
