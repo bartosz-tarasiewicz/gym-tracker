@@ -4,7 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import {chromium} from 'playwright';
 
-const files={'/':'index.html','/index.html':'index.html','/storage.js':'storage.js','/sync.js':'sync.js','/history-ui.js':'history-ui.js','/app.js':'app.js','/sw.js':'sw.js','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/icon-apple.png':'icon-apple.png'};
+const files={'/':'index.html','/index.html':'index.html','/storage.js':'storage.js','/sync.js':'sync.js','/week-ui.js':'week-ui.js','/progress-ui.js':'progress-ui.js','/app.js':'app.js','/sw.js':'sw.js','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/icon-apple.png':'icon-apple.png'};
 const store=new Map();let version=0;const operations=[];
 const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data))};
 const server=http.createServer(async(req,res)=>{
@@ -44,18 +44,19 @@ let first,second;
 try{
  first=await context();const p1=await first.newPage();p1.on('pageerror',e=>errors.push(e.message));
  await p1.goto(url,{waitUntil:'domcontentloaded'});
- const weekdays=await p1.locator('.day-tabs [data-day]').evaluateAll(nodes=>nodes.map(node=>node.textContent.trim()));
- assert.deepEqual(weekdays,['Pon','Wt','Śr','Czw','Pt'],'Only five weekday tiles, with Thursday visible once');
- assert.equal(await p1.locator('[data-day="4"]').count(),0,'Legacy Thursday strength tile must be hidden');
- const tileHeights=await p1.locator('.day-tab').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().height));
- assert.ok(tileHeights.every(height=>height<=40),'Weekday tiles should be compact on iPhone');
+ const weekdays=await p1.locator('.week-grid [data-date]').evaluateAll(nodes=>nodes.map(node=>node.querySelector('.week-name')?.textContent));
+ assert.deepEqual(weekdays,['Pn','Wt','Śr','Czw','Pt','Sob','Nd'],'Full Monday-to-Sunday calendar');
+ assert.equal(await p1.locator('[data-day="4"]').count(),0,'Legacy Thursday strength tile must stay hidden');
+ const tileWidths=await p1.locator('.week-day').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().width));
+ assert.ok(tileWidths.every(width=>width>25&&width<58),'Seven days should fit within iPhone viewport');
  await p1.locator('[data-day="3"]').click();
  assert.equal(await p1.locator('.set-row').count(),0,'GRIT must not be logged as sets');
  assert.equal(await p1.locator('#finish').count(),0,'GRIT must not be finished as a workout');
  await p1.locator('[data-day="5"]').click();
  assert.ok((await p1.locator('.machine-img').getAttribute('src')).includes('Matrix_Magnum_Leg_Press'),'Friday leg press photo must be mapped');
  assert.equal(await p1.locator('#machine').inputValue(),'MG-PL70','Friday workout remains at legacy Azure day index 5');
- log('Compact five-day navigation, untracked Thursday, and Friday machine photo');
+ assert.ok(await p1.locator('.machine-choice').count()>1,'Equipment alternatives should be visible');
+ log('Seven-day calendar, non-tracked Thursday, Friday photo, and visible alternatives');
  await p1.locator('[data-day="2"]').click();await p1.locator('[data-item="1"]').click();
  await input(p1).fill('42.5');
  await p1.locator('.set-row input[data-type="work"][data-field="reps"]').first().fill('13');
@@ -140,67 +141,63 @@ try{
  log('Separate training days update independently without global journal conflicts');
 
  const fridayId=[...store.keys()].find(id=>id.startsWith('draft:')&&id.endsWith('-5'));
- assert.ok(fridayId,'Friday draft was stored independently');
- const operationCursor=operations.length;
+ assert.ok(fridayId,'Friday workout is stored under existing date/day draft ID');
  await p2.locator('.done-button[data-type="work"]').first().click();
- await until(()=>store.get(fridayId)?.record?.exercises?.legpress?.sets?.[0]?.done===true ||
-   store.get(fridayId)?.record?.exercises?.legpress?.variants?.['MG-PL70']?.sets?.[0]?.done===true,
-   'confirmed Friday set');
- p2.once('dialog',dialog=>dialog.accept());
- await p2.locator('#finish').click();
- await until(()=>!store.has(fridayId)&&[...store].some(([id,v])=>id.startsWith('history:')&&v.record?.day===5),
-   'finished workout migrates to history and removes draft');
- const finishOps=operations.slice(operationCursor);
- const historyWrite=finishOps.findIndex(x=>x.method==='PUT'&&x.id.startsWith('history:'));
- const draftRemoval=finishOps.findIndex(x=>x.method==='DELETE'&&x.id===fridayId);
- assert.ok(historyWrite>=0&&draftRemoval>historyWrite,'History must be written before deleting draft');
- log('Finishing a workout writes history before removing its draft, without data loss');
+ await until(()=>store.get(fridayId)?.record?.exercises?.legpress?.variants?.['MG-PL70']?.sets?.[0]?.done===true,
+  'Friday auto-save set');
+ const cursor=operations.length;
+ await p2.locator('[data-week="-7"]').click();
+ assert.equal(await input(p2).inputValue(),'50','Previous Friday without history shows default 50 kg');
+ await p2.locator('[data-week="7"]').click();
+ assert.equal(await input(p2).inputValue(),'54','Original Friday result loads after week navigation');
+ assert.equal(await p2.locator('#finish').count(),0,'No mandatory finish control');
+ assert.equal(operations.slice(cursor).filter(x=>x.method==='PUT').length,0,'Browsing other dates creates no cloud writes');
+ log('Browsing dates does not create records; results auto-save on the original day');
 
- // Calendar must show completed workout dates without creating new cloud writes.
- const finishedId=[...store.keys()].find(id=>id.startsWith('history:')&&store.get(id)?.record?.day===5);
- assert.ok(finishedId,'Friday history record exists');
- assert.equal(await p2.locator('.calendar-weekday').count(),7,'Monday-first calendar should have seven days');
- const finishedDate=store.get(finishedId).record.date;
- await p2.locator('[data-history-date="'+finishedDate+'"]').click();
- assert.equal(await p2.locator('.history-edit-button').count(),1,'Selecting a date filters the finished sessions');
- log('Calendar marks workouts and filters history by selected date');
-
- // Editing a finished workout must update its original sync ID, not create a duplicate.
- const beforeHistoryIds=[...store.keys()].filter(id=>id.startsWith('history:')).sort();
- await p2.locator('.history-edit-button').first().click();
- assert.equal(await p2.locator('#history-save').count(),1,'History editor opens');
- const editedKg=p2.locator('.history-editor [data-history-type="work"][data-history-field="kg"]').first();
- assert.ok(await editedKg.count(),'Friday history has working sets to edit');
- await editedKg.fill('56.5');
- await p2.locator('#history-edit-rir').selectOption('2');
- await p2.locator('#history-save').click();
- await until(()=>JSON.stringify(store.get(finishedId)?.record).includes('"kg":"56.5"'),'corrected history record upload');
- assert.deepEqual([...store.keys()].filter(id=>id.startsWith('history:')).sort(),beforeHistoryIds,
-  'Editing must not create or delete history records');
- assert.ok(JSON.stringify(store.get(finishedId)?.record).includes('"rir":"2"'),'Updated RIR saved into original workout');
- log('History correction updates the original Azure record without duplicates');
-
- // Cancel discards editor changes (no pending write).
- await p2.locator('.history-edit-button').first().click();
- await p2.locator('.history-editor [data-history-type="work"][data-history-field="kg"]').first().fill('99');
- p2.once('dialog',dialog=>dialog.accept());
- await p2.locator('#history-cancel').click();
- assert.ok(!JSON.stringify(store.get(finishedId)?.record).includes('"kg":"99"'));
- log('Canceling history edit never writes proposed changes');
-
- // Accidental same-day completion must require an explicit extra confirmation.
+ // Seed an actual finished workout from the prior Friday in the mock Azure API.
+ const historicId='history:import-2026-11-06-5';
+ const historicSet={kg:'50',reps:'12',done:true};
+ const historic={date:'2026-11-06',day:5,started:'2026-11-06T10:00:00.000Z',source:'Imported training',notes:'',coreEnabled:{},
+  exercises:{legpress:{machine:'MG-PL70',sets:[historicSet],warmups:[],rir:'1',
+   variants:{'MG-PL70':{sets:[historicSet],warmups:[],rir:'1'}}}}};
+ store.set(historicId,{kind:'history',record:structuredClone(historic),etag:'"seed-01"'});
+ await p2.locator('[data-view="settings"]').click();
+ await p2.locator('#cloud-sync').click();
+ await p2.waitForFunction(id=>{
+  const s=JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}');
+  return (s.history||[]).some(x=>x.syncId===id);
+ },historicId);
  await p2.locator('[data-view="train"]').click();
- await p2.locator('[data-day="5"]').click();
- await p2.locator('.done-button[data-type="work"]').first().click();
- p2.once('dialog',dialog=>{assert.match(dialog.message(),/ODDZIELNĄ sesję/);dialog.dismiss();});
- await p2.locator('#finish').click();
- assert.deepEqual([...store.keys()].filter(id=>id.startsWith('history:')).sort(),beforeHistoryIds,
-  'Dismissing duplicate warning must not create another completed workout');
- log('Duplicate-day completion requires explicit confirmation');
+ await p2.locator('#week-date').fill('2026-11-06');
+ assert.equal(await input(p2).inputValue(),'50','Imported historic workout should open directly in Train');
+ assert.match(await p2.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/);
+ const existingIds=[...store.keys()].sort();
+ await input(p2).fill('56.5');
+ await p2.locator('#rir').selectOption('2');
+ await until(()=>JSON.stringify(store.get(historicId)?.record).includes('"kg":"56.5"'),'in-place historic correction');
+ assert.deepEqual([...store.keys()].sort(),existingIds,'Existing history record corrected without new draft or duplicate');
+ assert.ok(JSON.stringify(store.get(historicId).record).includes('"rir":"2"'));
+ log('Editing a completed imported workout updates the original Azure syncId');
 
+ await p2.locator('[data-area="core"]').click();
+ await p2.locator('[data-core="5"]').click();
+ assert.ok((await p2.locator('.machine-img').getAttribute('src')).includes('plank-drags-header.jpg'),'CORE has an exercise photo');
+ assert.ok(await p2.locator('.img-link').count(),'Exercise photo has a visible source link');
+ log('CORE photos display for the selected exercise');
+
+ await p2.locator('[data-view="history"]').click();
+ assert.equal(await p2.locator('#trend-exercise').count(),1,'History is a trends dashboard');
+ assert.equal(await p2.locator('.history-edit-button').count(),0,'History no longer has edit forms');
+ await p2.locator('#trend-exercise').selectOption('legpress');
+ await p2.locator('#trend-machine').selectOption('MG-PL70');
+ assert.ok(await p2.locator('.trend-chart').count(),'Two Friday training dates provide a weight trend');
+ assert.match(await p2.locator('.trend-stats').innerText(),/56,5/);
+ await p2.locator('[data-trend-metric="reps"]').click();
+ assert.ok(await p2.locator('.trend-chart').count(),'Rep trend renders independently');
+ log('History shows per-machine weight and rep trends from completed sets');
  assert.deepEqual(errors,[],'Uncaught JS errors: '+errors.join(';'));
  log('No uncaught JavaScript errors');
- console.log('SUCCESS: cloud-authoritative browser scenarios plus history calendar, edit, and duplicate guard');
+ console.log('SUCCESS: date-first Azure, inherited workouts, auto-save, CORE photos, and progress trends');
 }finally{
  await browser.close();await new Promise(resolve=>server.close(resolve));
 }
