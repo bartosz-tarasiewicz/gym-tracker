@@ -239,7 +239,7 @@ function toast(str){const t=document.getElementById('toast');t.textContent=str;t
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:PLAN[state.activeDay].items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
-function render(){document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():settingsHTML()}
+function render(){document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===(state.view==='history-edit'?'history':state.view)));document.getElementById('app').innerHTML=state.view==='train'?trainHTML():['history','history-edit'].includes(state.view)?historyHTML():settingsHTML()}
 function setsHTML(list,type,item){const l=exerciseLog(item),machine=l.machine,v=currentVariant(item);return list.map((s,j)=>`<div class="set-row ${s.done?'done':''}"><strong>${type==='warm'?'R'+(j+1):j+1}</strong><input aria-label="Ciężar ${type} ${j+1}" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="${type}" data-field="kg" data-set="${j}" value="${esc(s.kg)}"><input aria-label="${measure(item)} ${type} ${j+1}" inputmode="decimal" type="number" min="0" step="any" placeholder="${item.mode?.startsWith('sec')?'s': 'powt.'}" data-type="${type}" data-field="reps" data-set="${j}" value="${esc(s.reps)}"><button class="done-button ${s.done?'checked':''}" data-done="${j}" data-type="${type}" aria-label="Seria ${j+1} ${s.done?'wykonana':'niewykonana'}">${s.done?'✓':'○'}</button></div>`).join('')}
 function dayTabsHTML(d){return `<div class="tabs day-tabs">${DISPLAY_DAYS.map(i=>`<button class="tab day-tab ${d===i?'active':''}" data-day="${i}">${esc(PLAN[i].day)}</button>`).join('')}</div>`}
 function trainHTML(){
@@ -273,8 +273,7 @@ function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?
  lines.push(`\n${item.title}`);const vars=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [k,v] of Object.entries(vars)){
  const rows=(v.sets||[]).filter(x=>x.done);if(!rows.length)continue;lines.push(`  ${machineName(k)} (${unit(k)}): ${rows.map(x=>`${x.kg||'masa ciała'} × ${x.reps} ${measure(item)}`).join(' | ')}; RIR ${v.rir||'—'}`)}
  }if(s.notes)lines.push(`\nNotatka: ${s.notes}`);return lines.join('\n')}
-function historyHTML(){const arr=[...state.history].reverse();const total=arr.reduce((n,h)=>n+allLogged(h).reduce((a,{log})=>a+(log.variants&&Object.keys(log.variants).length?Object.values(log.variants):[log]).reduce((b,v)=>b+(v.sets||[]).filter(x=>x.done).length,0),0),0);
- return `<section class="hero"><div class="eyebrow">Historia zapisana na urządzeniu</div><h1>Progres</h1><p class="muted">Przechowujemy wykonane serie i wybrane warianty sprzętu. Po skonfigurowaniu konta Azure historia będzie dostępna na wielu urządzeniach.</p></section><div class="statgrid"><div class="stat"><strong>${arr.length}</strong><span>Treningi</span></div><div class="stat"><strong>${total}</strong><span>Serie</span></div><div class="stat"><strong>${Object.keys(state.sessions).length}</strong><span>Rozpoczęte</span></div></div><div class="panel"><h2>Ostatnie treningi</h2>${arr.length?arr.map((h,i)=>`<div class="history-item"><div class="flex"><strong>${esc(PLAN[h.day]?.name||'Trening')}</strong><span class="chip">${esc(h.date)}</span></div><p class="hint">${esc(h.source||'Wprowadzone w aplikacji')}</p><pre style="white-space:pre-wrap;font:12px/1.5 system-ui;color:#b9d0d7">${esc(sessionReport(h))}</pre></div>`).join(''):'<div class="empty">Brak zakończonych treningów. Rozpocznij i potwierdź pierwszą serię.</div>'}</div>`}
+function historyHTML(){return GymHistoryUI.html(state,{PLAN,allLogged,sessionReport,machineName,unit,measure})}
 function settingsHTML(){const draft=Object.values(state.sessions).map(s=>sessionReport(s)).join('\n\n')||'Brak rozpoczętych treningów';return `<section class="hero"><div class="eyebrow">Dane i kopie</div><h1>Bezpieczny zapis</h1><p class="muted">Każda zmiana jest automatycznie zapisywana lokalnie. IndexedDB + awaryjna kopia localStorage. Synchronizacja Azure jest dostępna w sekcji poniżej po zalogowaniu i konfiguracji bazy. Kopia JSON nadal jest zalecana.</p></section>
  <div class="panel"><h2>Eksport danych</h2><div class="inline-actions"><button class="btn" id="export">↓ Kopia JSON</button><button class="btn secondary" id="exportcsv">↓ Serie CSV</button></div><hr class="hr"><div class="label">Przywrócenie kopii JSON</div><input type="file" id="import" accept="application/json,.json" style="width:100%;margin:12px 0;color:#ccd8e1"><div class="warning">Import zastępuje dotychczasowe treningi na tym urządzeniu. Najpierw zrób kopię JSON.</div></div>
  <div class="panel"><h2>Awaryjny raport tekstowy</h2><p class="muted">Raport można zaznaczyć ręcznie, nawet jeśli funkcja kopiowania zawiedzie. Obejmuje potwierdzone serie z rozpoczętych treningów.</p><textarea readonly id="report" class="report">${esc(draft)}</textarea><div class="inline-actions"><button class="btn secondary" id="copy-report">Kopiuj raport</button></div></div>
@@ -285,8 +284,9 @@ function mutateSet(field,j,type,value){const {item}=currentItem(),v=currentVaria
 function changeArea(area){state.activeArea=area;save(false);render()}
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
+ if(await window.GymHistoryUI?.handleClick?.(b,{state,save,render,toast,GymStorage}))return;
   if(b.id&&b.id.startsWith('cloud-')){try{await GymCloud.action(b.id)}catch(e){console.warn('Cloud action:',e);toast('Błąd synchronizacji — lokalne dane zachowane')}render();return;}
- if(b.dataset.view){state.view=b.dataset.view;save(false);render();return}
+ if(b.dataset.view){if(window.GymHistoryUI&&!GymHistoryUI.allowNavigate())return;state.view=b.dataset.view;save(false);render();return}
  if(b.dataset.day!==undefined){const day=Number(b.dataset.day);if(!DISPLAY_DAYS.includes(day))return;state.activeDay=day;state.activeArea='main';state.activeExercise=0;save(false);render();return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
  if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);save(false);render();return}
@@ -295,19 +295,23 @@ document.addEventListener('click',async event=>{
  if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;save(false);render();return}
  if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
  if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession().coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
- if(b.id==='finish'){const s=activeSession(),sum=summary();if(!sum.done){toast('Najpierw potwierdź choć jedną serię');return}if(!confirm(`Zakończyć trening? Potwierdzone serie: ${sum.done}.`))return;
+ if(b.id==='finish'){const s=activeSession(),sum=summary();if(!sum.done){toast('Najpierw potwierdź choć jedną serię');return}const existing=state.history.filter(h=>h.date===s.date&&h.day===s.day).length;
+  const question=existing?`W historii jest już ${existing} trening(ów) dla ${s.date} i tego dnia planu. Zapisanie utworzy ODDZIELNĄ sesję, nie poprawi poprzedniej. Aby poprawić wyniki, wybierz Anuluj, a następnie Historia → Edytuj trening. Czy na pewno zapisać drugi trening?`:`Zakończyć trening? Potwierdzone serie: ${sum.done}.`;
+  if(!confirm(question))return;
   state.history.push(JSON.parse(JSON.stringify({...s,source:'Wpisane w aplikacji',syncId:'history:'+(crypto.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2))})));delete state.sessions[dateKey()+'-'+state.activeDay];state.view='history';save();window.GymCloud?.markDeleted?.('draft:'+dateKey()+'-'+state.activeDay);await GymStorage.flush();render();toast('Trening w historii, zapis lokalny wykonany');return}
  if(b.id==='export'){download('gym-tracker-backup-'+dateKey()+'.json',JSON.stringify(state,null,2),'application/json');return}
  if(b.id==='exportcsv'){download('gym-tracker-series-'+dateKey()+'.csv',csv(),'text/csv;charset=utf-8');return}
  if(b.id==='copy-report'){const t=document.getElementById('report');t.focus();t.select();try{await navigator.clipboard.writeText(t.value);toast('Skopiowano raport')}catch{toast('Raport zaznaczony — skopiuj ręcznie')}return}
 });
 document.addEventListener('change',async event=>{const el=event.target;
+ if(window.GymHistoryUI?.handleChange?.(el))return;
  if(el.id==='machine'){switchVariant(currentItem().item,el.value);save();render()}
  else if(el.id==='rir'){currentVariant(currentItem().item).rir=el.value;save()}
  else if(el.id==='enable-core'){activeSession().coreEnabled[currentItem().item.id]=el.checked;save();render()}
  else if(el.id==='import'){const file=el.files?.[0];if(!file)return;try{if(file.size>10*1024*1024)throw Error('Backup too large');const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object')throw Error('Invalid structure');if(!confirm('Import zastąpi lokalny dziennik. Kontynuować?'))return;state=normalize(data);save();await GymStorage.flush();render();toast('Kopia przywrócona')}catch(e){console.error(e);toast('Błąd importu JSON')}}
 });
 document.addEventListener('input',event=>{const t=event.target;
+ if(window.GymHistoryUI?.handleInput?.(t))return;
  if(t.dataset.field){mutateSet(t.dataset.field,Number(t.dataset.set),t.dataset.type,t.value)}
  else if(t.id==='notes'){activeSession().notes=t.value;save()}
 });
