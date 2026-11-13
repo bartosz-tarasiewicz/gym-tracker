@@ -5,7 +5,7 @@ import path from 'node:path';
 import {chromium} from 'playwright';
 
 const files={'/':'index.html','/index.html':'index.html','/storage.js':'storage.js','/sync.js':'sync.js','/app.js':'app.js','/sw.js':'sw.js','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/icon-apple.png':'icon-apple.png'};
-const store=new Map();let version=0;
+const store=new Map();let version=0;const operations=[];
 const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data))};
 const server=http.createServer(async(req,res)=>{
  const url=new URL(req.url,'http://localhost');
@@ -18,9 +18,9 @@ const server=http.createServer(async(req,res)=>{
   let raw='';for await(const p of req)raw+=p;
   const body=JSON.parse(raw),old=store.get(id);
   if((old?.etag||null)!==body.expectedEtag)return json(res,409,{error:'workout_changed'});
-  if(req.method==='DELETE'){store.delete(id);return json(res,200,{ok:true,id,deleted:true});}
+  if(req.method==='DELETE'){store.delete(id);operations.push({id,method:'DELETE'});return json(res,200,{ok:true,id,deleted:true});}
   const etag='"'+(++version)+'"';
-  store.set(id,{kind:id.split(':')[0],record:structuredClone(body.record),etag});
+  store.set(id,{kind:id.split(':')[0],record:structuredClone(body.record),etag});operations.push({id,method:'PUT'});
   return json(res,200,{ok:true,id,etag});
  }
  const file=files[url.pathname];if(!file){res.writeHead(404);return res.end('Not Found');}
@@ -126,9 +126,27 @@ try{
  await until(()=>JSON.stringify([...store]).includes('"kg":"54"'),'Friday workout');
  assert.ok(store.size>=3,'Three different workouts should be stored separately');
  log('Separate training days update independently without global journal conflicts');
+
+ const fridayId=[...store.keys()].find(id=>id.startsWith('draft:')&&id.endsWith('-5'));
+ assert.ok(fridayId,'Friday draft was stored independently');
+ const operationCursor=operations.length;
+ await p2.locator('.done-button[data-type="work"]').first().click();
+ await until(()=>store.get(fridayId)?.record?.exercises?.legpress?.sets?.[0]?.done===true ||
+   store.get(fridayId)?.record?.exercises?.legpress?.variants?.['MG-PL70']?.sets?.[0]?.done===true,
+   'confirmed Friday set');
+ p2.once('dialog',dialog=>dialog.accept());
+ await p2.locator('#finish').click();
+ await until(()=>!store.has(fridayId)&&[...store].some(([id,v])=>id.startsWith('history:')&&v.record?.day===5),
+   'finished workout migrates to history and removes draft');
+ const finishOps=operations.slice(operationCursor);
+ const historyWrite=finishOps.findIndex(x=>x.method==='PUT'&&x.id.startsWith('history:'));
+ const draftRemoval=finishOps.findIndex(x=>x.method==='DELETE'&&x.id===fridayId);
+ assert.ok(historyWrite>=0&&draftRemoval>historyWrite,'History must be written before deleting draft');
+ log('Finishing a workout writes history before removing its draft, without data loss');
+
  assert.deepEqual(errors,[],'Uncaught JS errors: '+errors.join(';'));
  log('No uncaught JavaScript errors');
- console.log('SUCCESS: 7 cloud-authoritative browser scenarios');
+ console.log('SUCCESS: 8 cloud-authoritative browser scenarios');
 }finally{
  await browser.close();await new Promise(resolve=>server.close(resolve));
 }
