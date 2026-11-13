@@ -1,5 +1,5 @@
 'use strict';
-/* Zenek Gym Tracker v0.2 — no framework, no server or required build step. */
+/* Zenek Gym Tracker v0.5 — date-first, Azure-authoritative training. */
 const MACHINE={
  'MG-PL13':{label:'MG-PL13 · Supine Bench Press',type:'plates',image:'https://johnsonfitness.co.nz/cdn/shop/files/MX19_MAGNUMMG-PL13supinebenchpress_BlkMatte_hero_b1afdd1b-a22e-4889-830c-eb9735e93c32.jpg?v=1711426098&width=1000'},
  'MG-PL14':{label:'MG-PL14 · Incline Bench Press',type:'plates',image:'https://www.renewfit.com/photos_grd/ph1671796767836.jpg'},
@@ -39,6 +39,19 @@ const MACHINE_PHOTOS={
  'G3-S22':{image:'https://static-data2.manualslib.com/product-images/892/2340529/matrix-g3-s22.jpg'}
 };
 for(const [id,photo] of Object.entries(MACHINE_PHOTOS))Object.assign(MACHINE[id],photo);
+// Exercise photos. Credit links are shown in the app; unverified models are never labeled as exact.
+const CORE_PHOTOS={
+ 'core-crunch':{image:'https://images.ctfassets.net/3s5io6mnxfqz/7qb4qHUCjKe8j487NACvu3/f7fb4f5d7ce91ae86e57d707bcf875a9/AdobeStock_29077916_2.jpeg',credit:'MasterClass',source:'https://www.masterclass.com/articles/cable-crunches-guide'},
+ 'core-knees':{image:'https://www.living.fit/cdn/shop/files/ca-16-vertical-knee-raise-2_535x.jpg?v=1755653302',credit:'Living.Fit',source:'https://www.living.fit/products/leg-raise-captains-chair-with-dip-and-push-up-station'},
+ 'core-woodchop':{image:'https://app-media.fitbod.me/v2/79/images/angles/1.jpg',credit:'Fitbod',source:'https://fitbod.me/exercises/cable-wood-chop'},
+ 'core-side-plank':{image:'https://pilatesc.jp/wp-content/uploads/2025/10/hj%E3%80%81%EF%BD%88%EF%BD%8A.1-1024x724.jpeg',credit:'Pilates C',source:'https://pilatesc.jp/onomichi-pilates-side-plank-hiplift/'},
+ 'core-rack':{image:'https://images.squarespace-cdn.com/content/v1/5a5e65fe8dd0411461e901a2/1518203311717-MQRQMQ5LMKLVPCDCMVSV/KBFitBrit_222.jpg?format=2500w',credit:'KB Fit Britt',source:'https://www.kbfitbritt.com/shop/biathlon',imageNote:'Pozycja front rack — w carry poruszaj się spokojnie, bez przechylania tułowia.'},
+ 'core-drag':{image:'https://www.mensjournal.com/.image/NDI6MDAwMDAwMDAxMTQ2ODQx/plank-drags-header.jpg',credit:"Men's Journal",source:'https://www.mensjournal.com/health-fitness/strength-coach-reveals-the-best-anti-movement-abs-exercises-for-a-bulletproof-core-and-heavier-compound-lifts'},
+ 'core-hollow':{image:'https://static.nike.com/a/images/f_auto/dpr_1.0%2Ccs_srgb/w_1212%2Cc_limit/4d42fe90-cdff-41a5-acad-50acce27a12f/how-to-do-a-handstand-push-up-according-to-crossfit-coaches.jpg',credit:'Nike',source:'https://www.nike.com/au/a/how-to-do-handstand-pushups'},
+ 'core-wheel':{image:'https://i0.wp.com/www.muscleandfitness.com/wp-content/uploads/2018/05/1109-ab-wheel-rollout.jpg?quality=86&strip=all',credit:'Muscle & Fitness',source:'https://www.muscleandfitness.com/workouts/abs-and-core-exercises/11-hardest-abs-exercises-all-time/'},
+ 'core-pallof':{image:'https://i.vimeocdn.com/video/1025961123-863a0a9daf9b4b20223983416f965e68fb569473a35b2b54318afb22318febbf-d',credit:'Vimeo',source:'https://vimeo.com/495920365'},
+ 'core-bend':{image:'https://static.movimente.me/media/imgs/exercises/IMG_0751.jpg',credit:'Movimente.me',source:'https://movimente.me/exercicio/flexao-lateral-de-tronco-em-pe-c-polia-baixa/'}
+};
 const DISPLAY_DAYS=[0,1,2,3,5]; // Preserve Friday's existing day=5 IDs in Azure and backups.
 const make=(id,title,work,options,tip='',warm=[])=>({id,title,work,options,tip,warm});
 const ARMS=[
@@ -89,7 +102,7 @@ const CORE=[
 ];
 const dateKey=()=>{const d=new Date();const p=x=>String(x).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`};
 const todayDay=()=>{const d=new Date().getDay();return {1:0,2:1,3:2,4:3,5:5}[d]??0};
-const initial=()=>({version:2,activeDay:todayDay(),activeExercise:0,activeArea:'main',activeCore:0,view:'train',sessions:{},history:[],savedAt:0});
+const initial=()=>({version:2,selectedDate:dateKey(),selectedRecordId:'',activeDay:todayDay(),activeExercise:0,activeArea:'main',activeCore:0,view:'train',sessions:{},history:[],savedAt:0});
 let state=initial();
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const machineName=k=>MACHINE[k]?.label||k;
@@ -99,24 +112,64 @@ function normalize(data){if(!data||typeof data!=='object'||!Array.isArray(data.h
   s.history=s.history.map(h=>({...h,day:h.day===4?5:h.day}));
   const moved={};for(const [key,x] of Object.entries(s.sessions)){const originalDay=x.day;if(originalDay===4)x.day=5;const newKey=originalDay===4&&key.endsWith('-4')?key.slice(0,-1)+'5':key;moved[newKey]=x} s.sessions=moved;
  }
- s.version=2;s.activeDay=Math.max(0,Math.min(PLAN.length-1,Number(s.activeDay)||0));if(s.activeDay===4)s.activeDay=3;s.activeExercise=Math.max(0,Number(s.activeExercise)||0);s.activeCore=Math.max(0,Math.min(9,Number(s.activeCore)||0));return s;
+ s.version=2;s.selectedDate=/^\d{4}-\d{2}-\d{2}$/.test(s.selectedDate||'')?s.selectedDate:dateKey();s.activeDay=GymWeek.dayIndex(s.selectedDate);s.selectedRecordId=String(s.selectedRecordId||'');s.activeExercise=Math.max(0,Number(s.activeExercise)||0);s.activeCore=Math.max(0,Math.min(9,Number(s.activeCore)||0));return s;
 }
-function activeSession(){const key=dateKey()+'-'+state.activeDay;if(!state.sessions[key])state.sessions[key]={date:dateKey(),day:state.activeDay,started:new Date().toISOString(),exercises:{},coreEnabled:{},notes:''};return state.sessions[key]}
-function exerciseLog(item){const s=activeSession();if(!s.exercises[item.id])s.exercises[item.id]={machine:item.options[0],sets:item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),rir:'',variants:{}};
- const l=s.exercises[item.id];if(!l.warmups)l.warmups=(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false}));if(!l.variants)l.variants={};if(!l.machine)l.machine=item.options[0];return l;
+function selectDate(date){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime()))return;
+ state.selectedDate=date;state.selectedRecordId='';
+ state.activeDay=GymWeek.dayIndex(date);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
+ save(false);render();
 }
-function currentVariant(item){const l=exerciseLog(item);if(!l.variants[l.machine]){
-  // Legacy records' original sets are preserved when moving to variant-aware storage.
-  l.variants[l.machine]={sets:l.sets||item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:l.warmups||[],rir:l.rir||''};
+const sessionKey=()=>state.selectedDate+'-'+state.activeDay;
+function storedDay(){
+ const {selectedDate,activeDay,selectedRecordId}=state;
+ const found=state.history.filter(h=>h.date===selectedDate&&h.day===activeDay);
+ if(selectedRecordId){
+  const selected=found.find(h=>h.syncId===selectedRecordId);
+  if(selected)return selected;
  }
- return l.variants[l.machine];
+ if(found.length)return found[found.length-1];
+ return state.sessions[sessionKey()]||null;
 }
-function switchVariant(item,newMachine){const l=exerciseLog(item);currentVariant(item);l.machine=newMachine;
- if(!l.variants[newMachine])l.variants[newMachine]={sets:item.work.map(([kg,reps])=>({kg:'',reps:String(reps),done:false})),warmups:(item.warm||[]).map(([,reps])=>({kg:'',reps:String(reps),done:false})),rir:''};
+function activeSession(create=false){
+ const existing=storedDay();if(existing)return existing;
+ const fresh={date:state.selectedDate,day:state.activeDay,started:new Date().toISOString(),exercises:{},coreEnabled:{},notes:''};
+ if(create)state.sessions[sessionKey()]=fresh;
+ return fresh;
 }
-function counted(item){const l=exerciseLog(item);currentVariant(item);return Object.values(l.variants).reduce((n,v)=>n+(v.sets||[]).filter(x=>x.done).length,0)}
+function defaultLog(item){return {machine:item.options[0],sets:item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),rir:'',variants:{}};}
+function exerciseLog(item,create=false){
+ const session=activeSession(create);
+ if(!session.exercises[item.id]&&create)session.exercises[item.id]=defaultLog(item);
+ return session.exercises[item.id]||defaultLog(item);
+}
+function currentVariant(item,create=false){
+ const log=exerciseLog(item,create),id=log.machine||item.options[0];
+ if(!log.variants&&create)log.variants={};
+ if(log.variants?.[id])return log.variants[id];
+ const variant={sets:log.sets||item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:log.warmups||(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),rir:log.rir||''};
+ if(create)log.variants[id]=variant;
+ return variant;
+}
+function switchVariant(item,newMachine){
+ if(!item.options.includes(newMachine))return;
+ const log=exerciseLog(item,true);
+ currentVariant(item,true);
+ log.machine=newMachine;
+ if(!log.variants[newMachine])log.variants[newMachine]={sets:item.work.map(([,reps])=>({kg:'',reps:String(reps),done:false})),warmups:(item.warm||[]).map(([,reps])=>({kg:'',reps:String(reps),done:false})),rir:''};
+}
+function counted(item){
+ const log=exerciseLog(item);
+ const versions=log.variants&&Object.keys(log.variants).length?Object.values(log.variants):[log];
+ return versions.reduce((n,v)=>n+(v.sets||[]).filter(x=>x.done).length,0);
+}
 function isCoreEnabled(item){const s=activeSession();return !!(s.coreEnabled?.[item.id]||counted(item)>0)}
-function summary(){const d=state.activeDay;const mainDone=PLAN[d].items.reduce((n,x)=>n+counted(x),0);const coreDone=CORE.reduce((n,x)=>n+counted(x),0);const planned=PLAN[d].items.reduce((n,x)=>n+x.work.length,0)+CORE.filter(isCoreEnabled).reduce((n,x)=>n+x.work.length,0);return {mainDone,coreDone,planned,done:mainDone+coreDone}}
+function summary(){
+ const d=state.activeDay,mainDone=PLAN[d].items.reduce((n,x)=>n+counted(x),0);
+ const coreDone=CORE.reduce((n,x)=>n+counted(x),0);
+ const planned=PLAN[d].items.reduce((n,x)=>n+x.work.length,0)+CORE.filter(isCoreEnabled).reduce((n,x)=>n+x.work.length,0);
+ return {mainDone,coreDone,planned,done:mainDone+coreDone};
+}
 // Extract only meaningful workout data. Navigation, timestamps and untouched
 // exercise templates must never create conflicts or authorize overwrites.
 function workoutProjection(data){
@@ -239,81 +292,108 @@ function toast(str){const t=document.getElementById('toast');t.textContent=str;t
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:PLAN[state.activeDay].items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
-function render(){document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===(state.view==='history-edit'?'history':state.view)));document.getElementById('app').innerHTML=state.view==='train'?trainHTML():['history','history-edit'].includes(state.view)?historyHTML():settingsHTML()}
-function setsHTML(list,type,item){const l=exerciseLog(item),machine=l.machine,v=currentVariant(item);return list.map((s,j)=>`<div class="set-row ${s.done?'done':''}"><strong>${type==='warm'?'R'+(j+1):j+1}</strong><input aria-label="Ciężar ${type} ${j+1}" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="${type}" data-field="kg" data-set="${j}" value="${esc(s.kg)}"><input aria-label="${measure(item)} ${type} ${j+1}" inputmode="decimal" type="number" min="0" step="any" placeholder="${item.mode?.startsWith('sec')?'s': 'powt.'}" data-type="${type}" data-field="reps" data-set="${j}" value="${esc(s.reps)}"><button class="done-button ${s.done?'checked':''}" data-done="${j}" data-type="${type}" aria-label="Seria ${j+1} ${s.done?'wykonana':'niewykonana'}">${s.done?'✓':'○'}</button></div>`).join('')}
-function dayTabsHTML(d){return `<div class="tabs day-tabs">${DISPLAY_DAYS.map(i=>`<button class="tab day-tab ${d===i?'active':''}" data-day="${i}">${esc(PLAN[i].day)}</button>`).join('')}</div>`}
+function render(){document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():settingsHTML()}
+function setsHTML(list,type,item){
+ return (list||[]).map((s,j)=>{
+  const head=type==='warm'?'R'+(j+1):String(j+1);
+  return '<div class="set-row '+(s.done?'done':'')+'"><strong>'+head+'</strong>'+
+   '<input aria-label="Ciężar '+type+' '+(j+1)+'" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="'+type+'" data-field="kg" data-set="'+j+'" value="'+esc(s.kg??'')+'">'+
+   '<div class="nudge-wrap"><button type="button" data-nudge="-1" data-type="'+type+'" data-set="'+j+'" aria-label="Odejmij powtórzenie">−</button><input aria-label="'+esc(measure(item))+' '+type+' '+(j+1)+'" inputmode="numeric" type="number" min="0" step="1" placeholder="'+(item.mode?.startsWith('sec')?'s':'powt.')+'" data-type="'+type+'" data-field="reps" data-set="'+j+'" value="'+esc(s.reps??'')+'"><button type="button" data-nudge="1" data-type="'+type+'" data-set="'+j+'" aria-label="Dodaj powtórzenie">+</button></div>'+
+   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>';
+ }).join('');
+}
+function selectedDayReports(){return state.history.filter(h=>h.date===state.selectedDate&&h.day===state.activeDay)}
 function trainHTML(){
- const d=state.activeDay;
- if(d===3)return `<section class="hero"><div class="eyebrow">Gym Tracker · Azure Primary</div><h1>Czwartek</h1><p class="muted">Dziś GRIT Strength — tych zajęć nie rejestrujemy w Gym Trackerze.</p></section>${dayTabsHTML(d)}<div class="panel"><div class="title">Dzień poza dziennikiem</div><p class="hint">Brak serii, licznika postępu i zapisu treningu. Wróć do aplikacji na kolejny trening siłowy.</p></div>`;
+ const calendar=GymWeek.html(state),d=state.activeDay;
+ if(d===-1)return calendar+'<section class="hero"><div class="eyebrow">Dzień bez planu</div><h1>Regeneracja</h1><p class="muted">Sobota i niedziela są wolne od rejestrowania treningów. Możesz wybrać dowolny dzień w kalendarzu.</p></section>';
+ if(d===3)return calendar+'<section class="hero"><div class="eyebrow">Dzień poza dziennikiem</div><h1>Czwartek</h1><p class="muted">Les Mills GRIT Strength pozostaje poza Gym Trackerem. Nie tworzymy serii ani wpisu do Azure.</p></section>';
  const s=activeSession(),day=PLAN[d],{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
- const mainTabs=day.items.map((e,i)=>`<button class="tab ${state.activeArea==='main'&&index===i?'active':''}" data-item="${i}">${i+1}</button>`).join('');
- const coreTabs=CORE.map((e,i)=>`<button class="core-choice ${state.activeArea==='core'&&index===i?'active':''}" data-core="${i}">${isCoreEnabled(e)?'✓ ':'＋ '}${esc(e.title)}</button>`).join('');
- const selected=item.options.map(k=>`<option value="${esc(k)}" ${log.machine===k?'selected':''}>${esc(machineName(k))}</option>`).join('');
- const photo=m.image?`<img class="machine-img" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="${esc(m.label)}" src="${esc(m.image)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><div class="image-error" hidden>Zdjęcie chwilowo niedostępne</div>${m.imageNote?`<p class="photo-note">${esc(m.imageNote)}</p>`:''}`:`<div class="image-error">${esc(m.label)}<br>Zdjęcie tego wariantu nie jest jeszcze dostępne.</div>`;
- const last=[...state.history].reverse().find(h=>h.exercises?.[item.id]);const previous=last?.exercises[item.id];
- const preview=previous?`Poprzednio (${esc(last.date)}): ${(previous.sets||[]).filter(x=>x.done).map(x=>esc(x.kg)+' × '+esc(x.reps)).join(' · ')||'brak potwierdzonych serii'}`:'Wypełnione wartości to PROPOZYCJA, nie wykonany trening.';
- const coreActive=state.activeArea==='core',enabled=isCoreEnabled(item);
- return `<section class="hero"><div class="eyebrow">Gym Tracker · Azure-ready</div><h1>${esc(day.name)}</h1><p class="muted">Wpisy są automatycznie zapisywane lokalnie. Wszystkie serie zaczynają jako niewykonane.</p></section>
- ${dayTabsHTML(d)}
- <div class="panel"><div class="flex"><div><div class="eyebrow">Postęp</div><div class="title">${sum.done}<span class="muted"> / ${sum.planned} serii</span></div></div><span class="chip">${esc(dateKey())}</span></div><div class="meter"><div style="width:${sum.planned?Math.min(100,Math.round(sum.done/sum.planned*100)):0}%"></div></div><p class="hint">Główne: ${sum.mainDone} · CORE BONUS: ${sum.coreDone}</p></div>
- <div class="inline-actions"><button class="btn ${coreActive?'secondary':''}" data-area="main">🏋️ Trening</button><button class="btn ${!coreActive?'secondary':''}" data-area="core">🧱 CORE BONUS (${CORE.length})</button></div>
- ${coreActive?`<div class="panel"><div class="eyebrow">10 ćwiczeń do wyboru</div><p class="hint">Włącz 1–2. Pozostałe nie liczą się do planu.</p><div class="core-chooser">${coreTabs}</div></div>`:`<div class="tabs">${mainTabs}</div>`}
- <div class="panel"><div class="exercise-head"><div><div class="number">${coreActive?'CORE BONUS':'ĆWICZENIE'} ${index+1} / ${list.length}</div><div class="title">${esc(item.title)}</div><p class="hint">${item.work.length} serie robocze · ${esc(item.tip)}</p></div></div>
- ${coreActive?`<label class="core-toggle"><input type="checkbox" id="enable-core" ${enabled?'checked':''}><strong>Włącz do dzisiejszego treningu</strong></label>`:''}
- ${!coreActive||enabled?`<div class="label">Maszyna / wariant</div><select id="machine" class="equipment">${selected}</select><div class="img-frame">${photo}</div><p class="ex-note">Jednostka: <strong>${esc(unit(log.machine))}</strong> · ${esc(measure(item))}. Dla nowego sprzętu przechowujemy oddzielne serie.</p>
- ${preview?`<p class="hint">${preview}</p>`:''}
- ${(v.warmups||[]).length?`<div class="section-header"><strong>Rozgrzewka</strong><span class="smallcaps">Nie liczy się do roboczych</span></div><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>${setsHTML(v.warmups,'warm',item)}`:''}
- <div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">${(v.sets||[]).filter(x=>x.done).length} wykonano</span></div><div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>${setsHTML(v.sets,'work',item)}
- <div class="inline-actions"><button class="btn secondary small" id="addset">+ Dodaj serię</button><button class="btn secondary small" id="markall">✓ Potwierdź wszystkie wpisane</button></div>
- <div class="label">RIR ostatniej serii / ocena</div><select id="rir" class="rir-select"><option value="">— nie podano —</option>${['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>`<option value="${x}" ${v.rir===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`:`<p class="hint">Włącz ćwiczenie, aby uzupełnić serie. Pozostałe opcje core pozostają dostępne, ale nieobowiązkowe.</p>`}
- <div class="stepper"><button class="btn secondary" id="prev" ${index===0?'disabled':''}>← Wstecz</button><button class="btn" id="next" ${index===list.length-1?'disabled':''}>Następne →</button></div></div>
- <div class="panel"><div class="eyebrow">Notatka do treningu</div><textarea class="notes" id="notes" placeholder="Zmiana sprzętu, wykonane bonusy, RIR, ból, uwagi…">${esc(s.notes||'')}</textarea><div class="inline-actions"><button class="btn full" id="finish" ${!sum.done?'disabled':''}>✓ Zakończ i dodaj do historii (${sum.done} serii)</button></div><p class="hint">Dane zapisują się już w trakcie wpisywania. Zakończenie tworzy wpis w historii, ale nie jest wymagane do zachowania roboczego treningu.</p></div>`}
+ const old=selectedDayReports(),saved=storedDay(),coreActive=state.activeArea==='core',enabled=isCoreEnabled(item);
+ const tabs=day.items.map((e,i)=>{
+  const done=counted(e);
+  return '<button type="button" class="exercise-tab '+(!coreActive&&i===index?'active':'')+'" data-item="'+i+'"><span>'+(done?'✓ ':'' )+(i+1)+'. '+esc(e.title)+'</span>'+(done?'<small>'+done+' serii</small>':'')+'</button>';
+ }).join('');
+ const coreTabs=CORE.map((e,i)=>'<button type="button" class="core-choice '+(coreActive&&index===i?'active':'')+'" data-core="'+i+'">'+(isCoreEnabled(e)?'✓ ':'＋ ')+esc(e.title)+'</button>').join('');
+ const selected=item.options.map(k=>'<option value="'+esc(k)+'" '+(log.machine===k?'selected':'')+'>'+esc(machineName(k))+'</option>').join('');
+ const choices=item.options.map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k).split(' · ')[0])+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
+ const image=coreActive?CORE_PHOTOS[item.id]||m:m,src=image?.image;
+ const photo=src?'<img class="machine-img" loading="lazy" decoding="async" alt="'+esc(item.title+' — '+(coreActive?'przykład ćwiczenia':machineName(log.machine)))+'" src="'+esc(src)+'" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><div class="image-error" hidden>Zdjęcie chwilowo niedostępne</div>':
+  '<div class="image-error">'+esc(machineName(log.machine))+'<p>Zdjęcie tego wariantu nie jest jeszcze dostępne.</p></div>';
+ const credit=image?.source?'<a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(image.source)+'">Źródło zdjęcia: '+esc(image.credit||'materiał demonstracyjny')+'</a>':'';
+ const photoNote=image?.imageNote?'<p class="photo-note">'+esc(image.imageNote)+'</p>':'';
+ const previous=[...state.history,...Object.values(state.sessions)].filter(h=>h.date<state.selectedDate&&h.exercises?.[item.id]).sort((a,b)=>a.date.localeCompare(b.date)).reverse().find(h=>{
+  const l=h.exercises[item.id];return l?.variants?.[log.machine]||l?.machine===log.machine;
+ });
+ const oldLog=previous?.exercises[item.id],oldVariant=oldLog?.variants?.[log.machine]||(oldLog?.machine===log.machine?oldLog:null);
+ const oldRows=(oldVariant?.sets||[]).filter(x=>x.done);
+ const preview=oldRows.length?'<div class="previous-results"><strong>Poprzednio · '+esc(previous.date)+'</strong><span>'+oldRows.map(x=>esc(x.kg||'BW')+' × '+esc(x.reps)).join(' · ')+'</span></div>':
+  '<p class="hint">Wpisane liczby są propozycją. Nie są zaliczone, dopóki nie potwierdzisz serii.</p>';
+ const switcher=old.length>1?'<div class="panel"><label class="label" for="session-picker">Kilka treningów tego dnia — wybierz do edycji</label><select class="equipment" id="session-picker">'+old.map((h,i)=>'<option value="'+esc(h.syncId||'')+'" '+(s===h?'selected':'')+'>Sesja '+(i+1)+' · '+esc(h.started?.slice(11,16)||h.date)+'</option>').join('')+'</select></div>':'';
+ const todayBlock='<section class="hero compact-hero"><div class="eyebrow">'+esc(state.selectedDate)+' · '+(saved?'Istniejący zapis':'Nowy trening')+'</div><h1>'+esc(day.name)+'</h1><p class="muted">'+(saved?'Edytujesz zapis z wybranego dnia. Zmiany są zapisywane automatycznie.':'Wartości startowe są podpowiedzią. Dopiero wpisana zmiana lub potwierdzona seria utworzy zapis.')+'</p></section>';
+ const overview='<div class="panel workout-overview"><div class="flex"><div><div class="eyebrow">Wykonane serie</div><div class="title">'+sum.done+'<span class="muted"> / '+sum.planned+'</span></div></div><span class="chip">'+esc(state.selectedDate)+'</span></div><div class="meter"><div style="width:'+(sum.planned?Math.round(100*sum.done/sum.planned):0)+'%"></div></div><p class="hint">Główne: '+sum.mainDone+' · CORE: '+sum.coreDone+'</p></div>';
+ const chooseArea='<div class="inline-actions"><button class="btn '+(coreActive?'secondary':'')+'" data-area="main">🏋️ Trening</button><button class="btn '+(!coreActive?'secondary':'')+'" data-area="core">🧱 CORE BONUS</button></div>';
+ const chooser=coreActive?'<div class="panel"><div class="eyebrow">Wybierz ćwiczenie CORE</div><p class="hint">Ćwiczenia opcjonalne. Nieaktywne nie są liczone do planu.</p><div class="core-chooser">'+coreTabs+'</div></div>':'<div class="exercise-strip">'+tabs+'</div>';
+ const photoSection='<div class="img-frame">'+photo+'</div>'+credit+photoNote;
+ const selectedVariants='<div class="label">Maszyna / hantle / zamiennik</div><div class="machine-options">'+choices+'</div><select id="machine" class="equipment" aria-label="Wybierz wariant sprzętu">'+selected+'</select>';
+ const sets='<p class="ex-note">Jednostka: <strong>'+esc(unit(log.machine))+'</strong> · '+esc(measure(item))+'. Każdy wariant sprzętu ma osobne wyniki.</p>'+preview+
+  (v.warmups?.length?'<div class="section-header"><strong>Rozgrzewka</strong><span class="smallcaps">Poza licznikiem serii</span></div><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.warmups,'warm',item):'')+
+  '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div><div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
+  '<div class="inline-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><button type="button" class="btn secondary small" id="markall">✓ Potwierdź wszystkie wpisane</button></div>'+
+  '<div class="label">RIR ostatniej serii / ocena</div><select id="rir" class="rir-select"><option value="">— nie podano —</option>'+['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>'<option value="'+x+'" '+(v.rir===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select>';
+ const exercise='<div class="panel"><div class="exercise-head"><div><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><div class="title">'+esc(item.title)+'</div><p class="hint">'+esc(item.tip)+'</p></div></div>'+
+  (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
+  selectedVariants+photoSection+(coreActive&&!enabled?'<p class="hint">Zaznacz „Dodaj do treningu”, by wpisywać serie. Zdjęcie i warianty są widoczne bez włączania ćwiczenia.</p>':sets)+
+  '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Wstecz</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
+ const notes='<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, ból, uwagi…">'+esc(s.notes||'')+'</textarea><p class="hint">Zapis automatyczny w Azure po zmianach. Nie trzeba kończyć treningu ani tworzyć drugiego wpisu.</p></div>';
+ return calendar+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
+}
 function allLogged(s){const items=[...(PLAN[s.day]?.items||[]),...CORE];return Object.entries(s.exercises||{}).map(([id,log])=>({item:items.find(x=>x.id===id)||{id,title:'Ćwiczenie archiwalne: '+id,mode:'reps'},log}));}
 function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?.name||s.day}`,`Źródło: ${s.source||'zapis użytkownika'}`];for(const {item,log} of allLogged(s)){
  lines.push(`\n${item.title}`);const vars=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [k,v] of Object.entries(vars)){
  const rows=(v.sets||[]).filter(x=>x.done);if(!rows.length)continue;lines.push(`  ${machineName(k)} (${unit(k)}): ${rows.map(x=>`${x.kg||'masa ciała'} × ${x.reps} ${measure(item)}`).join(' | ')}; RIR ${v.rir||'—'}`)}
  }if(s.notes)lines.push(`\nNotatka: ${s.notes}`);return lines.join('\n')}
-function historyHTML(){return GymHistoryUI.html(state,{PLAN,allLogged,sessionReport,machineName,unit,measure})}
-function settingsHTML(){const draft=Object.values(state.sessions).map(s=>sessionReport(s)).join('\n\n')||'Brak rozpoczętych treningów';return `<section class="hero"><div class="eyebrow">Dane i kopie</div><h1>Bezpieczny zapis</h1><p class="muted">Każda zmiana jest automatycznie zapisywana lokalnie. IndexedDB + awaryjna kopia localStorage. Synchronizacja Azure jest dostępna w sekcji poniżej po zalogowaniu i konfiguracji bazy. Kopia JSON nadal jest zalecana.</p></section>
+function historyHTML(){return GymProgress.html(state,{PLAN,CORE,MACHINE,allLogged,sessionReport,machineName,unit,measure})}
+function settingsHTML(){const draft=Object.values(state.sessions).map(s=>sessionReport(s)).join('\n\n')||'Brak rozpoczętych treningów';return `<section class="hero"><div class="eyebrow">Dane i kopie</div><h1>Bezpieczny zapis</h1><p class="muted">Wyniki synchronizujemy z Azure. Na urządzeniu przechowujemy tylko pamięć podręczną i kolejkę zmian na wypadek utraty połączenia. Kopia JSON jest dodatkowym zabezpieczeniem.</p></section>
  <div class="panel"><h2>Eksport danych</h2><div class="inline-actions"><button class="btn" id="export">↓ Kopia JSON</button><button class="btn secondary" id="exportcsv">↓ Serie CSV</button></div><hr class="hr"><div class="label">Przywrócenie kopii JSON</div><input type="file" id="import" accept="application/json,.json" style="width:100%;margin:12px 0;color:#ccd8e1"><div class="warning">Import zastępuje dotychczasowe treningi na tym urządzeniu. Najpierw zrób kopię JSON.</div></div>
  <div class="panel"><h2>Awaryjny raport tekstowy</h2><p class="muted">Raport można zaznaczyć ręcznie, nawet jeśli funkcja kopiowania zawiedzie. Obejmuje potwierdzone serie z rozpoczętych treningów.</p><textarea readonly id="report" class="report">${esc(draft)}</textarea><div class="inline-actions"><button class="btn secondary" id="copy-report">Kopiuj raport</button></div></div>
- <div class="panel"><h2>iPhone i Azure</h2><p class="hint">Po wdrożeniu na HTTPS: Safari → Udostępnij → Dodaj do ekranu początkowego. Używaj stale tej samej instalacji / adresu. Brak backendu i logowania.</p><p class="hint">Hosting: Azure Static Web Apps Free. Do synchronizacji zaloguj się przez GitHub i połącz Azure Table Storage.</p></div>${window.GymCloud?.html?.()||''}`}
+ <div class="panel"><h2>iPhone i Azure</h2><p class="hint">Na iPhonie: Safari → Udostępnij → Dodaj do ekranu początkowego. Logowanie do chmury odbywa się przez GitHub. Wybór daty lub samo oglądanie treningu nie tworzy nowych rekordów.</p><p class="hint">Hosting: Azure Static Web Apps Free. Dane: Azure Table Storage. Przy braku połączenia zmiany trafiają do kolejki offline.</p></div>${window.GymCloud?.html?.()||''}`}
 function csv(){const rows=[['date','day','exercise','machine','set','kg','reps_or_seconds','measure','rir','source','status']];for(const s of [...state.history,...Object.values(state.sessions)])for(const {item,log} of allLogged(s)){const variants=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [machine,v] of Object.entries(variants))(v.sets||[]).forEach((x,j)=>{if(x.done)rows.push([s.date,PLAN[s.day]?.name||s.day,item.title,machine,j+1,x.kg,x.reps,measure(item),v.rir||'',s.source||'aplikacja',state.history.includes(s)?'finished':'draft'])})}return rows.map(r=>r.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(',')).join('\r\n')}
 function download(name,content,mime){const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000)}
-function mutateSet(field,j,type,value){const {item}=currentItem(),v=currentVariant(item);const arr=type==='warm'?v.warmups:v.sets;arr[j][field]=value;save()}
+function mutateSet(field,j,type,value){const {item}=currentItem(),v=currentVariant(item,true);const arr=type==='warm'?v.warmups:v.sets;arr[j][field]=value;save()}
 function changeArea(area){state.activeArea=area;save(false);render()}
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
- if(await window.GymHistoryUI?.handleClick?.(b,{state,save,render,toast,GymStorage}))return;
+ if(window.GymProgress?.handleClick?.(b,render))return;
+ if(b.dataset.week!==undefined){selectDate(b.dataset.week==='today'?dateKey():GymWeek.shift(state.selectedDate,Number(b.dataset.week)));return}
+ if(b.dataset.date!==undefined){selectDate(b.dataset.date);return}
+ if(b.dataset.machine!==undefined){switchVariant(currentItem().item,b.dataset.machine);save();render();return}
+ if(b.dataset.nudge!==undefined){const {item}=currentItem(),v=currentVariant(item,true),row=(b.dataset.type==='warm'?v.warmups:v.sets)[Number(b.dataset.set)];if(!row)return;const n=Number(row.reps)||0;row.reps=String(Math.max(0,n+Number(b.dataset.nudge)*(item.mode?.startsWith('sec')?5:1)));save();render();return}
   if(b.id&&b.id.startsWith('cloud-')){try{await GymCloud.action(b.id)}catch(e){console.warn('Cloud action:',e);toast('Błąd synchronizacji — lokalne dane zachowane')}render();return;}
- if(b.dataset.view){if(window.GymHistoryUI&&!GymHistoryUI.allowNavigate())return;state.view=b.dataset.view;save(false);render();return}
- if(b.dataset.day!==undefined){const day=Number(b.dataset.day);if(!DISPLAY_DAYS.includes(day))return;state.activeDay=day;state.activeArea='main';state.activeExercise=0;save(false);render();return}
+ if(b.dataset.view){state.view=b.dataset.view;save(false);render();return}
+ if(b.dataset.day!==undefined){const date=b.dataset.date;if(date)selectDate(date);return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
  if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);save(false);render();return}
  if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);save(false);render();return}
- if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(state.activeArea==='core'&&s.done)activeSession().coreEnabled[item.id]=true;save();render();return}
+ if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();return}
  if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;save(false);render();return}
- if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
- if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession().coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
- if(b.id==='finish'){const s=activeSession(),sum=summary();if(!sum.done){toast('Najpierw potwierdź choć jedną serię');return}const existing=state.history.filter(h=>h.date===s.date&&h.day===s.day).length;
-  const question=existing?`W historii jest już ${existing} trening(ów) dla ${s.date} i tego dnia planu. Zapisanie utworzy ODDZIELNĄ sesję, nie poprawi poprzedniej. Aby poprawić wyniki, wybierz Anuluj, a następnie Historia → Edytuj trening. Czy na pewno zapisać drugi trening?`:`Zakończyć trening? Potwierdzone serie: ${sum.done}.`;
-  if(!confirm(question))return;
-  state.history.push(JSON.parse(JSON.stringify({...s,source:'Wpisane w aplikacji',syncId:'history:'+(crypto.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2))})));delete state.sessions[dateKey()+'-'+state.activeDay];state.view='history';save();window.GymCloud?.markDeleted?.('draft:'+dateKey()+'-'+state.activeDay);await GymStorage.flush();render();toast('Trening w historii, zapis lokalny wykonany');return}
+ if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item,true);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
+ if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item,true);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession(true).coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
  if(b.id==='export'){download('gym-tracker-backup-'+dateKey()+'.json',JSON.stringify(state,null,2),'application/json');return}
  if(b.id==='exportcsv'){download('gym-tracker-series-'+dateKey()+'.csv',csv(),'text/csv;charset=utf-8');return}
  if(b.id==='copy-report'){const t=document.getElementById('report');t.focus();t.select();try{await navigator.clipboard.writeText(t.value);toast('Skopiowano raport')}catch{toast('Raport zaznaczony — skopiuj ręcznie')}return}
 });
 document.addEventListener('change',async event=>{const el=event.target;
- if(window.GymHistoryUI?.handleChange?.(el))return;
+ if(window.GymProgress?.handleChange?.(el,render))return;
+ if(el.id==='week-date'){selectDate(el.value);return}
+ if(el.id==='session-picker'){state.selectedRecordId=el.value;save(false);render();return}
  if(el.id==='machine'){switchVariant(currentItem().item,el.value);save();render()}
- else if(el.id==='rir'){currentVariant(currentItem().item).rir=el.value;save()}
- else if(el.id==='enable-core'){activeSession().coreEnabled[currentItem().item.id]=el.checked;save();render()}
+ else if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;save()}
+ else if(el.id==='enable-core'){activeSession(true).coreEnabled[currentItem().item.id]=el.checked;save();render()}
  else if(el.id==='import'){const file=el.files?.[0];if(!file)return;try{if(file.size>10*1024*1024)throw Error('Backup too large');const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object')throw Error('Invalid structure');if(!confirm('Import zastąpi lokalny dziennik. Kontynuować?'))return;state=normalize(data);save();await GymStorage.flush();render();toast('Kopia przywrócona')}catch(e){console.error(e);toast('Błąd importu JSON')}}
 });
 document.addEventListener('input',event=>{const t=event.target;
- if(window.GymHistoryUI?.handleInput?.(t))return;
  if(t.dataset.field){mutateSet(t.dataset.field,Number(t.dataset.set),t.dataset.type,t.value)}
- else if(t.id==='notes'){activeSession().notes=t.value;save()}
+ else if(t.id==='notes'){activeSession(true).notes=t.value;save()}
 });
 (async()=>{try{state=normalize(await GymStorage.load(status));}catch(e){console.error(e);status('⚠ Nie można wczytać danych','warn')}render();
   if(window.GymCloud)void GymCloud.init({getState:()=>state,hasWorkoutData,workoutRecords,cloudState,meaningfulSignature,workoutDetails,applySnapshot:async data=>{state=normalize({...state,history:data.history,sessions:data.sessions,savedAt:Date.now()});GymStorage.save(state);await GymStorage.flush();render()},backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{if(state.view==='settings')render()}});
