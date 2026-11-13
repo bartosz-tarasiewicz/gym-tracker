@@ -205,6 +205,34 @@ try{
  await p2.locator('[data-trend-metric="reps"]').click();
  assert.ok(await p2.locator('.trend-chart').count(),'Rep trend renders independently');
  log('History shows per-machine weight and rep trends from completed sets');
+
+ // Additive history import must protect existing Azure workouts, even if the
+ // imported file includes a conflicting date with a different cloud ID.
+ const savedFriday=JSON.stringify(store.get(historicId).record);
+ const sourceImport={
+  format:'gym-tracker-history-additive-v1',
+  history:[
+   {syncId:'history:test-import-2026-10-26',date:'2026-10-26',day:0,
+    source:'Test import',notes:'Import only new dates',coreEnabled:{},
+    exercises:{flat:{machine:'MG-PL13',variants:{'MG-PL13':{sets:[{kg:'70',reps:'8',done:true}],warmups:[],rir:'1'}}}}},
+   {syncId:'history:duplicate-should-not-be-created',date:'2026-11-06',day:5,
+    source:'Test import',notes:'Do not overwrite',coreEnabled:{},
+    exercises:{legpress:{machine:'MG-PL70',variants:{'MG-PL70':{sets:[{kg:'999',reps:'1',done:true}],warmups:[],rir:'0'}}}}}
+  ]
+ };
+ await p2.locator('[data-view="settings"]').click();
+ assert.equal(await p2.locator('#import-additive').count(),1);
+ p2.once('dialog',dialog=>{assert.match(dialog.message(),/Dodać 1 brakujących treningów/);dialog.accept()});
+ await p2.locator('#import-additive').setInputFiles({name:'import-test.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(sourceImport))});
+ await until(()=>store.has('history:test-import-2026-10-26'),'new history workout upload');
+ assert.equal(JSON.stringify(store.get(historicId).record),savedFriday,'Existing 6 Nov workout is never overwritten');
+ assert.equal(store.has('history:duplicate-should-not-be-created'),false,'Duplicate date cannot be imported under a different ID');
+ const nBefore=store.size;
+ await p2.locator('#import-additive').setInputFiles({name:'import-test-again.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(sourceImport))});
+ await pause(500);
+ assert.equal(store.size,nBefore,'Repeating import is idempotent');
+ log('Additive import uploads only missing dates, preserves existing Azure data and is idempotent');
+
  assert.deepEqual(errors,[],'Uncaught JS errors: '+errors.join(';'));
  log('No uncaught JavaScript errors');
  console.log('SUCCESS: date-first Azure, inherited workouts, auto-save, CORE photos, and progress trends');
