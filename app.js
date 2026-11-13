@@ -409,7 +409,7 @@ function trainHTML(){
   '<p class="hint">'+(isHistory?'Zapis nadpisuje wyniki tego treningu w Azure, zachowując jego identyfikator. Do kliknięcia „Zapisz zmiany” korekty nie są wysyłane.':'Nowe wyniki są również zapisywane automatycznie, żeby nie stracić serii przy utracie połączenia.')+'</p></div>';
  return calendar+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
 }
-function allLogged(s){const items=[...(PLAN[s.day]?.items||[]),...CORE];return Object.entries(s.exercises||{}).map(([id,log])=>({item:items.find(x=>x.id===id)||{id,title:'Ćwiczenie archiwalne: '+id,mode:'reps'},log}));}
+function allLogged(s){const items=[...(PLAN[s.day]?.items||[]),...CORE];const archived={'core-deadbug':'Dead Bug (archiwalne)','core-suitcase':'Suitcase Carry (archiwalne)'};return Object.entries(s.exercises||{}).map(([id,log])=>({item:items.find(x=>x.id===id)||{id,title:archived[id]||('Ćwiczenie archiwalne: '+id),mode:id==='core-suitcase'?'secSide':'reps'},log}));}
 function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?.name||s.day}`,`Źródło: ${s.source||'zapis użytkownika'}`];for(const {item,log} of allLogged(s)){
  lines.push(`\n${item.title}`);const vars=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [k,v] of Object.entries(vars)){
  const rows=(v.sets||[]).filter(x=>x.done);if(!rows.length)continue;lines.push(`  ${machineName(k)} (${unit(k)}): ${rows.map(x=>`${x.kg||'masa ciała'} × ${x.reps} ${measure(item)}`).join(' | ')}; RIR ${v.rir||'—'}`)}
