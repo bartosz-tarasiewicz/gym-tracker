@@ -65,7 +65,8 @@ test('Snapshot lifecycle, ETag compare-and-swap and user isolation',async()=>{
 });
 test('Validation and partition key isolates provider/user',async()=>{
  assert.equal((await handler(request('bart','PUT',{snapshot:{history:[],sessions:[]},expectedEtag:null}),context)).status,400);
- assert.equal((await handler(request('bart','PUT',{snapshot:{history:[],sessions:{} }},context)).status,400);
+ const missingEtag=await handler(request('bart','PUT',{snapshot:{history:[],sessions:{}}}),context);
+ assert.equal(missingEtag.status,400);
  assert.notEqual(partitionFor(identity('a')),partitionFor(identity('b')));
  assert.equal((await handler(request('bart','PUT',{snapshot:{history:new Array(6000).fill({}),sessions:{}},expectedEtag:null}),context)).status,413);
 });
