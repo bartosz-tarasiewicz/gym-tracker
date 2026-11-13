@@ -47,7 +47,8 @@ window.GymProgress=(()=>{
   const records=allRecords(state);
   const exercises=new Map();
   for(const e of [...api.PLAN.flatMap(p=>p.items),...api.CORE])exercises.set(e.id,e.title);
-  for(const rec of records)for(const id of Object.keys(rec.exercises||{}))if(!exercises.has(id))exercises.set(id,id);
+  const archived={'core-deadbug':'Dead Bug (archiwalne)','core-suitcase':'Suitcase Carry (archiwalne)'};
+  for(const rec of records)for(const id of Object.keys(rec.exercises||{}))if(!exercises.has(id))exercises.set(id,archived[id]||id);
   const ids=[...exercises].sort((a,b)=>a[1].localeCompare(b[1],'pl'));
   if(!exercises.has(exercise))exercise=ids[0]?.[0]||'';
   const usedMachines=new Set();
