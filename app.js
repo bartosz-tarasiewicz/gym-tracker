@@ -359,40 +359,41 @@ function settingsHTML(){const draft=Object.values(state.sessions).map(s=>session
  <div class="panel"><h2>iPhone i Azure</h2><p class="hint">Po wdrożeniu na HTTPS: Safari → Udostępnij → Dodaj do ekranu początkowego. Używaj stale tej samej instalacji / adresu. Brak backendu i logowania.</p><p class="hint">Hosting: Azure Static Web Apps Free. Do synchronizacji zaloguj się przez GitHub i połącz Azure Table Storage.</p></div>${window.GymCloud?.html?.()||''}`}
 function csv(){const rows=[['date','day','exercise','machine','set','kg','reps_or_seconds','measure','rir','source','status']];for(const s of [...state.history,...Object.values(state.sessions)])for(const {item,log} of allLogged(s)){const variants=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [machine,v] of Object.entries(variants))(v.sets||[]).forEach((x,j)=>{if(x.done)rows.push([s.date,PLAN[s.day]?.name||s.day,item.title,machine,j+1,x.kg,x.reps,measure(item),v.rir||'',s.source||'aplikacja',state.history.includes(s)?'finished':'draft'])})}return rows.map(r=>r.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(',')).join('\r\n')}
 function download(name,content,mime){const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000)}
-function mutateSet(field,j,type,value){const {item}=currentItem(),v=currentVariant(item);const arr=type==='warm'?v.warmups:v.sets;arr[j][field]=value;save()}
+function mutateSet(field,j,type,value){const {item}=currentItem(),v=currentVariant(item,true);const arr=type==='warm'?v.warmups:v.sets;arr[j][field]=value;save()}
 function changeArea(area){state.activeArea=area;save(false);render()}
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
- if(await window.GymHistoryUI?.handleClick?.(b,{state,save,render,toast,GymStorage}))return;
+ if(window.GymProgress?.handleClick?.(b,render))return;
+ if(b.dataset.week!==undefined){selectDate(b.dataset.week==='today'?dateKey():GymWeek.shift(state.selectedDate,Number(b.dataset.week)));return}
+ if(b.dataset.date!==undefined){selectDate(b.dataset.date);return}
+ if(b.dataset.machine!==undefined){switchVariant(currentItem().item,b.dataset.machine);save();render();return}
+ if(b.dataset.nudge!==undefined){const {item}=currentItem(),v=currentVariant(item,true),row=(b.dataset.type==='warm'?v.warmups:v.sets)[Number(b.dataset.set)];if(!row)return;const n=Number(row.reps)||0;row.reps=String(Math.max(0,n+Number(b.dataset.nudge)*(item.mode?.startsWith('sec')?5:1)));save();render();return}
   if(b.id&&b.id.startsWith('cloud-')){try{await GymCloud.action(b.id)}catch(e){console.warn('Cloud action:',e);toast('Błąd synchronizacji — lokalne dane zachowane')}render();return;}
- if(b.dataset.view){if(window.GymHistoryUI&&!GymHistoryUI.allowNavigate())return;state.view=b.dataset.view;save(false);render();return}
- if(b.dataset.day!==undefined){const day=Number(b.dataset.day);if(!DISPLAY_DAYS.includes(day))return;state.activeDay=day;state.activeArea='main';state.activeExercise=0;save(false);render();return}
+ if(b.dataset.view){state.view=b.dataset.view;save(false);render();return}
+ if(b.dataset.day!==undefined){const date=b.dataset.date;if(date)selectDate(date);return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
  if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);save(false);render();return}
  if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);save(false);render();return}
- if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(state.activeArea==='core'&&s.done)activeSession().coreEnabled[item.id]=true;save();render();return}
+ if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();return}
  if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;save(false);render();return}
- if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
- if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession().coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
- if(b.id==='finish'){const s=activeSession(),sum=summary();if(!sum.done){toast('Najpierw potwierdź choć jedną serię');return}const existing=state.history.filter(h=>h.date===s.date&&h.day===s.day).length;
-  const question=existing?`W historii jest już ${existing} trening(ów) dla ${s.date} i tego dnia planu. Zapisanie utworzy ODDZIELNĄ sesję, nie poprawi poprzedniej. Aby poprawić wyniki, wybierz Anuluj, a następnie Historia → Edytuj trening. Czy na pewno zapisać drugi trening?`:`Zakończyć trening? Potwierdzone serie: ${sum.done}.`;
-  if(!confirm(question))return;
-  state.history.push(JSON.parse(JSON.stringify({...s,source:'Wpisane w aplikacji',syncId:'history:'+(crypto.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2))})));delete state.sessions[dateKey()+'-'+state.activeDay];state.view='history';save();window.GymCloud?.markDeleted?.('draft:'+dateKey()+'-'+state.activeDay);await GymStorage.flush();render();toast('Trening w historii, zapis lokalny wykonany');return}
+ if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item,true);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
+ if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item,true);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession(true).coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
  if(b.id==='export'){download('gym-tracker-backup-'+dateKey()+'.json',JSON.stringify(state,null,2),'application/json');return}
  if(b.id==='exportcsv'){download('gym-tracker-series-'+dateKey()+'.csv',csv(),'text/csv;charset=utf-8');return}
  if(b.id==='copy-report'){const t=document.getElementById('report');t.focus();t.select();try{await navigator.clipboard.writeText(t.value);toast('Skopiowano raport')}catch{toast('Raport zaznaczony — skopiuj ręcznie')}return}
 });
 document.addEventListener('change',async event=>{const el=event.target;
- if(window.GymHistoryUI?.handleChange?.(el))return;
+ if(window.GymProgress?.handleChange?.(el,render))return;
+ if(el.id==='week-date'){selectDate(el.value);return}
+ if(el.id==='session-picker'){state.selectedRecordId=el.value;save(false);render();return}
  if(el.id==='machine'){switchVariant(currentItem().item,el.value);save();render()}
- else if(el.id==='rir'){currentVariant(currentItem().item).rir=el.value;save()}
- else if(el.id==='enable-core'){activeSession().coreEnabled[currentItem().item.id]=el.checked;save();render()}
+ else if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;save()}
+ else if(el.id==='enable-core'){activeSession(true).coreEnabled[currentItem().item.id]=el.checked;save();render()}
  else if(el.id==='import'){const file=el.files?.[0];if(!file)return;try{if(file.size>10*1024*1024)throw Error('Backup too large');const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object')throw Error('Invalid structure');if(!confirm('Import zastąpi lokalny dziennik. Kontynuować?'))return;state=normalize(data);save();await GymStorage.flush();render();toast('Kopia przywrócona')}catch(e){console.error(e);toast('Błąd importu JSON')}}
 });
 document.addEventListener('input',event=>{const t=event.target;
- if(window.GymHistoryUI?.handleInput?.(t))return;
  if(t.dataset.field){mutateSet(t.dataset.field,Number(t.dataset.set),t.dataset.type,t.value)}
- else if(t.id==='notes'){activeSession().notes=t.value;save()}
+ else if(t.id==='notes'){activeSession(true).notes=t.value;save()}
 });
 (async()=>{try{state=normalize(await GymStorage.load(status));}catch(e){console.error(e);status('⚠ Nie można wczytać danych','warn')}render();
   if(window.GymCloud)void GymCloud.init({getState:()=>state,hasWorkoutData,workoutRecords,cloudState,meaningfulSignature,workoutDetails,applySnapshot:async data=>{state=normalize({...state,history:data.history,sessions:data.sessions,savedAt:Date.now()});GymStorage.save(state);await GymStorage.flush();render()},backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{if(state.view==='settings')render()}});
