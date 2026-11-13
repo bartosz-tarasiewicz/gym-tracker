@@ -95,4 +95,7 @@
 .trend-history strong{font-size:14px}
 .trend-history small{grid-column:1/-1;color:#91abbb;font-size:11px}
 @media(max-width:380px){.shell{padding-left:11px;padding-right:11px}.week-panel{padding:10px 8px}.week-grid{gap:3px}.nudge-wrap button{flex-basis:21px;min-width:21px}.set-row{gap:3px}.set-row input{padding-left:3px;padding-right:3px}}
+
+.save-training-btn{margin-top:16px;min-height:52px;font-size:16px;box-shadow:0 4px 17px #45c68b19}
+#save-training:focus-visible{outline:3px solid #b3f6d6;outline-offset:3px}
 </style></head><body><div class="shell"><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div style="text-align:right"><div id="today" class="chip"></div><span id="storage-status" class="status">Wczytywanie danych…</span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.4 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="progress-ui.js"></script><script src="app.js"></script></body></html>
