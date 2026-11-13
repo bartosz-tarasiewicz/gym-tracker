@@ -32,7 +32,7 @@ await new Promise(res=>server.listen(0,'127.0.0.1',res));
 const url='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true});
 const errors=[];
-const context=()=>browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
+const context=options=>browser.newContext({viewport:{width:390,height:844},acceptDownloads:true,...options});
 const input=pg=>pg.locator('.set-row input[data-type="work"][data-field="kg"]').first();
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(f,label){
@@ -53,12 +53,14 @@ try{
  assert.ok([...store.keys()][0].startsWith('draft:'));
  log('Azure receives one workout record with real changes and an ETag');
 
- second=await context();
- await second.addInitScript(()=>{
-  // Simulate previous application visits that generated blank local templates.
-  const d='2026-11-01',record={date:d,day:0,started:'2000-01-01T01:01:01Z',notes:'',coreEnabled:{},exercises:{}};
-  localStorage.setItem('zenek-gym-v1',JSON.stringify({version:2,sessions:{[d+'-0']:record},history:[],savedAt:42}));
- });
+ // Seed the old offline cache *once* as browser storageState. An addInitScript
+ // on every navigation would repeatedly wipe real edits and invalidate the test.
+ const seedDate='2026-11-01';
+ const seedRecord={date:seedDate,day:0,started:'2000-01-01T01:01:01Z',notes:'',coreEnabled:{},exercises:{}};
+ const seed={version:2,sessions:{[seedDate+'-0']:seedRecord},history:[],savedAt:42};
+ second=await context({storageState:{cookies:[],origins:[{
+  origin:url,localStorage:[{name:'zenek-gym-v1',value:JSON.stringify(seed)}]
+ }]}});
  const p2=await second.newPage();p2.on('pageerror',e=>errors.push(e.message));
  await p2.goto(url,{waitUntil:'domcontentloaded'});
  await p2.locator('[data-day="2"]').click();await p2.locator('[data-item="1"]').click();
