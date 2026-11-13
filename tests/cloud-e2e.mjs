@@ -100,6 +100,7 @@ try{
  },ownerKey);
  assert.ok(JSON.parse(await p2.evaluate(key=>localStorage.getItem(key),ownerKey)).pending.length>0);
  await p2.reload({waitUntil:'domcontentloaded'});
+ await p2.locator('[data-view="train"]').click();
  await p2.locator('[data-day="2"]').click();await p2.locator('[data-item="1"]').click();
  assert.equal(await input(p2).inputValue(),'51.5','Offline edit must survive reload');
  await p2.unroute('**/api/workouts**');
