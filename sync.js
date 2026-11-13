@@ -1,7 +1,7 @@
 /* Azure sync: explicit authentication, optimistic concurrency, offline-first. */
 'use strict';
 window.GymCloud=(()=>{
-  let getState=()=>({}),applySnapshot=async()=>{},backup=()=>{};
+  let getState=()=>({}),applySnapshot=async()=>{},backup=()=>{},onStatusChange=()=>{};
   let principal=null,flag='offline',label='Tylko zapis lokalny',remote=null,busy=false,dirty=false,timer=null;
   const META_PREFIX='zenek-gym-cloud-v1-';
   function dataset(data){
@@ -16,7 +16,7 @@ window.GymCloud=(()=>{
   function localMeta(){try{return JSON.parse(localStorage.getItem(META_PREFIX+principal.identityProvider+'-'+principal.userId)||'null')}catch{return null}}
   function storeMeta(etag,hash){localStorage.setItem(META_PREFIX+principal.identityProvider+'-'+principal.userId,JSON.stringify({etag,hash}));}
   function meaningful(d){return !!(d.history?.length||Number(d.savedAt)>0||Object.values(d.sessions||{}).some(s=>s.notes||Object.values(s.coreEnabled||{}).some(Boolean)))}
-  function viewStatus(f,s){flag=f;label=s;let n=document.getElementById('cloud-info');if(n)n.textContent=s}
+  function viewStatus(f,s){flag=f;label=s;let n=document.getElementById('cloud-info');if(n)n.textContent=s;onStatusChange();}
   const enc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   async function api(method='GET',data){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
@@ -117,7 +117,7 @@ window.GymCloud=(()=>{
       '<p class="hint">Azure wymaga skonfigurowania połączenia do Table Storage. Dopóki go nie ma, dane pozostają lokalnie — nie oznaczamy ich jako wysłane.</p></div>';
   }
   async function init(options){
-    getState=options.getState;applySnapshot=options.applySnapshot;backup=options.backup;
+    getState=options.getState;applySnapshot=options.applySnapshot;backup=options.backup;onStatusChange=options.onStatusChange||onStatusChange;
     try{
       const response=await fetch('/.auth/me',{credentials:'same-origin',cache:'no-store'});
       if(!response.ok)throw Error('auth unavailable');
