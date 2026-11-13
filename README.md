@@ -1,4 +1,28 @@
-# Gym Tracker — Azure Static Web Apps, v0.2
+# Gym Tracker — v0.5 · Azure Primary · trening wybierany datą
+
+PWA na iPhone i Windows (HTML/CSS/JS, bez etapu kompilacji). Hosting: Azure Static Web Apps. Historia treningów i sesje w Azure Table Storage, z lokalnym buforem do pracy offline. Zakres testów i infrastruktury jest opisany w `docs/AZURE_AUTHORITY_V04.md`.
+
+## Jak korzystać
+
+1. W zakładce **Trening** wybierz datę w kalendarzu tygodniowym **Pon–Nd**; strzałki przesuwają tydzień, „Dziś” wraca do aktualnej daty, a pole daty umożliwia skok.
+2. Jeśli tego dnia istnieje trening, formularz otwiera **istniejący wpis do edycji** i zachowuje jego `syncId`. Jeżeli go nie ma, wyświetla niewykonane serie z proponowanym ciężarem i liczbą powtórzeń.
+3. Wybieraj alternatywną maszynę, hantle lub wyciąg z widocznych przycisków; każdy wariant ma osobne serie. Przy powtórzeniach działają przyciski **− / +**.
+4. Potwierdź serię przyciskiem ✓. Zmiany oraz korekty wpisów są zapisywane automatycznie; **nie trzeba kończyć treningu**. Niewykonane wartości domyślne nie tworzą rekordu w Azure.
+5. **CORE BONUS** ma 10 opcjonalnych ćwiczeń ze zdjęciami poglądowymi i źródłami. Czwartek (GRIT) oraz sobota/niedziela nie są rejestrowane.
+6. W **Progresie** wybierz ćwiczenie, wariant sprzętu, ciężar/powtórzenia/objętość i liczbę ostatnich treningów. Wykres bazuje wyłącznie na wykonanych seriach z zakończonej historii i autosave'owanych sesji.
+
+**Bezpieczeństwo danych:** w Azure istnieje odrębny rekord per `draft:YYYY-MM-DD-day` lub `history:id` (zachowany format v0.4). Nawigacja po datach nie wysyła pustych treningów. Korekta historycznego wpisu aktualizuje ten sam rekord z ochroną ETag. Nie ma automatycznego usuwania istniejących rekordów i nie ma migracji schematu bazy. Lokalny IndexedDB/localStorage to bufor pracy offline, nie druga „główna baza”.
+
+**Zdjęcia:** zdjęcia ćwiczeń CORE są osadzone z zewnętrznych źródeł; jeśli serwis źródłowy blokuje wyświetlenie, może pojawić się komunikat o niedostępności. Zawsze widać tytuł ćwiczenia i źródło obrazu.
+
+## Historia wersji
+- v0.5: kalendarz Pn–Nd na ekranie Trening, edycja wybranego dnia, przywrócone warianty, CORE photo, trendy.
+- v0.4: Azure-authoritative per-workout records, ETag i kolejka offline.
+
+---
+
+## Starsze informacje (archiwalne)
+
 
 Lekka PWA na iPhone i Windows: czysty HTML/CSS/JavaScript, bez React i bez etapu kompilacji. Jest to aktualizacja pliku `gym-tracker-mvp(1).zip` użytkownika.
 
