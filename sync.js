@@ -1,7 +1,7 @@
 /* Azure sync: explicit authentication, optimistic concurrency, offline-first. */
 'use strict';
 window.GymCloud=(()=>{
-  let getState=()=>({}),applySnapshot=async()=>{},backup=()=>{},onStatusChange=()=>{};
+  let getState=()=>({}),applySnapshot=async()=>{},backup=()=>{},onStatusChange=()=>{},hasWorkoutData=()=>true;
   let principal=null,flag='offline',label='Tylko zapis lokalny',remote=null,busy=false,dirty=false,timer=null,bothBackedUp=false;
   const META_PREFIX='zenek-gym-cloud-v1-';
   function dataset(data){
@@ -15,14 +15,7 @@ window.GymCloud=(()=>{
   }
   function localMeta(){try{return JSON.parse(localStorage.getItem(META_PREFIX+principal.identityProvider+'-'+principal.userId)||'null')}catch{return null}}
   function storeMeta(etag,hash){localStorage.setItem(META_PREFIX+principal.identityProvider+'-'+principal.userId,JSON.stringify({etag,hash}));}
-  function meaningful(d){
-    // savedAt is changed by navigation alone. It is NOT evidence of a workout.
-    return !!(d.history?.length||Object.values(d.sessions||{}).some(s=>
-      !!(s.notes&&String(s.notes).trim()) ||
-      Object.keys(s.exercises||{}).length>0 ||
-      Object.values(s.coreEnabled||{}).some(Boolean)
-    ));
-  }
+  function meaningful(d){return hasWorkoutData(d);}
   function stats(d){
     const h=Array.isArray(d?.history)?d.history:[];
     const drafts=d?.sessions&&typeof d.sessions==='object'?Object.values(d.sessions):[];
@@ -97,6 +90,12 @@ window.GymCloud=(()=>{
       }
       const cloudHash=fingerprint(cloud.snapshot);
       if(cloudHash===hash){storeMeta(cloud.etag,hash);viewStatus('synced','✓ Chmura zsynchronizowana');return;}
+      // A fresh browser can contain auto-created template exercises. They are not logged
+      // workouts. Restore the cloud version rather than uploading blank templates or conflicting.
+      if(!meaningful(before)){
+        if(fingerprint(getState())!==hash){dirty=true;return;}
+        await apply(cloud);return;
+      }
       if(!meta){
         if(!meaningful(before)){if(fingerprint(getState())!==hash){viewStatus('conflict','⚠ Nowe zmiany lokalne — wymagane scalenie');return;}await apply(cloud);}
         else viewStatus('conflict','⚠ Dane lokalne i chmurowe różnią się — wybierz wersję');
@@ -169,7 +168,7 @@ window.GymCloud=(()=>{
       '<p class="hint">Wszystkie treningi pozostają lokalnie do czasu potwierdzonego zapisu w Azure. Przy błędach nie usuwamy lokalnej kopii.</p></div>';
   }
   async function init(options){
-    getState=options.getState;applySnapshot=options.applySnapshot;backup=options.backup;onStatusChange=options.onStatusChange||onStatusChange;
+    getState=options.getState;applySnapshot=options.applySnapshot;backup=options.backup;hasWorkoutData=options.hasWorkoutData||hasWorkoutData;onStatusChange=options.onStatusChange||onStatusChange;
     try{
       const response=await fetch('/.auth/me',{credentials:'same-origin',cache:'no-store'});
       if(!response.ok)throw Error('auth unavailable');
