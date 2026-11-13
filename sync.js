@@ -2,7 +2,7 @@
 'use strict';
 window.GymCloud=(()=>{
   let getState=()=>({}),applySnapshot=async()=>{},backup=()=>{},onStatusChange=()=>{};
-  let principal=null,flag='offline',label='Tylko zapis lokalny',remote=null,busy=false,dirty=false,timer=null;
+  let principal=null,flag='offline',label='Tylko zapis lokalny',remote=null,busy=false,dirty=false,timer=null,bothBackedUp=false;
   const META_PREFIX='zenek-gym-cloud-v1-';
   function dataset(data){
     return {version:2,history:Array.isArray(data.history)?data.history:[],sessions:data.sessions&&typeof data.sessions==='object'&&!Array.isArray(data.sessions)?data.sessions:{}};
@@ -15,7 +15,42 @@ window.GymCloud=(()=>{
   }
   function localMeta(){try{return JSON.parse(localStorage.getItem(META_PREFIX+principal.identityProvider+'-'+principal.userId)||'null')}catch{return null}}
   function storeMeta(etag,hash){localStorage.setItem(META_PREFIX+principal.identityProvider+'-'+principal.userId,JSON.stringify({etag,hash}));}
-  function meaningful(d){return !!(d.history?.length||Number(d.savedAt)>0||Object.values(d.sessions||{}).some(s=>s.notes||Object.values(s.coreEnabled||{}).some(Boolean)))}
+  function meaningful(d){
+    // savedAt is changed by navigation alone. It is NOT evidence of a workout.
+    return !!(d.history?.length||Object.values(d.sessions||{}).some(s=>
+      !!(s.notes&&String(s.notes).trim()) ||
+      Object.keys(s.exercises||{}).length>0 ||
+      Object.values(s.coreEnabled||{}).some(Boolean)
+    ));
+  }
+  function stats(d){
+    const h=Array.isArray(d?.history)?d.history:[];
+    const drafts=d?.sessions&&typeof d.sessions==='object'?Object.values(d.sessions):[];
+    const all=[...h,...drafts];
+    let done=0,rows=0;
+    for(const session of all)for(const log of Object.values(session?.exercises||{})){
+      const vars=log?.variants&&Object.keys(log.variants).length?Object.values(log.variants):[log];
+      for(const v of vars)for(const entry of (v?.sets||[])){
+        rows++;if(entry?.done)done++;
+      }
+    }
+    const dates=all.map(x=>x?.date).filter(x=>typeof x==='string').sort();
+    return {finished:h.length,drafts:drafts.length,confirmed:done,entries:rows,lastDate:dates.at(-1)||'—'};
+  }
+  function conflictPanel(){
+    const local=stats(getState()),cloud=stats(remote?.snapshot);
+    const line=(title,d)=>'<div class="panel" style="margin:0;padding:12px;flex:1;min-width:165px"><strong>'+title+'</strong>'+
+      '<div class="hint" style="margin-bottom:0">Zakończone treningi: '+d.finished+
+      '<br>Rozpoczęte: '+d.drafts+
+      '<br>Potwierdzone serie: '+d.confirmed+
+      '<br>Ostatnia data: '+enc(d.lastDate)+'</div></div>';
+    return '<div class="flex flex-wrap" style="align-items:stretch;margin:10px 0">'+
+      line('Na tym urządzeniu',local)+line('W Azure',cloud)+
+      '</div><div class="inline-actions"><button class="btn secondary" id="cloud-backup-both">'+
+      '↓ Pobierz obie kopie JSON (jeden plik)</button></div>'+
+      (bothBackedUp?'<p class="hint" style="color:#83d9b2">✓ Kopia porównawcza została przygotowana. Możesz bezpieczniej zdecydować, którą wersję zachować.</p>':
+      '<p class="hint">Najpierw pobierz obie kopie. Nie wybieraj wersji, dopóki nie porównasz liczby treningów i serii.</p>');
+  }
   function viewStatus(f,s){flag=f;label=s;let n=document.getElementById('cloud-info');if(n)n.textContent=s;onStatusChange();}
   const enc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   async function api(method='GET',data){
@@ -52,6 +87,7 @@ window.GymCloud=(()=>{
     try{
       const before=getState(),local=dataset(before),hash=fingerprint(local),meta=localMeta();
       const cloud=await api();
+      if(remote?.etag!==cloud?.etag)bothBackedUp=false;
       remote=cloud;
       if(!cloud.snapshot){
         if(meta&&meta.etag){viewStatus('conflict','⚠ Brak poprzedniej kopii w chmurze — wybierz sposób odzyskania');return;}
@@ -85,7 +121,19 @@ window.GymCloud=(()=>{
   function schedule(){if(!principal)return;clearTimeout(timer);timer=setTimeout(()=>{if(flag==='conflict'||flag==='unconfigured')return;void reconcile()},1400)}
   async function action(name){
     if(name==='cloud-sync'){await reconcile();return;}
+    if(name==='cloud-backup-both'){
+      // One file, one user gesture. No silent remote overwrite, and no multiple-download permission required.
+      const cloud=remote?.snapshot||null;
+      const local=dataset(getState());
+      backup('gym-tracker-dwie-kopie-'+new Date().toISOString().slice(0,10)+'.json',{
+        kind:'gym-tracker-compare-backup',version:1,createdAt:new Date().toISOString(),
+        local,cloud,
+        cloudRevision:remote?.etag||null
+      });
+      bothBackedUp=true;viewStatus('conflict',label);return;
+    }
     if(name==='cloud-download'){
+      if(!bothBackedUp){viewStatus('conflict','⚠ Najpierw pobierz obie kopie JSON');return;}
       if(!confirm('Wczytać dane z Azure? Bieżące dane lokalne zostaną najpierw pobrane jako kopia JSON.'))return;
       // Download must be initiated synchronously from the user's click (browser activation).
       backup('gym-tracker-local-before-cloud.json',getState());
@@ -95,6 +143,7 @@ window.GymCloud=(()=>{
       return;
     }
     if(name==='cloud-upload'){
+      if(!bothBackedUp){viewStatus('conflict','⚠ Najpierw pobierz obie kopie JSON');return;}
       if(!confirm('Zastąpić dane w Azure lokalnym dziennikiem? Najpierw pobierzemy automatycznie kopię danych chmurowych.'))return;
       const previous=remote;
       if(previous?.snapshot)backup('gym-tracker-cloud-before-replace.json',previous.snapshot);
@@ -113,8 +162,11 @@ window.GymCloud=(()=>{
       '<div id="cloud-info" class="detail" role="status">'+enc(label)+'</div>'+
       (signed?'<p class="hint">Zalogowano: '+enc(principal.userDetails||principal.identityProvider)+'</p><div class="inline-actions"><button class="btn secondary" id="cloud-sync">↻ Synchronizuj teraz</button><a class="btn ghost" style="text-decoration:none" href="/.auth/logout?post_logout_redirect_uri=/">Wyloguj</a></div>':
        '<div class="inline-actions"><a class="btn" style="text-decoration:none" href="/.auth/login/github?post_login_redirect_uri=/">Zaloguj przez GitHub</a></div>')+
-      (signed&&flag==='conflict'?'<div class="warning"><strong>Konflikt danych.</strong> Pobierz kopie JSON przed wyborem źródła. Obie operacje tworzą kopię tego, co ma zostać zastąpione.</div><div class="inline-actions"><button class="btn secondary" id="cloud-download">Użyj danych z Azure</button><button class="btn ghost" id="cloud-upload">Wyślij lokalne do Azure</button></div>':'')+
-      '<p class="hint">Azure wymaga skonfigurowania połączenia do Table Storage. Dopóki go nie ma, dane pozostają lokalnie — nie oznaczamy ich jako wysłane.</p></div>';
+      (signed&&flag==='conflict'?'<div class="warning"><strong>Konflikt danych.</strong> Żadna wersja nie została nadpisana. Porównaj dzienniki i pobierz wspólną kopię JSON, zanim wybierzesz źródło.</div>'+
+        conflictPanel()+
+        '<div class="inline-actions"><button class="btn secondary" id="cloud-download" '+(!bothBackedUp?'disabled':'')+'>Użyj danych z Azure</button>'+
+        '<button class="btn ghost" id="cloud-upload" '+(!bothBackedUp?'disabled':'')+'>Wyślij lokalne do Azure</button></div>':'')+
+      '<p class="hint">Wszystkie treningi pozostają lokalnie do czasu potwierdzonego zapisu w Azure. Przy błędach nie usuwamy lokalnej kopii.</p></div>';
   }
   async function init(options){
     getState=options.getState;applySnapshot=options.applySnapshot;backup=options.backup;onStatusChange=options.onStatusChange||onStatusChange;
