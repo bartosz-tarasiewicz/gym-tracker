@@ -75,7 +75,7 @@ window.GymProgress=(()=>{
  }
  function handleClick(button,render){if(button.dataset.trendMetric!==undefined){metric=button.dataset.trendMetric;render();return true;}return false;}
  function handleChange(target,render){
-  if(target.id==='trend-exercise'){exercise=target.value;machine='';render();return true;}
+  if(target.id==='trend-exercise'){exercise=target.value;machine='';metric='weight';render();return true;}
   if(target.id==='trend-machine'){machine=target.value;render();return true;}
   if(target.id==='trend-range'){range=target.value;render();return true;}
   return false;
