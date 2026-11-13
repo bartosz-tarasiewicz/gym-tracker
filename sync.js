@@ -113,7 +113,13 @@ window.GymCloud=(()=>{
  }
  function markDeleted(id){
   if(!/^draft:[a-zA-Z0-9:_-]+$/.test(id))return;
-  if(owner){tombstones.add(id);persist();}
+  if(owner){
+   tombstones.add(id);persist();
+   if(initialized&&!blocked){
+    pendingSnapshot();
+    clearTimeout(flushTimer);flushTimer=setTimeout(()=>void sync(),1100);
+   }
+  }
  }
  function schedule(){
   if(!owner)return; // unpaired anonymous browser: local backup only
