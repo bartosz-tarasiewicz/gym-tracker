@@ -1,0 +1,27 @@
+name: Gym Tracker cloud browser tests
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'sync.js'
+      - 'app.js'
+      - 'storage.js'
+      - 'tests/cloud-e2e.mjs'
+      - '.github/workflows/gym-cloud-e2e.yml'
+jobs:
+  cloud-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Execute two-device sync tests
+        run: node tests/cloud-e2e.mjs
