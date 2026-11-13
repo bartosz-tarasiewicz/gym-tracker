@@ -1,0 +1,22 @@
+name: Gym Tracker cloud API tests
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'sync.js'
+      - 'staticwebapp.config.json'
+      - '.github/workflows/gym-cloud-tests.yml'
+jobs:
+  api-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --prefix api --no-audit --no-fund
+      - run: node --test api/tests/snapshot.test.cjs
