@@ -416,9 +416,65 @@ function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?
  }if(s.notes)lines.push(`\nNotatka: ${s.notes}`);return lines.join('\n')}
 function historyHTML(){return GymProgress.html(state,{PLAN,CORE,MACHINE,allLogged,sessionReport,machineName,unit,measure})}
 function settingsHTML(){const draft=Object.values(state.sessions).map(s=>sessionReport(s)).join('\n\n')||'Brak rozpoczętych treningów';return `<section class="hero"><div class="eyebrow">Dane i kopie</div><h1>Bezpieczny zapis</h1><p class="muted">Wyniki synchronizujemy z Azure. Na urządzeniu przechowujemy tylko pamięć podręczną i kolejkę zmian na wypadek utraty połączenia. Kopia JSON jest dodatkowym zabezpieczeniem.</p></section>
+ <div class="panel"><h2>➕ Dodaj starsze treningi</h2><p class="muted">Uzupełnij historię z pliku JSON. Aplikacja sprawdzi aktualne dane Azure i <strong>pominie daty, dla których istnieje już trening</strong>. Żadnych nadpisań, żadnych duplikatów.</p><div class="label">Plik z historią (format gym-tracker-history-additive-v1)</div><input type="file" id="import-additive" accept=".json,application/json" style="width:100%;margin:10px 0;color:#ccd8e1"><p class="hint">Wymaga zalogowania i zakończonej synchronizacji Azure. Przed importem możesz pobrać kopię JSON poniżej.</p></div>
  <div class="panel"><h2>Eksport danych</h2><div class="inline-actions"><button class="btn" id="export">↓ Kopia JSON</button><button class="btn secondary" id="exportcsv">↓ Serie CSV</button></div><hr class="hr"><div class="label">Przywrócenie kopii JSON</div><input type="file" id="import" accept="application/json,.json" style="width:100%;margin:12px 0;color:#ccd8e1"><div class="warning">Import zastępuje dotychczasowe treningi na tym urządzeniu. Najpierw zrób kopię JSON.</div></div>
  <div class="panel"><h2>Awaryjny raport tekstowy</h2><p class="muted">Raport można zaznaczyć ręcznie, nawet jeśli funkcja kopiowania zawiedzie. Obejmuje potwierdzone serie z rozpoczętych treningów.</p><textarea readonly id="report" class="report">${esc(draft)}</textarea><div class="inline-actions"><button class="btn secondary" id="copy-report">Kopiuj raport</button></div></div>
  <div class="panel"><h2>iPhone i Azure</h2><p class="hint">Na iPhonie: Safari → Udostępnij → Dodaj do ekranu początkowego. Logowanie do chmury odbywa się przez GitHub. Wybór daty lub samo oglądanie treningu nie tworzy nowych rekordów.</p><p class="hint">Hosting: Azure Static Web Apps Free. Dane: Azure Table Storage. Przy braku połączenia zmiany trafiają do kolejki offline.</p></div>${window.GymCloud?.html?.()||''}`}
+
+const importKey=record=>String(record.date)+'|'+String(record.day);
+function checkHistoryImport(payload){
+ if(!payload||payload.format!=='gym-tracker-history-additive-v1'||!Array.isArray(payload.history))throw Error('Unsupported additive import');
+ if(payload.history.length===0||payload.history.length>100)throw Error('Unexpected import size');
+ const seenKeys=new Set(),seenIds=new Set(),clean=[];
+ for(const record of payload.history){
+  if(!record||typeof record!=='object'||typeof record.syncId!=='string'||
+    !/^history:[a-zA-Z0-9:_-]{3,100}$/.test(record.syncId)||
+    !/^\d{4}-\d{2}-\d{2}$/.test(record.date)||
+    GymWeek.iso(new Date(record.date+'T12:00:00'))!==record.date||
+    GymWeek.dayIndex(record.date)!==Number(record.day)||
+    ![0,1,2,5].includes(Number(record.day))||
+    !record.exercises||typeof record.exercises!=='object'||Array.isArray(record.exercises))
+    throw Error('Invalid imported workout');
+  const key=importKey(record);
+  if(seenKeys.has(key)||seenIds.has(record.syncId))throw Error('Duplicate workout within import');
+  seenKeys.add(key);seenIds.add(record.syncId);
+  const variants=Object.values(record.exercises).flatMap(log=>log&&typeof log==='object'?
+   Object.values(log.variants&&typeof log.variants==='object'?log.variants:{[log.machine||'BODY']:log}):[]);
+  if(!variants.length||!variants.some(v=>Array.isArray(v?.sets)&&v.sets.some(s=>s?.done&&String(s.reps??'').trim()!=='')))throw Error('No confirmed sets');
+  clean.push(JSON.parse(JSON.stringify(record)));
+ }
+ return clean;
+}
+async function addHistoricalWorkouts(file){
+ if(!file)return;
+ if(file.size>1024*1024)throw Error('File exceeds 1 MB');
+ const payload=JSON.parse(await file.text());
+ const incoming=checkHistoryImport(payload);
+ if(!window.GymCloud?.prepareHistoryImport)throw Error('Azure sync not ready');
+ const status=await GymCloud.prepareHistoryImport();
+ if(!status.ready){toast(status.reason);return}
+ // Azure has just been fetched; never import on top of stale data.
+ const existingKeys=new Set([...state.history,...Object.values(state.sessions)].map(importKey));
+ const existingIds=new Set(state.history.map(x=>x.syncId));
+ const additions=incoming.filter(x=>!existingKeys.has(importKey(x))&&!existingIds.has(x.syncId));
+ const skipped=incoming.length-additions.length;
+ if(!additions.length){toast('Wszystkie '+incoming.length+' treningów są już zapisane — nic nie zmieniono');return}
+ const dates=additions.map(x=>x.date).join(', ');
+ if(!confirm('Dodać '+additions.length+' brakujących treningów do Azure?\\nDaty: '+dates+
+    '\\nPominięte istniejące: '+skipped+'.\\nDane obecnych treningów pozostają bez zmian.'))return;
+ // New entries receive their original stable IDs, never replace old records.
+ state.history.push(...additions);
+ state.history.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||
+   String(a.started||'').localeCompare(String(b.started||'')));
+ save();
+ await GymStorage.flush();
+ await GymCloud.action('cloud-sync');
+ render();
+ const flag=GymCloud.getStatus();
+ toast(flag==='synced'?'Dodano '+additions.length+' treningów do Azure · pominięto '+skipped:
+   'Dodano '+additions.length+' lokalnie; synchronizacja Azure oczekuje. Sprawdź status chmury.');
+}
+
 function csv(){const rows=[['date','day','exercise','machine','set','kg','reps_or_seconds','measure','rir','source','status']];for(const s of [...state.history,...Object.values(state.sessions)])for(const {item,log} of allLogged(s)){const variants=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [machine,v] of Object.entries(variants))(v.sets||[]).forEach((x,j)=>{if(x.done)rows.push([s.date,PLAN[s.day]?.name||s.day,item.title,machine,j+1,x.kg,x.reps,measure(item),v.rir||'',s.source||'aplikacja',state.history.includes(s)?'finished':'draft'])})}return rows.map(r=>r.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(',')).join('\r\n')}
 function download(name,content,mime){const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000)}
 function mutateSet(field,j,type,value){const {item}=currentItem(),v=currentVariant(item,true);const arr=type==='warm'?v.warmups:v.sets;arr[j][field]=value;save()}
@@ -452,6 +508,7 @@ document.addEventListener('change',async event=>{const el=event.target;
  if(el.id==='machine'){switchVariant(currentItem().item,el.value);save();render()}
  else if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;save()}
  else if(el.id==='enable-core'){activeSession(true).coreEnabled[currentItem().item.id]=el.checked;save();render()}
+ else if(el.id==='import-additive'){const file=el.files?.[0];if(!file)return;try{await addHistoricalWorkouts(file)}catch(e){console.error('Additive import:',e);toast('Nie zaimportowano: sprawdź format pliku i Azure')}finally{el.value=''}}
  else if(el.id==='import'){const file=el.files?.[0];if(!file)return;try{pendingHistoryEdit=null;if(file.size>10*1024*1024)throw Error('Backup too large');const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object')throw Error('Invalid structure');if(!confirm('Import zastąpi lokalny dziennik. Kontynuować?'))return;state=normalize(data);save();await GymStorage.flush();render();toast('Kopia przywrócona')}catch(e){console.error(e);toast('Błąd importu JSON')}}
 });
 document.addEventListener('input',event=>{const t=event.target;
