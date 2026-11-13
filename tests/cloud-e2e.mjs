@@ -68,9 +68,12 @@ try{
   assert.equal(await input(page).inputValue(),'47.5');
   assert.ok(JSON.stringify(remote).includes('"kg":"47.5"'));
   pass('Concurrent stale edit is protected by conflict, not overwritten');
-  p2.once('dialog',dialog=>dialog.accept());
-  const dl=p2.waitForEvent('download');
+  p2.on('console',message=>{if(message.type()==='warning'||message.type()==='error')console.log('P2 CONSOLE:',message.type(),message.text())});
+  p2.once('dialog',dialog=>{console.log('DIALOG:',dialog.message());void dialog.accept()});
+  p2.on('download',download=>console.log('DOWNLOAD:',download.suggestedFilename()));
+  const dl=p2.waitForEvent('download',{timeout:8000});
   await p2.locator('#cloud-download').click();
+  console.log('AFTER CLICK:',(await p2.locator('#cloud-info').textContent()),'ERRORS',errors);
   const file=await dl;
   const backup=JSON.parse(fs.readFileSync(await file.path(),'utf8'));
   assert.ok(JSON.stringify(backup).includes('"kg":"50"'));
