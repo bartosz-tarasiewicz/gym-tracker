@@ -104,6 +104,38 @@ const dateKey=()=>{const d=new Date();const p=x=>String(x).padStart(2,'0');retur
 const todayDay=()=>{const d=new Date().getDay();return {1:0,2:1,3:2,4:3,5:5}[d]??0};
 const initial=()=>({version:2,selectedDate:dateKey(),selectedRecordId:'',activeDay:todayDay(),activeExercise:0,activeArea:'main',activeCore:0,view:'train',sessions:{},history:[],savedAt:0});
 let state=initial();
+let pendingHistoryEdit=null;
+// History edits are isolated from the Azure-synced state until explicit Save.
+const cloneWorkout=value=>JSON.parse(JSON.stringify(value));
+function historyEditChanged(){return !!pendingHistoryEdit&&JSON.stringify(pendingHistoryEdit.draft)!==pendingHistoryEdit.original}
+function abandonHistoryEdit(){
+ if(historyEditChanged()&&!confirm('Masz niezapisane zmiany w tym treningu. Odrzucić je?'))return false;
+ pendingHistoryEdit=null;
+ return true;
+}
+function savedHistoryRecord(){
+ const {selectedDate,activeDay,selectedRecordId}=state;
+ const options=state.history.filter(h=>h.date===selectedDate&&h.day===activeDay);
+ return selectedRecordId?options.find(h=>h.syncId===selectedRecordId)||options[options.length-1]:options[options.length-1];
+}
+function editableHistoryRecord(){
+ const originalRecord=savedHistoryRecord();
+ if(!originalRecord){pendingHistoryEdit=null;return null;}
+ const id=originalRecord.syncId||null,index=state.history.indexOf(originalRecord);
+ const current=JSON.stringify(originalRecord);
+ if(pendingHistoryEdit&&(id?pendingHistoryEdit.id===id:pendingHistoryEdit.index===index)&&
+    pendingHistoryEdit.date===state.selectedDate&&pendingHistoryEdit.day===state.activeDay){
+  // Refresh an untouched editor after authoritative Azure data loads.
+  if(!historyEditChanged()&&pendingHistoryEdit.original!==current){
+   pendingHistoryEdit.original=current;
+   pendingHistoryEdit.draft=cloneWorkout(originalRecord);
+  }
+  return pendingHistoryEdit.draft;
+ }
+ pendingHistoryEdit={id,index,date:originalRecord.date,day:originalRecord.day,original:current,draft:cloneWorkout(originalRecord)};
+ return pendingHistoryEdit.draft;
+}
+
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const machineName=k=>MACHINE[k]?.label||k;
 function normalize(data){if(!data||typeof data!=='object'||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object'||Array.isArray(data.sessions))return initial();
@@ -116,20 +148,15 @@ function normalize(data){if(!data||typeof data!=='object'||!Array.isArray(data.h
 }
 function selectDate(date){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime()))return;
+ if(date===state.selectedDate)return;
+ if(!abandonHistoryEdit())return;
  state.selectedDate=date;state.selectedRecordId='';
  state.activeDay=GymWeek.dayIndex(date);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
  save(false);render();
 }
 const sessionKey=()=>state.selectedDate+'-'+state.activeDay;
 function storedDay(){
- const {selectedDate,activeDay,selectedRecordId}=state;
- const found=state.history.filter(h=>h.date===selectedDate&&h.day===activeDay);
- if(selectedRecordId){
-  const selected=found.find(h=>h.syncId===selectedRecordId);
-  if(selected)return selected;
- }
- if(found.length)return found[found.length-1];
- return state.sessions[sessionKey()]||null;
+ return editableHistoryRecord()||state.sessions[sessionKey()]||null;
 }
 function activeSession(create=false){
  const existing=storedDay();if(existing)return existing;
@@ -286,7 +313,39 @@ function meaningfulSignature(data){
   const h=p.history.map(({syncId,...record})=>JSON.stringify(record)).sort();
   return JSON.stringify({history:h,drafts:p.drafts});
 }
-function save(sync=true){state.savedAt=Date.now();GymStorage.save(state);if(sync)window.GymCloud?.schedule?.()}
+function save(sync=true){
+ // Changes in a completed historical workout stay inside the editor until Save.
+ if(sync&&pendingHistoryEdit)return;
+ state.savedAt=Date.now();
+ GymStorage.save(state);
+ if(sync)window.GymCloud?.schedule?.();
+}
+async function saveSelectedWorkout(){
+ if(pendingHistoryEdit){
+  if(!historyEditChanged()){toast('Brak nowych zmian do zapisania');return}
+  const edit=pendingHistoryEdit;
+  const index=edit.id?state.history.findIndex(h=>h.syncId===edit.id):edit.index;
+  const stored=state.history[index];
+  if(!stored||JSON.stringify(stored)!==edit.original){
+   toast('Trening zmienił się na innym urządzeniu. Nie nadpisano nowszych danych.');
+   return;
+  }
+  // Keep the exact cloud ID. Replacing the array element is a PUT, not an INSERT.
+  const replacement=cloneWorkout(edit.draft);
+  replacement.syncId=stored.syncId;
+  state.history[index]=replacement;
+  pendingHistoryEdit=null;
+  save();
+  await GymStorage.flush();
+  render();
+  toast('Zapisano korektę · synchronizacja z Azure w toku');
+  return;
+ }
+ if(!storedDay()){toast('Nie ma jeszcze zmian do zapisania');return}
+ save();
+ await GymStorage.flush();
+ toast('Zapis na urządzeniu · synchronizacja z Azure w toku');
+}
 function status(str,level){const n=document.getElementById('storage-status');if(n){n.textContent=str;n.classList.toggle('warn',level==='warn')}}
 function toast(str){const t=document.getElementById('toast');t.textContent=str;t.style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.style.display='none',2400)}
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
