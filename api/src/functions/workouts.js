@@ -148,6 +148,20 @@ async function handle(request,context){
   return reply(503,{error:'workout_storage_failed'});
  }
 }
+/* Versioned read-only health probe for post-deployment runtime verification.
+ * It never exposes user IDs, storage keys, workout data or connection strings. */
+async function healthHandler(request,context){
+ try{
+  const t=await storage();if(!t)return reply(503,{status:'unavailable'});
+  try{await t.getEntity('healthcheck','nonexistent-v04')}
+  catch(e){if(e.statusCode!==404)throw e;}
+  return reply(200,{status:'ok',runtime:'workouts-v04'});
+ }catch(e){
+  context.error('Workout API health failed',e?.code||e?.statusCode||e?.name||'error');
+  return reply(503,{status:'unavailable'});
+ }
+}
+app.http('workouts-health',{methods:['GET'],route:'workouts-health',authLevel:'anonymous',handler:healthHandler});
 app.http('workouts-list',{methods:['GET'],route:'workouts',authLevel:'anonymous',handler:handle});
 app.http('workouts-item',{methods:['PUT','DELETE'],route:'workouts/{id}',authLevel:'anonymous',handler:handle});
-module.exports={handle,compressed,decompressed,identity,partition,rowKey,legacyId,migrateLegacy,list,identifier};
+module.exports={handle,healthHandler,compressed,decompressed,identity,partition,rowKey,legacyId,migrateLegacy,list,identifier};
