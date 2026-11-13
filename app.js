@@ -1,5 +1,5 @@
 'use strict';
-/* Zenek Gym Tracker v0.2 — no framework, no server or required build step. */
+/* Zenek Gym Tracker v0.5 — date-first, Azure-authoritative training. */
 const MACHINE={
  'MG-PL13':{label:'MG-PL13 · Supine Bench Press',type:'plates',image:'https://johnsonfitness.co.nz/cdn/shop/files/MX19_MAGNUMMG-PL13supinebenchpress_BlkMatte_hero_b1afdd1b-a22e-4889-830c-eb9735e93c32.jpg?v=1711426098&width=1000'},
  'MG-PL14':{label:'MG-PL14 · Incline Bench Press',type:'plates',image:'https://www.renewfit.com/photos_grd/ph1671796767836.jpg'},
@@ -39,6 +39,19 @@ const MACHINE_PHOTOS={
  'G3-S22':{image:'https://static-data2.manualslib.com/product-images/892/2340529/matrix-g3-s22.jpg'}
 };
 for(const [id,photo] of Object.entries(MACHINE_PHOTOS))Object.assign(MACHINE[id],photo);
+// Exercise photos. Credit links are shown in the app; unverified models are never labeled as exact.
+const CORE_PHOTOS={
+ 'core-crunch':{image:'https://images.ctfassets.net/3s5io6mnxfqz/7qb4qHUCjKe8j487NACvu3/f7fb4f5d7ce91ae86e57d707bcf875a9/AdobeStock_29077916_2.jpeg',credit:'MasterClass',source:'https://www.masterclass.com/articles/cable-crunches-guide'},
+ 'core-knees':{image:'https://www.living.fit/cdn/shop/files/ca-16-vertical-knee-raise-2_535x.jpg?v=1755653302',credit:'Living.Fit',source:'https://www.living.fit/products/leg-raise-captains-chair-with-dip-and-push-up-station'},
+ 'core-woodchop':{image:'https://app-media.fitbod.me/v2/79/images/angles/1.jpg',credit:'Fitbod',source:'https://fitbod.me/exercises/cable-wood-chop'},
+ 'core-side-plank':{image:'https://pilatesc.jp/wp-content/uploads/2025/10/hj%E3%80%81%EF%BD%88%EF%BD%8A.1-1024x724.jpeg',credit:'Pilates C',source:'https://pilatesc.jp/onomichi-pilates-side-plank-hiplift/'},
+ 'core-rack':{image:'https://images.squarespace-cdn.com/content/v1/5a5e65fe8dd0411461e901a2/1518203311717-MQRQMQ5LMKLVPCDCMVSV/KBFitBrit_222.jpg?format=2500w',credit:'KB Fit Britt',source:'https://www.kbfitbritt.com/shop/biathlon',imageNote:'Pozycja front rack — w carry poruszaj się spokojnie, bez przechylania tułowia.'},
+ 'core-drag':{image:'https://www.mensjournal.com/.image/NDI6MDAwMDAwMDAxMTQ2ODQx/plank-drags-header.jpg',credit:"Men's Journal",source:'https://www.mensjournal.com/health-fitness/strength-coach-reveals-the-best-anti-movement-abs-exercises-for-a-bulletproof-core-and-heavier-compound-lifts'},
+ 'core-hollow':{image:'https://static.nike.com/a/images/f_auto/dpr_1.0%2Ccs_srgb/w_1212%2Cc_limit/4d42fe90-cdff-41a5-acad-50acce27a12f/how-to-do-a-handstand-push-up-according-to-crossfit-coaches.jpg',credit:'Nike',source:'https://www.nike.com/au/a/how-to-do-handstand-pushups'},
+ 'core-wheel':{image:'https://i0.wp.com/www.muscleandfitness.com/wp-content/uploads/2018/05/1109-ab-wheel-rollout.jpg?quality=86&strip=all',credit:'Muscle & Fitness',source:'https://www.muscleandfitness.com/workouts/abs-and-core-exercises/11-hardest-abs-exercises-all-time/'},
+ 'core-pallof':{image:'https://i.vimeocdn.com/video/1025961123-863a0a9daf9b4b20223983416f965e68fb569473a35b2b54318afb22318febbf-d',credit:'Vimeo',source:'https://vimeo.com/495920365'},
+ 'core-bend':{image:'https://static.movimente.me/media/imgs/exercises/IMG_0751.jpg',credit:'Movimente.me',source:'https://movimente.me/exercicio/flexao-lateral-de-tronco-em-pe-c-polia-baixa/'}
+};
 const DISPLAY_DAYS=[0,1,2,3,5]; // Preserve Friday's existing day=5 IDs in Azure and backups.
 const make=(id,title,work,options,tip='',warm=[])=>({id,title,work,options,tip,warm});
 const ARMS=[
@@ -89,7 +102,7 @@ const CORE=[
 ];
 const dateKey=()=>{const d=new Date();const p=x=>String(x).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`};
 const todayDay=()=>{const d=new Date().getDay();return {1:0,2:1,3:2,4:3,5:5}[d]??0};
-const initial=()=>({version:2,activeDay:todayDay(),activeExercise:0,activeArea:'main',activeCore:0,view:'train',sessions:{},history:[],savedAt:0});
+const initial=()=>({version:2,selectedDate:dateKey(),selectedRecordId:'',activeDay:todayDay(),activeExercise:0,activeArea:'main',activeCore:0,view:'train',sessions:{},history:[],savedAt:0});
 let state=initial();
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const machineName=k=>MACHINE[k]?.label||k;
@@ -99,24 +112,64 @@ function normalize(data){if(!data||typeof data!=='object'||!Array.isArray(data.h
   s.history=s.history.map(h=>({...h,day:h.day===4?5:h.day}));
   const moved={};for(const [key,x] of Object.entries(s.sessions)){const originalDay=x.day;if(originalDay===4)x.day=5;const newKey=originalDay===4&&key.endsWith('-4')?key.slice(0,-1)+'5':key;moved[newKey]=x} s.sessions=moved;
  }
- s.version=2;s.activeDay=Math.max(0,Math.min(PLAN.length-1,Number(s.activeDay)||0));if(s.activeDay===4)s.activeDay=3;s.activeExercise=Math.max(0,Number(s.activeExercise)||0);s.activeCore=Math.max(0,Math.min(9,Number(s.activeCore)||0));return s;
+ s.version=2;s.selectedDate=/^\d{4}-\d{2}-\d{2}$/.test(s.selectedDate||'')?s.selectedDate:dateKey();s.activeDay=GymWeek.dayIndex(s.selectedDate);s.selectedRecordId=String(s.selectedRecordId||'');s.activeExercise=Math.max(0,Number(s.activeExercise)||0);s.activeCore=Math.max(0,Math.min(9,Number(s.activeCore)||0));return s;
 }
-function activeSession(){const key=dateKey()+'-'+state.activeDay;if(!state.sessions[key])state.sessions[key]={date:dateKey(),day:state.activeDay,started:new Date().toISOString(),exercises:{},coreEnabled:{},notes:''};return state.sessions[key]}
-function exerciseLog(item){const s=activeSession();if(!s.exercises[item.id])s.exercises[item.id]={machine:item.options[0],sets:item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),rir:'',variants:{}};
- const l=s.exercises[item.id];if(!l.warmups)l.warmups=(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false}));if(!l.variants)l.variants={};if(!l.machine)l.machine=item.options[0];return l;
+function selectDate(date){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime()))return;
+ state.selectedDate=date;state.selectedRecordId='';
+ state.activeDay=GymWeek.dayIndex(date);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
+ save(false);render();
 }
-function currentVariant(item){const l=exerciseLog(item);if(!l.variants[l.machine]){
-  // Legacy records' original sets are preserved when moving to variant-aware storage.
-  l.variants[l.machine]={sets:l.sets||item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:l.warmups||[],rir:l.rir||''};
+const sessionKey=()=>state.selectedDate+'-'+state.activeDay;
+function storedDay(){
+ const {selectedDate,activeDay,selectedRecordId}=state;
+ const found=state.history.filter(h=>h.date===selectedDate&&h.day===activeDay);
+ if(selectedRecordId){
+  const selected=found.find(h=>h.syncId===selectedRecordId);
+  if(selected)return selected;
  }
- return l.variants[l.machine];
+ if(found.length)return found[found.length-1];
+ return state.sessions[sessionKey()]||null;
 }
-function switchVariant(item,newMachine){const l=exerciseLog(item);currentVariant(item);l.machine=newMachine;
- if(!l.variants[newMachine])l.variants[newMachine]={sets:item.work.map(([kg,reps])=>({kg:'',reps:String(reps),done:false})),warmups:(item.warm||[]).map(([,reps])=>({kg:'',reps:String(reps),done:false})),rir:''};
+function activeSession(create=false){
+ const existing=storedDay();if(existing)return existing;
+ const fresh={date:state.selectedDate,day:state.activeDay,started:new Date().toISOString(),exercises:{},coreEnabled:{},notes:''};
+ if(create)state.sessions[sessionKey()]=fresh;
+ return fresh;
 }
-function counted(item){const l=exerciseLog(item);currentVariant(item);return Object.values(l.variants).reduce((n,v)=>n+(v.sets||[]).filter(x=>x.done).length,0)}
+function defaultLog(item){return {machine:item.options[0],sets:item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),rir:'',variants:{}};}
+function exerciseLog(item,create=false){
+ const session=activeSession(create);
+ if(!session.exercises[item.id]&&create)session.exercises[item.id]=defaultLog(item);
+ return session.exercises[item.id]||defaultLog(item);
+}
+function currentVariant(item,create=false){
+ const log=exerciseLog(item,create),id=log.machine||item.options[0];
+ if(!log.variants&&create)log.variants={};
+ if(log.variants?.[id])return log.variants[id];
+ const variant={sets:log.sets||item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:log.warmups||(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),rir:log.rir||''};
+ if(create)log.variants[id]=variant;
+ return variant;
+}
+function switchVariant(item,newMachine){
+ if(!item.options.includes(newMachine))return;
+ const log=exerciseLog(item,true);
+ currentVariant(item,true);
+ log.machine=newMachine;
+ if(!log.variants[newMachine])log.variants[newMachine]={sets:item.work.map(([,reps])=>({kg:'',reps:String(reps),done:false})),warmups:(item.warm||[]).map(([,reps])=>({kg:'',reps:String(reps),done:false})),rir:''};
+}
+function counted(item){
+ const log=exerciseLog(item);
+ const versions=log.variants&&Object.keys(log.variants).length?Object.values(log.variants):[log];
+ return versions.reduce((n,v)=>n+(v.sets||[]).filter(x=>x.done).length,0);
+}
 function isCoreEnabled(item){const s=activeSession();return !!(s.coreEnabled?.[item.id]||counted(item)>0)}
-function summary(){const d=state.activeDay;const mainDone=PLAN[d].items.reduce((n,x)=>n+counted(x),0);const coreDone=CORE.reduce((n,x)=>n+counted(x),0);const planned=PLAN[d].items.reduce((n,x)=>n+x.work.length,0)+CORE.filter(isCoreEnabled).reduce((n,x)=>n+x.work.length,0);return {mainDone,coreDone,planned,done:mainDone+coreDone}}
+function summary(){
+ const d=state.activeDay,mainDone=PLAN[d].items.reduce((n,x)=>n+counted(x),0);
+ const coreDone=CORE.reduce((n,x)=>n+counted(x),0);
+ const planned=PLAN[d].items.reduce((n,x)=>n+x.work.length,0)+CORE.filter(isCoreEnabled).reduce((n,x)=>n+x.work.length,0);
+ return {mainDone,coreDone,planned,done:mainDone+coreDone};
+}
 // Extract only meaningful workout data. Navigation, timestamps and untouched
 // exercise templates must never create conflicts or authorize overwrites.
 function workoutProjection(data){
