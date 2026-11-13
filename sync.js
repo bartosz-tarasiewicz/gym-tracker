@@ -36,7 +36,7 @@ window.GymCloud=(()=>{
     const before=fingerprint(getState());await applySnapshot(cloud.snapshot);
     storeMeta(cloud.etag,fingerprint(cloud.snapshot));
     viewStatus('synced','✓ Chmura zsynchronizowana');
-    if(fingerprint(getState())!==fingerprint(cloud.snapshot))schedule();
+    // Rendering may instantiate an empty draft; it is not a user edit and should not write to cloud.
   }
   async function push(snapshot,etag){
     const hash=fingerprint(snapshot);
