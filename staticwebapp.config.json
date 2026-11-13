@@ -17,6 +17,15 @@
   },
   "routes": [
     {
+      "route": "/api/health",
+      "methods": [
+        "GET"
+      ],
+      "allowedRoles": [
+        "anonymous"
+      ]
+    },
+    {
       "route": "/api/*",
       "allowedRoles": [
         "authenticated"

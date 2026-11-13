@@ -27,7 +27,7 @@ const fake={
   }
 };
 TableClient.fromConnectionString=()=>fake;
-const {handler,encode,decode,principalFrom,partitionFor}=require('../src/functions/snapshot.js');
+const {handler,healthHandler,encode,decode,principalFrom,partitionFor}=require('../src/functions/snapshot.js');
 const identity=(userId)=>({userId,identityProvider:'github',userDetails:userId,userRoles:['authenticated']});
 const request=(user,method='GET',body)=>{
  const h=user?Buffer.from(JSON.stringify(identity(user))).toString('base64'):null;
@@ -69,4 +69,16 @@ test('Validation and partition key isolates provider/user',async()=>{
  assert.equal(missingEtag.status,400);
  assert.notEqual(partitionFor(identity('a')),partitionFor(identity('b')));
  assert.equal((await handler(request('bart','PUT',{snapshot:{history:new Array(6000).fill({}),sessions:{}},expectedEtag:null}),context)).status,413);
+});
+
+test('Health probe checks Table Storage without disclosing credentials or records',async()=>{
+ const healthy=await healthHandler(request(null),context);
+ assert.equal(healthy.status,200);
+ assert.deepEqual(healthy.jsonBody,{status:'ok'});
+ const previous=process.env.GYM_STORAGE_CONNECTION_STRING;
+ delete process.env.GYM_STORAGE_CONNECTION_STRING;
+ const disconnected=await healthHandler(request(null),context);
+ assert.equal(disconnected.status,503);
+ assert.deepEqual(disconnected.jsonBody,{status:'unavailable'});
+ process.env.GYM_STORAGE_CONNECTION_STRING=previous;
 });
