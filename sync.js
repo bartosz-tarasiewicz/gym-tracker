@@ -7,6 +7,7 @@ window.GymCloud=(()=>{
  let workoutRecords=()=>new Map(),cloudState=()=>({sessions:{},history:[]}),meaningfulSignature=()=>'',hasWorkoutData=()=>false,workoutDetails=()=>({});
  let principal=null,owner=null,base=new Map(),pending=new Map(),remote=new Map(),tombstones=new Set();
  let initialized=false,busy=false,blocked=false,backedUp=false,flushTimer=null,flushBusy=false,flag='offline',message='Zapis lokalny aktywny';
+ let lastMergePreview=null;
  const clone=o=>JSON.parse(JSON.stringify(o));
  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const key=()=>META+encodeURIComponent(owner||'');
@@ -87,6 +88,60 @@ window.GymCloud=(()=>{
   const n=pending.size;
   return n?('⏳ '+n+' trening'+(n===1?' czekający':'ów czekających')+' na wysłanie'):'✓ Dane w Azure aktualne';
  }
+ // Read-only comparison. A record is safe to add only when neither its cloud ID
+ // nor its workout date/day identifies different content on the other side.
+ // Different records on the same day may be legitimate, but require manual review.
+ function mergePlan(localRows,serverRowsMap){
+  const byDate=(rows)=>{
+   const idx=new Map();
+   for(const [id,row] of rows){
+    if(row.isEmpty)continue;
+    const date=row.record?.date,day=row.record?.day;
+    if(!date||day===undefined||day===null)continue;
+    const key=date+'|'+day;
+    if(!idx.has(key))idx.set(key,new Set());
+    idx.get(key).add(id);
+   }
+   return idx;
+  };
+  const localDates=byDate(localRows),remoteDates=byDate(serverRowsMap);
+  const missing=[],remoteOnly=[],conflicts=[];
+  const conflicted=new Set();
+  function collision(id,other,reason){
+   const key=String(id)+'|'+String(other)+'|'+reason;
+   if(!conflicted.has(key)){conflicted.add(key);conflicts.push({id,other,reason});}
+  }
+  for(const [id,l] of localRows){
+   if(l.isEmpty)continue;
+   const r=serverRowsMap.get(id);
+   if(r){
+    if(l.kind!==r.kind||l.sig!==r.sig)collision(id,id,'Różne wyniki tego samego rekordu');
+    continue;
+   }
+   const dateKey=l.record?.date+'|'+l.record?.day;
+   const others=remoteDates.get(dateKey);
+   if(others?.size){for(const other of others)collision(id,other,'Dwa identyfikatory treningu z tego samego dnia');}
+   else missing.push(l);
+  }
+  for(const [id,r] of serverRowsMap){
+   if(r.isEmpty)continue;
+   if(localRows.has(id))continue;
+   const dateKey=r.record?.date+'|'+r.record?.day;
+   const others=localDates.get(dateKey);
+   if(others?.size){for(const other of others)collision(id,other,'Dwa identyfikatory treningu z tego samego dnia');}
+   else remoteOnly.push(r);
+  }
+  return {missing,remoteOnly,conflicts};
+ }
+ function mergeSummary(plan){
+  return '<div class="detail" style="margin:12px 0"><strong>Porównanie rekordów:</strong>'+
+   '<p class="hint">Brakujące w Azure: '+plan.missing.length+
+   '<br>Brakujące na urządzeniu: '+plan.remoteOnly.length+
+   '<br>Wymagające ręcznej decyzji: '+plan.conflicts.length+'</p>'+
+   (plan.conflicts.length?'<p class="warning" style="margin:8px 0">Nie scalę automatycznie różnych wyników tego samego treningu ani dwóch wpisów z tą samą datą. Zachowano obie kopie.</p>':'')+
+   '</div>';
+ }
+
  function pendingSnapshot(){
   const desired=workoutRecords(getState());
   // Workouts already written in Azure are compared by their meaningful
@@ -255,6 +310,60 @@ window.GymCloud=(()=>{
    status('offline','Dane zapisane lokalnie · chmura niedostępna lub brak logowania');
   }
  }
+
+ async function mergeNonConflicting(){
+  if(!principal||!blocked){status('conflict','⚠ Najpierw zaloguj się i odczytaj dane Azure');return;}
+  if(!backedUp){status('conflict','⚠ Przed scaleniem pobierz obie kopie JSON');return;}
+  if(busy||flushBusy){status('conflict','⚠ Trwa synchronizacja — nie scalano danych');return;}
+  if(pending.size||tombstones.size){
+   status('conflict','⚠ Istnieje niezakończona kolejka zmian. Zabezpiecz obie kopie i nie wybieraj jednej jako głównej.');
+   return;
+  }
+  try{
+   const fresh=serverRows(await request());
+   remote=fresh;
+   const own=workoutRecords(getState()),plan=mergePlan(own,fresh);
+   lastMergePreview=plan;
+   if(plan.conflicts.length){
+    status('conflict','⚠ '+plan.conflicts.length+' nakładających się treningów wymaga ręcznej decyzji. Nic nie nadpisano.');
+    return;
+   }
+   const extra=plan.missing.length,received=plan.remoteOnly.length;
+   if(!confirm('Po pobraniu obu kopii JSON scalić dane BEZ nadpisywania istniejących rekordów?'+
+       '\nDodać do Azure: '+extra+
+       '\nPobrać z Azure: '+received+
+       '\nŻaden istniejący trening nie zostanie zastąpiony.'))return;
+   const localSignature=dataSignature(getState());
+   for(const item of plan.missing){
+    // Null ETag = create only, even if another device races to this ID.
+    const result=await request('PUT',item.id,{record:item.record,expectedEtag:null});
+    fresh.set(item.id,{id:item.id,kind:item.kind,record:clone(item.record),
+      sig:item.sig,etag:result.etag,isEmpty:false});
+   }
+   // Recheck the entire server after the write: it might have changed while
+   // we were adding other records. Preserve both copies if anything diverged.
+   const latest=serverRows(await request());
+   remote=latest;
+   if(dataSignature(getState())!==localSignature||
+      mergePlan(workoutRecords(getState()),latest).conflicts.length){
+    lastMergePreview=mergePlan(workoutRecords(getState()),latest);
+    backedUp=false;
+    status('conflict','⚠ Azure lub lokalne treningi zmieniły się w trakcie scalania. Nie nadpisano ich, pobierz nowe kopie.');
+    return;
+   }
+   // All rows have identical IDs/signatures, or are present only on the cloud.
+   // Set the exact ETags before hydrating; neither delete nor overwrite data.
+   rowVersions(latest);
+   initialized=true;blocked=false;backedUp=false;lastMergePreview=null;
+   pending.clear();tombstones.clear();persist();
+   await hydrate(cloudState(latest));
+   status('synced','✓ Scalono dane bez nadpisywania: '+extra+' dodano do Azure, '+received+' pobrano na telefon.');
+  }catch(e){
+   backedUp=false;
+   status('conflict','⚠ Nie udało się bezpiecznie scalić danych. Zachowano kopie; nie wybieraj nadpisywania.');
+   console.warn('Safe merge failed',e);
+  }
+ }
  async function action(name){
   if(name==='cloud-sync'){
    if(!principal)await login();
@@ -264,6 +373,7 @@ window.GymCloud=(()=>{
    }else await sync();
    return;
   }
+  if(name==='cloud-merge-safe'){await mergeNonConflicting();return;}
   if(name==='cloud-backup-both'){
    backup('gym-tracker-obie-kopie-'+new Date().toISOString().slice(0,10)+'.json',{
     format:'gym-tracker-safety-backup-v04',time:new Date().toISOString(),
@@ -298,7 +408,9 @@ window.GymCloud=(()=>{
     '<a class="btn ghost" href="/.auth/logout?post_logout_redirect_uri=/" style="text-decoration:none">Wyloguj</a></div>':
     '<div class="inline-actions"><a class="btn" href="/.auth/login/github?post_login_redirect_uri=/" style="text-decoration:none">Zaloguj przez GitHub</a></div>')+
    (blocked?'<div class="warning" style="margin-top:12px"><strong>Rozbieżne dane.</strong> Żadne zmiany nie zostały automatycznie nadpisane. Porównaj i zapisz obie kopie, zanim wybierzesz źródło.</div>'+
-    preview()+'<div class="inline-actions"><button class="btn secondary" id="cloud-backup-both">↓ Pobierz obie kopie JSON</button></div>'+
+    preview()+(lastMergePreview?mergeSummary(lastMergePreview):'')+
+    '<div class="inline-actions"><button class="btn secondary" id="cloud-backup-both">↓ Pobierz obie kopie JSON</button></div>'+
+    '<div class="inline-actions"><button class="btn" id="cloud-merge-safe" '+(backedUp?'':'disabled')+'>⇄ Scal bez nadpisywania</button></div>'+
     '<div class="inline-actions"><button class="btn secondary" id="cloud-download" '+disabled+'>Przyjmij z Azure</button>'+
     '<button class="btn ghost" id="cloud-upload" '+disabled+'>Wyślij lokalne zmiany</button></div>':
     '<p class="hint">'+(pending.size?'Lokalne zmiany oczekujące na wysłanie: '+pending.size+'.':'Brak oczekujących zmian.')+'</p>')+
