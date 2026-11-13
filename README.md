@@ -2,6 +2,12 @@
 
 PWA na iPhone i Windows (HTML/CSS/JS, bez etapu kompilacji). Hosting: Azure Static Web Apps. Historia treningów i sesje w Azure Table Storage, z lokalnym buforem do pracy offline. Zakres testów i infrastruktury jest opisany w `docs/AZURE_AUTHORITY_V04.md`.
 
+## Dodawanie wcześniejszych treningów bez nadpisywania
+
+W zakładce **Dane → Dodaj starsze treningi** wybierz prywatny plik `gym-tracker-history-additive-v1` (trzymany poza kodem i hostingiem). Aplikacja wymaga logowania do Azure przez GitHub oraz zakończonego, bezkonfliktowego odczytu danych z chmury. Następnie wyświetla liczbę brakujących dat i potwierdzenie. Istniejące rekordy o tym samym dniu planu i dacie lub tym samym `syncId` są pomijane; import jest powtarzalny (idempotentny). Nowe wpisy synchronizują się w Azure pod własnymi stabilnymi `history:*` ID. Dla bezpieczeństwa zrób **Kopię JSON** przed importem. Stary przycisk „Przywrócenie kopii JSON” nadal jest operacją zastępującą i nie służy do uzupełniania historii.
+
+**Prywatność:** osobiste pliki z treningami nie są dołączane do repozytorium ani publikowane w aplikacji — import odbywa się wyłącznie z pliku wybranego przez zalogowaną osobę na jej urządzeniu.
+
 ## Jak korzystać
 
 1. W zakładce **Trening** wybierz datę w kalendarzu tygodniowym **Pon–Nd**; strzałki przesuwają tydzień, „Dziś” wraca do aktualnej daty, a pole daty umożliwia skok.
