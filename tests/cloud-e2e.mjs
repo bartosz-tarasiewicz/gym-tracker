@@ -99,7 +99,12 @@ try{
   const m=JSON.parse(localStorage.getItem(key)||'null');return !!m?.pending?.length;
  },ownerKey);
  assert.ok(JSON.parse(await p2.evaluate(key=>localStorage.getItem(key),ownerKey)).pending.length>0);
+ const beforeLocal=JSON.parse(await p2.evaluate(()=>localStorage.getItem('zenek-gym-v1')));
+ console.log('BEFORE RELOAD:',JSON.stringify(beforeLocal).includes('"kg":"51.5"'),beforeLocal.savedAt);
+ assert.ok(JSON.stringify(beforeLocal).includes('"kg":"51.5"'),'Local cache must reflect offline edit before reload');
  await p2.reload({waitUntil:'domcontentloaded'});
+ const afterLocal=JSON.parse(await p2.evaluate(()=>localStorage.getItem('zenek-gym-v1')));
+ console.log('AFTER RELOAD:',JSON.stringify(afterLocal).includes('"kg":"51.5"'),afterLocal.savedAt,'CLOUD:',(await p2.locator('#cloud-info').count())?(await p2.locator('#cloud-info').textContent()):'hidden');
  await p2.locator('[data-view="train"]').click();
  await p2.locator('[data-day="2"]').click();await p2.locator('[data-item="1"]').click();
  assert.equal(await input(p2).inputValue(),'51.5','Offline edit must survive reload');
