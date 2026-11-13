@@ -94,4 +94,20 @@ async function handler(request,context){
   return result(405,{error:'method_not_allowed'});
 }
 app.http('snapshot',{methods:['GET','PUT'],authLevel:'anonymous',route:'snapshot',handler});
-module.exports={handler,encode,decode,principalFrom,partitionFor};
+/* Public liveness probe. Returns only status, never secrets or user data. */
+async function healthHandler(request,context) {
+  try {
+    const t=await table();
+    if(!t)return result(503,{status:'unavailable'});
+    // A missing row is expected; this verifies both table creation and read access.
+    try {await t.getEntity('health-check','no-record');}
+    catch(e){if(e.statusCode!==404)throw e;}
+    return result(200,{status:'ok'});
+  }catch(e){
+    context.error('Table Storage health check failed',e?.code||e?.statusCode||e?.name||'error');
+    return result(503,{status:'unavailable'});
+  }
+}
+app.http('health',{methods:['GET'],authLevel:'anonymous',route:'health',handler:healthHandler});
+
+module.exports={handler,healthHandler,encode,decode,principalFrom,partitionFor};
