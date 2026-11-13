@@ -233,9 +233,56 @@ try{
  assert.equal(store.size,nBefore,'Repeating import is idempotent');
  log('Additive import uploads only missing dates, preserves existing Azure data and is idempotent');
 
+
+ // A previously imported local history can be richer than Azure without
+ // its own sync metadata. Merge must ADD missing records, never overwrite.
+ const existingStoreSnapshot=new Map([...store].map(([id,v])=>[id,JSON.stringify(v.record)]));
+ const extraId='history:local-preserved-2026-10-19';
+ const recovered={date:'2026-10-19',day:0,source:'Recovered from iPhone',started:'2026-10-19T08:00:00.000Z',notes:'',coreEnabled:{},
+  syncId:extraId,exercises:{flat:{machine:'MG-PL13',variants:{'MG-PL13':{sets:[{kg:'55',reps:'10',done:true}],warmups:[],rir:'2'}}}}};
+ const localSeed={version:2,activeDay:0,selectedDate:'2026-10-19',view:'settings',sessions:{},history:[recovered],savedAt:12};
+ const third=await context({storageState:{cookies:[],origins:[{origin:url,localStorage:[{name:'zenek-gym-v1',value:JSON.stringify(localSeed)}]}]}});
+ const p3=await third.newPage();p3.on('pageerror',e=>errors.push(e.message));await p3.goto(url,{waitUntil:'domcontentloaded'});
+ await p3.locator('[data-view="settings"]').click();
+ await p3.waitForFunction(()=>document.querySelector('#cloud-info')?.textContent?.includes('dwa różne dzienniki'));
+ assert.equal(await p3.locator('#cloud-merge-safe').isDisabled(),true,'Safe merge requires both backups first');
+ const safetyFile=p3.waitForEvent('download',{timeout:8000});
+ await p3.locator('#cloud-backup-both').click();
+ const safety=JSON.parse(fs.readFileSync(await (await safetyFile).path(),'utf8'));
+ assert.equal(safety.format,'gym-tracker-safety-backup-v04');
+ assert.ok(safety.local.history.some(h=>h.syncId===extraId),'Backup contains local-only record');
+ assert.ok(safety.cloud.history.some(h=>h.syncId===historicId),'Backup contains Azure-only record');
+ p3.once('dialog',d=>{assert.match(d.message(),/Dodać do Azure: 1/);d.accept();});
+ await p3.locator('#cloud-merge-safe').click();
+ await until(()=>store.has(extraId),'local missing history safe merge');
+ await p3.waitForFunction(()=>document.querySelector('#cloud-info')?.textContent?.includes('Scalono dane'));
+ for(const [id,record] of existingStoreSnapshot)assert.equal(JSON.stringify(store.get(id)?.record),record,'Previously stored record '+id+' remains unchanged');
+ const combined=JSON.parse(await p3.evaluate(()=>localStorage.getItem('zenek-gym-v1')));
+ assert.ok(combined.history.some(h=>h.syncId===extraId),'Local record remains in the device');
+ assert.ok(combined.history.some(h=>h.syncId===historicId),'Azure record is downloaded to the device');
+ assert.equal(store.size,existingStoreSnapshot.size+1,'Exactly one previously missing record is added');
+ log('Safe merge unions independent local and Azure records without overwriting either');
+
+ // If the same cloud ID was edited differently on two devices, merge must
+ // explicitly refuse even after both backups were saved.
+ const conflict=structuredClone(recovered);conflict.exercises.flat.variants['MG-PL13'].sets[0].kg='99';
+ const conflictSeed={...localSeed,history:[conflict]};
+ const fourth=await context({storageState:{cookies:[],origins:[{origin:url,localStorage:[{name:'zenek-gym-v1',value:JSON.stringify(conflictSeed)}]}]}});
+ const p4=await fourth.newPage();p4.on('pageerror',e=>errors.push(e.message));await p4.goto(url,{waitUntil:'domcontentloaded'});
+ await p4.locator('[data-view="settings"]').click();
+ await p4.waitForFunction(()=>document.querySelector('#cloud-info')?.textContent?.includes('dwa różne dzienniki'));
+ const backupConflict=p4.waitForEvent('download',{timeout:8000});
+ await p4.locator('#cloud-backup-both').click();await backupConflict;
+ const recordBeforeConflict=JSON.stringify(store.get(extraId).record);
+ await p4.locator('#cloud-merge-safe').click();
+ await p4.waitForFunction(()=>document.querySelector('#cloud-info')?.textContent?.includes('nakładających się'));
+ assert.equal(JSON.stringify(store.get(extraId).record),recordBeforeConflict,'Safe merge refuses conflicting same-ID edits');
+ assert.match(await p4.locator('#cloud-info').innerText(),/ręcznej decyzji/);
+ log('Same-ID conflicting workout is preserved for manual review; no blind overwrite');
+
  assert.deepEqual(errors,[],'Uncaught JS errors: '+errors.join(';'));
  log('No uncaught JavaScript errors');
- console.log('SUCCESS: date-first Azure, inherited workouts, auto-save, CORE photos, and progress trends');
+ console.log('SUCCESS: date-first Azure, explicit Save, additive import and safe conflict reconciliation');
 }finally{
  await browser.close();await new Promise(resolve=>server.close(resolve));
 }
