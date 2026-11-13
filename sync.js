@@ -35,6 +35,7 @@ window.GymCloud=(()=>{
     const line=(title,d)=>'<div class="panel" style="margin:0;padding:12px;flex:1;min-width:165px"><strong>'+title+'</strong>'+
       '<div class="hint" style="margin-bottom:0">Zakończone treningi: '+d.finished+
       '<br>Rozpoczęte: '+d.drafts+
+      '<br>Szkice z własnymi zmianami: '+(d.draftsWithChanges||0)+
       '<br>Potwierdzone serie: '+d.confirmed+
       '<br>Zmodyfikowane wiersze: '+(d.modifiedRows||0)+
       '<br>Notatki: '+(d.notes||0)+
