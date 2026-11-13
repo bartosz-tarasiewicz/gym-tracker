@@ -91,10 +91,14 @@ try {
  page.once('dialog',dialog=>dialog.accept());
  await page.locator('#finish').click();
  await page.locator('[data-view="history"]').click();
- assert.match(await page.locator('#app').innerText(),/42.5 × 13/);
+ assert.equal(await page.locator('.calendar-weekday').count(),7,'Calendar should show seven weekdays');
+ assert.equal(await page.locator('.history-edit-button').count(),1,'Finished workout has an edit action');
+ await page.locator('.history-details summary').first().click();
+ assert.match(await page.locator('.history-report').first().innerText(),/42.5 × 13/);
  await page.reload({waitUntil:'domcontentloaded'});
- assert.match(await page.locator('#app').innerText(),/42.5 × 13/);
- pass('Finished workout remains in history after reload');
+ await page.locator('.history-details summary').first().click();
+ assert.match(await page.locator('.history-report').first().innerText(),/42.5 × 13/);
+ pass('Calendar and completed workout remain visible after reload');
  assert.equal(errors.length,0,'JavaScript errors: '+errors.join('; '));
  pass('No uncaught browser JavaScript errors');
  console.log('SUCCESS: '+checks+' real-browser checks against Azure');
