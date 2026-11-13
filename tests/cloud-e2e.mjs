@@ -120,6 +120,7 @@ try{
  await p1.locator('[data-day="1"]').click();await p1.locator('[data-item="0"]').click();
  await input(p1).fill('61');
  await until(()=>JSON.stringify([...store]).includes('"kg":"61"'),'Tuesday workout');
+ await p2.locator('[data-view="train"]').click();
  await p2.locator('[data-day="5"]').click();await p2.locator('[data-item="0"]').click();
  await input(p2).fill('54');
  await until(()=>JSON.stringify([...store]).includes('"kg":"54"'),'Friday workout');
