@@ -28,7 +28,7 @@ const fake={
  }
 };
 TableClient.fromConnectionString=()=>fake;
-const {handle,compressed,decompressed,identity,partition,rowKey,identifier}=require('../src/functions/workouts.js');
+const {handle,healthHandler,compressed,decompressed,identity,partition,rowKey,identifier}=require('../src/functions/workouts.js');
 const {encode}=require('../src/functions/snapshot.js');
 const who=x=>({userId:x,identityProvider:'github',userRoles:['authenticated']});
 const req=(name,method='GET',id=null,body=null)=>({
@@ -97,4 +97,10 @@ test('Payload limits, compression and invalid requests',async()=>{
  assert.equal((await handle(req('uA','PUT','draft:../../',{record:{},expectedEtag:null}),context)).status,400);
  assert.equal((await handle(req('uA','PUT','draft:2026-11-13-2',{record:{}}),context)).status,400);
  assert.equal((await handle(req('uA','PUT','draft:2026-11-13-2',{record:{notes:'z'.repeat(450000)},expectedEtag:null}),context)).status,413);
+});
+
+test('v0.4 health probe contains no private workout data or storage credentials',async()=>{
+ const r=await healthHandler(req(null),context);
+ assert.equal(r.status,200);
+ assert.deepEqual(r.jsonBody,{status:'ok',runtime:'workouts-v04'});
 });
