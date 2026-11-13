@@ -2,6 +2,10 @@
 
 PWA na iPhone i Windows (HTML/CSS/JS, bez etapu kompilacji). Hosting: Azure Static Web Apps. Historia treningów i sesje w Azure Table Storage, z lokalnym buforem do pracy offline. Zakres testów i infrastruktury jest opisany w `docs/AZURE_AUTHORITY_V04.md`.
 
+## Rozwiązywanie konfliktu danych (bez utraty treningów)
+
+Jeśli w **Dane → Treningi w Azure** pojawia się „Rozbieżne dane”, **nie wybieraj** natychmiast „Przyjmij z Azure” ani „Wyślij lokalne zmiany” — oba przyciski mogą zastąpić istniejące rekordy. Najpierw kliknij **Pobierz obie kopie JSON** i upewnij się, że plik został zapisany na urządzeniu. Potem możesz użyć **Scal bez nadpisywania**: funkcja odczytuje bieżące dane Azure, porównuje każdy rekord po ID i dacie/dniu planu, wysyła wyłącznie brakujące, niezmienione rekordy z lokalnej pamięci i uzupełnia brakujące z Azure. Każdy nowy zapis do Azure wymaga nieistniejącego rekordu (ETag=null). Gdy ten sam ID ma inne wyniki, ta sama data/dzień ma różne ID lub kolejka nie jest czysta, funkcja odmówi scalenia i zachowa obie kopie — nie zgaduje, który trening jest poprawny. Funkcję przetestowano na dwóch niezależnych dziennikach i kolizji tego samego ID.
+
 ## Dodawanie wcześniejszych treningów bez nadpisywania
 
 W zakładce **Dane → Dodaj starsze treningi** wybierz prywatny plik `gym-tracker-history-additive-v1` (trzymany poza kodem i hostingiem). Aplikacja wymaga logowania do Azure przez GitHub oraz zakończonego, bezkonfliktowego odczytu danych z chmury. Następnie wyświetla liczbę brakujących dat i potwierdzenie. Istniejące rekordy o tym samym dniu planu i dacie lub tym samym `syncId` są pomijane; import jest powtarzalny (idempotentny). Nowe wpisy synchronizują się w Azure pod własnymi stabilnymi `history:*` ID. Dla bezpieczeństwa zrób **Kopię JSON** przed importem. Stary przycisk „Przywrócenie kopii JSON” nadal jest operacją zastępującą i nie służy do uzupełniania historii.
