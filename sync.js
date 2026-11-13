@@ -87,16 +87,21 @@ window.GymCloud=(()=>{
     if(name==='cloud-sync'){await reconcile();return;}
     if(name==='cloud-download'){
       if(!confirm('Wczytać dane z Azure? Bieżące dane lokalne zostaną najpierw pobrane jako kopia JSON.'))return;
+      // Download must be initiated synchronously from the user's click (browser activation).
+      backup('gym-tracker-local-before-cloud.json',getState());
       const cloud=await api();
       if(!cloud.snapshot){viewStatus('conflict','Nie ma kopii w chmurze');return;}
-      backup('gym-tracker-local-before-cloud.json',getState());
       await apply(cloud);
       return;
     }
     if(name==='cloud-upload'){
       if(!confirm('Zastąpić dane w Azure lokalnym dziennikiem? Najpierw pobierzemy automatycznie kopię danych chmurowych.'))return;
+      const previous=remote;
+      if(previous?.snapshot)backup('gym-tracker-cloud-before-replace.json',previous.snapshot);
       const cloud=await api();
-      if(cloud.snapshot)backup('gym-tracker-cloud-before-replace.json',cloud.snapshot);
+      if(previous?.snapshot && cloud.etag!==previous.etag){
+        remote=cloud;viewStatus('conflict','⚠ Chmura ponownie się zmieniła — odśwież konflikt');return;
+      }
       await push(dataset(getState()),cloud.etag||null);
       return;
     }
