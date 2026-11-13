@@ -44,6 +44,18 @@ let first,second;
 try{
  first=await context();const p1=await first.newPage();p1.on('pageerror',e=>errors.push(e.message));
  await p1.goto(url,{waitUntil:'domcontentloaded'});
+ const weekdays=await p1.locator('.day-tabs [data-day]').evaluateAll(nodes=>nodes.map(node=>node.textContent.trim()));
+ assert.deepEqual(weekdays,['Pon','Wt','Śr','Czw','Pt'],'Only five weekday tiles, with Thursday visible once');
+ assert.equal(await p1.locator('[data-day="4"]').count(),0,'Legacy Thursday strength tile must be hidden');
+ const tileHeights=await p1.locator('.day-tab').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().height));
+ assert.ok(tileHeights.every(height=>height<=40),'Weekday tiles should be compact on iPhone');
+ await p1.locator('[data-day="3"]').click();
+ assert.equal(await p1.locator('.set-row').count(),0,'GRIT must not be logged as sets');
+ assert.equal(await p1.locator('#finish').count(),0,'GRIT must not be finished as a workout');
+ await p1.locator('[data-day="5"]').click();
+ assert.ok((await p1.locator('.machine-img').getAttribute('src')).includes('Matrix_Magnum_Leg_Press'),'Friday leg press photo must be mapped');
+ assert.equal(await p1.locator('#machine').inputValue(),'MG-PL70','Friday workout remains at legacy Azure day index 5');
+ log('Compact five-day navigation, untracked Thursday, and Friday machine photo');
  await p1.locator('[data-day="2"]').click();await p1.locator('[data-item="1"]').click();
  await input(p1).fill('42.5');
  await p1.locator('.set-row input[data-type="work"][data-field="reps"]').first().fill('13');
