@@ -1,7 +1,8 @@
 'use strict';
 const { app } = require('@azure/functions');
 const { TableClient } = require('@azure/data-tables');
-const { createHash, gzipSync, gunzipSync } = require('node:crypto').createHash ? { ...require('node:crypto'), ...require('node:zlib') } : {};
+const { createHash } = require('node:crypto');
+const { gzipSync, gunzipSync } = require('node:zlib');
 const TABLE = 'GymTrackerData';
 const ROW = 'snapshot';
 const CHUNK = 28000;
