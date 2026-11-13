@@ -4,7 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import {chromium} from 'playwright';
 
-const files={'/':'index.html','/index.html':'index.html','/storage.js':'storage.js','/sync.js':'sync.js','/app.js':'app.js','/sw.js':'sw.js','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/icon-apple.png':'icon-apple.png'};
+const files={'/':'index.html','/index.html':'index.html','/storage.js':'storage.js','/sync.js':'sync.js','/history-ui.js':'history-ui.js','/app.js':'app.js','/sw.js':'sw.js','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/icon-apple.png':'icon-apple.png'};
 const store=new Map();let version=0;const operations=[];
 const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data))};
 const server=http.createServer(async(req,res)=>{
@@ -156,9 +156,51 @@ try{
  assert.ok(historyWrite>=0&&draftRemoval>historyWrite,'History must be written before deleting draft');
  log('Finishing a workout writes history before removing its draft, without data loss');
 
+ // Calendar must show completed workout dates without creating new cloud writes.
+ const finishedId=[...store.keys()].find(id=>id.startsWith('history:')&&store.get(id)?.record?.day===5);
+ assert.ok(finishedId,'Friday history record exists');
+ assert.equal(await p2.locator('.calendar-weekday').count(),7,'Monday-first calendar should have seven days');
+ const finishedDate=store.get(finishedId).record.date;
+ await p2.locator('[data-history-date="'+finishedDate+'"]').click();
+ assert.equal(await p2.locator('.history-edit-button').count(),1,'Selecting a date filters the finished sessions');
+ log('Calendar marks workouts and filters history by selected date');
+
+ // Editing a finished workout must update its original sync ID, not create a duplicate.
+ const beforeHistoryIds=[...store.keys()].filter(id=>id.startsWith('history:')).sort();
+ await p2.locator('.history-edit-button').first().click();
+ assert.equal(await p2.locator('#history-save').count(),1,'History editor opens');
+ const editedKg=p2.locator('.history-editor [data-history-type="work"][data-history-field="kg"]').first();
+ assert.ok(await editedKg.count(),'Friday history has working sets to edit');
+ await editedKg.fill('56.5');
+ await p2.locator('#history-edit-rir').selectOption('2');
+ await p2.locator('#history-save').click();
+ await until(()=>JSON.stringify(store.get(finishedId)?.record).includes('"kg":"56.5"'),'corrected history record upload');
+ assert.deepEqual([...store.keys()].filter(id=>id.startsWith('history:')).sort(),beforeHistoryIds,
+  'Editing must not create or delete history records');
+ assert.ok(JSON.stringify(store.get(finishedId)?.record).includes('"rir":"2"'),'Updated RIR saved into original workout');
+ log('History correction updates the original Azure record without duplicates');
+
+ // Cancel discards editor changes (no pending write).
+ await p2.locator('.history-edit-button').first().click();
+ await p2.locator('.history-editor [data-history-type="work"][data-history-field="kg"]').first().fill('99');
+ p2.once('dialog',dialog=>dialog.accept());
+ await p2.locator('#history-cancel').click();
+ assert.ok(!JSON.stringify(store.get(finishedId)?.record).includes('"kg":"99"'));
+ log('Canceling history edit never writes proposed changes');
+
+ // Accidental same-day completion must require an explicit extra confirmation.
+ await p2.locator('[data-view="train"]').click();
+ await p2.locator('[data-day="5"]').click();
+ await p2.locator('.done-button[data-type="work"]').first().click();
+ p2.once('dialog',dialog=>{assert.match(dialog.message(),/ODDZIELNĄ sesję/);dialog.dismiss();});
+ await p2.locator('#finish').click();
+ assert.deepEqual([...store.keys()].filter(id=>id.startsWith('history:')).sort(),beforeHistoryIds,
+  'Dismissing duplicate warning must not create another completed workout');
+ log('Duplicate-day completion requires explicit confirmation');
+
  assert.deepEqual(errors,[],'Uncaught JS errors: '+errors.join(';'));
  log('No uncaught JavaScript errors');
- console.log('SUCCESS: 8 cloud-authoritative browser scenarios');
+ console.log('SUCCESS: cloud-authoritative browser scenarios plus history calendar, edit, and duplicate guard');
 }finally{
  await browser.close();await new Promise(resolve=>server.close(resolve));
 }
