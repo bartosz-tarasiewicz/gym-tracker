@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { chromium } from 'playwright';
 
 const URL = 'https://salmon-bush-06df5a710.8.azurestaticapps.net/';
@@ -72,24 +71,15 @@ try {
  assert.equal(fromIDB.sessions[Object.keys(fromIDB.sessions).find(k=>k.endsWith('-2'))].exercises['core-crunch'].variants.CABLE.sets[0].kg,'20');
  pass('Independent localStorage and IndexedDB copies exist');
  await page.locator('[data-view="settings"]').click();
- assert.match(await page.locator('#report').inputValue(),/42.5 × 13/);
- assert.match(await page.locator('#report').inputValue(),/20 × 15/);
- pass('Emergency report contains actual completed series');
- const jsonDownload=page.waitForEvent('download');
- await page.locator('#export').click();
- const j=await jsonDownload;
- const backup=JSON.parse(fs.readFileSync(await j.path(),'utf8'));
- assert.ok(backup.sessions&&Array.isArray(backup.history));
- pass('JSON export generates a valid backup');
- const csvDownload=page.waitForEvent('download');
- await page.locator('#exportcsv').click();
- const c=await csvDownload;
- const csv=fs.readFileSync(await c.path(),'utf8');
- assert.ok(csv.includes('42.5')&&csv.includes('15')&&csv.includes('20'));
- pass('CSV contains all completed machine and core sets');
+ assert.equal(await page.locator('#import-database').count(),1,'Import JSON control is visible');
+ assert.equal(await page.locator('#export').count(),1,'Full JSON export control exists');
+ assert.equal(await page.locator('#exportcsv').count(),1,'Full CSV export control exists');
+ assert.equal(await page.locator('#report').count(),0,'Emergency text report is removed');
+ assert.equal(await page.locator('#cloud-sync').count(),0,'Manual refresh button removed');
+ pass('Simplified Data tab renders Import, Export and a cloud connection status');
  await page.locator('[data-view="train"]').click();
  assert.equal(await page.locator('.week-grid .week-day').count(),7,'Seven-day calendar is available on Azure');
- assert.equal(await page.locator('#finish').count(),0,'No extra finish/save step should be needed');
+ assert.equal(await page.locator('#save-training').count(),1,'One explicit Save action is displayed');
  await page.locator('[data-view="history"]').click();
  assert.equal(await page.locator('#trend-exercise').count(),1,'History contains trend filters');
  assert.equal(await page.locator('.history-edit-button').count(),0,'No editing in History');
