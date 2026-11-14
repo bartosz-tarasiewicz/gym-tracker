@@ -743,7 +743,7 @@ window.GymCloud=(()=>{
   const dates=new Set(),ids=new Set();
   for(const item of rows){
    const rec=item?.record;
-   if(!rec||typeof rec!=='object'||Array.isArray(rec)||!/^\\d{4}-\\d{2}-\\d{2}$/.test(rec.date||'')||
+   if(!rec||typeof rec!=='object'||Array.isArray(rec)||!/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')||
      !Number.isInteger(Number(rec.day))||![0,1,2,3,4,5,-1].includes(Number(rec.day))||
      !rec.exercises||typeof rec.exercises!=='object'||Array.isArray(rec.exercises)||
      !['draft','history'].includes(item.kind)||! /^(draft|history):[a-zA-Z0-9:_-]{3,195}$/.test(item.id||'')||
