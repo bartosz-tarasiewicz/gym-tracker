@@ -21,7 +21,7 @@ window.GymCloud=(()=>{
   try {
    localStorage.setItem(key(),JSON.stringify({version:4,
     base:[...base].map(([id,x])=>[id,{etag:x.etag,sig:x.sig,kind:x.kind}]),
-    pending:[...pending].map(([id,x])=>[id,x]),tombstones:[...tombstones]}));
+    pending:[...pending].map(([id,x])=>[id,x]),tombstones:[...tombstones],blocked}));
   }catch(e){status('offline','⚠ Brak miejsca na kolejkę zmian — pobierz kopię JSON');console.error('Cloud queue persistence',e);}
  }
  function restore(){
@@ -31,6 +31,7 @@ window.GymCloud=(()=>{
    const raw=JSON.parse(localStorage.getItem(key())||'null');
    if(raw?.version!==4)return false;
    base=new Map(raw.base||[]);pending=new Map(raw.pending||[]);tombstones=new Set(raw.tombstones||[]);
+   blocked=raw.blocked===true;
    return true;
   }catch(e){console.warn('Invalid cloud sync cache',e);return false;}
  }
@@ -142,6 +143,51 @@ window.GymCloud=(()=>{
    '</div>';
  }
 
+ // Read-only cloud hydration: append records that this device does not have.
+ // Matching IDs with different edits remain untouched until explicitly resolved.
+ // Different IDs can represent deliberate separate sessions on the same date.
+ async function includeRemoteOnly(fresh){
+  const local=workoutRecords(getState());
+  const union=new Map(local);
+  let added=0,divergent=0;
+  for(const [id,row] of fresh){
+   const current=local.get(id);
+   if(current&&!current.isEmpty){
+    if(current.kind!==row.kind||current.sig!==row.sig)divergent++;
+    continue;
+   }
+   union.set(id,{id,kind:row.kind,record:clone(row.record),sig:row.sig,isEmpty:false});
+   // Never update the base revision of an existing divergent local record.
+   if(!current||current.isEmpty){
+    base.set(id,{etag:row.etag,sig:row.sig,kind:row.kind});
+    added++;
+   }
+  }
+  if(added){
+   // Apply to cache ONLY, never schedule a cloud write from a cloud read.
+   await hydrate(cloudState(union));
+   persist();
+  }
+  return {added,divergent};
+ }
+ async function refreshMissingFromAzure(){
+  if(!principal||busy||flushBusy||importBusy)return;
+  busy=true;
+  try{
+   const latest=serverRows(await request());
+   remote=latest;
+   const result=await includeRemoteOnly(latest);
+   blocked=true; // unresolved local-only/divergent records must not auto-upload
+   persist();
+   status('conflict',result.added
+    ?'✓ Pobrano '+result.added+' brakujących treningów z Azure. Inne lokalne zmiany zachowano.'
+    :'✓ Odczytano Azure. Istniejące lokalne zmiany zachowano, bez nadpisywania.');
+  }catch(e){
+   status('offline','⚠ Nie udało się pobrać treningów z Azure; lokalne dane zachowano.');
+   console.warn('Read-only Azure refresh:',e.message);
+  }finally{busy=false;}
+ }
+
  function pendingSnapshot(){
   const desired=workoutRecords(getState());
   // Workouts already written in Azure are compared by their meaningful
@@ -217,12 +263,12 @@ window.GymCloud=(()=>{
      base.delete(operation.id);pending.delete(operation.id);tombstones.delete(operation.id);persist();continue;
     }
     if((onServer?.etag||null)!==(operation.expectedEtag||null)){
-     blocked=true;status('conflict','⚠ Ten trening zmienił się w Azure — zachowano obie wersje');return;
+     blocked=true;persist();status('conflict','⚠ Ten trening zmienił się w Azure — zachowano obie wersje');return;
     }
     let response;
     try{response=await request(operation.method,operation.id,
       operation.method==='PUT'?{record:operation.record,expectedEtag:operation.expectedEtag}:{expectedEtag:operation.expectedEtag});}
-    catch(e){if(e.message==='REVISION_CONFLICT'){blocked=true;status('conflict','⚠ Równoczesna edycja treningu — bez nadpisywania');return;}throw e;}
+    catch(e){if(e.message==='REVISION_CONFLICT'){blocked=true;persist();status('conflict','⚠ Równoczesna edycja treningu — bez nadpisywania');return;}throw e;}
     if(operation.method==='DELETE'){
      base.delete(operation.id);remote.delete(operation.id);tombstones.delete(operation.id);
     }else{
@@ -263,7 +309,12 @@ window.GymCloud=(()=>{
      const own=getState(),cloud=cloudState(now);
      const ownSignature=dataSignature(own),cloudSignature=dataSignature(cloud);
      if(hasWorkoutData(own)&&hasWorkoutData(cloud)&&ownSignature!==cloudSignature){
-      blocked=true;status('conflict','⚠ Pierwsze połączenie: dwa różne dzienniki — nic nie nadpisano');return;
+      const pulled=await includeRemoteOnly(now);
+      blocked=true;persist();
+      status('conflict',pulled.added
+       ?'✓ Pobrano '+pulled.added+' brakujących treningów z Azure; lokalne różnice zachowano.'
+       :'⚠ Dwa różne dzienniki — lokalnych wyników nie nadpisano.');
+      return;
      }
      if(hasWorkoutData(own)&&!hasWorkoutData(cloud)){
       rowVersions(now);initialized=true;pendingSnapshot();await flushQueue();return;
@@ -305,7 +356,7 @@ window.GymCloud=(()=>{
    }
    principal=p;owner=id;
    localStorage.setItem(LAST_OWNER,owner);
-   await sync();
+   if(blocked)await refreshMissingFromAzure();else await sync();
   }catch{
    status('offline','Dane zapisane lokalnie · chmura niedostępna lub brak logowania');
   }
@@ -367,10 +418,8 @@ window.GymCloud=(()=>{
  async function action(name){
   if(name==='cloud-sync'){
    if(!principal)await login();
-   else if(blocked){ // refresh only the read-only preview
-    try{remote=serverRows(await request());status('conflict','⚠ Wybierz sposób rozwiązania konfliktu');}
-    catch{status('offline','Nie można odczytać Azure · lokalna kopia nadal istnieje');}
-   }else await sync();
+   else if(blocked)await refreshMissingFromAzure();
+   else await sync();
    return;
   }
   if(name==='cloud-merge-safe'){await mergeNonConflicting();return;}
@@ -384,7 +433,7 @@ window.GymCloud=(()=>{
   if(name==='cloud-download'){
    if(!confirm('Przyjąć dane z Azure? Kopia obu dzienników powinna być już pobrana.'))return;
    const recent=serverRows(await request());
-   remote=recent;rowVersions(recent);pending.clear();tombstones.clear();persist();blocked=false;
+   remote=recent;rowVersions(recent);pending.clear();tombstones.clear();blocked=false;persist();
    await hydrate(cloudState(remote));status('synced','✓ Przywrócono dane z Azure');return;
   }
   if(name==='cloud-upload'){
@@ -404,7 +453,7 @@ window.GymCloud=(()=>{
    '<p class="muted">Azure jest głównym źródłem danych. Urządzenie przechowuje cache i kolejkę zmian bez internetu; zapis pojedynczego treningu nie zastępuje całego dziennika.</p>'+
    '<div class="detail" id="cloud-info" role="status">'+esc(message)+'</div>'+
    (signed?'<p class="hint">Zalogowano: '+esc(principal.userDetails||principal.identityProvider)+'</p>'+
-    '<div class="inline-actions"><button class="btn secondary" id="cloud-sync">↻ Odśwież Azure</button>'+
+    '<div class="inline-actions"><button class="btn secondary" id="cloud-sync">'+(blocked?'↻ Pobierz brakujące z Azure':'↻ Odśwież Azure')+'</button>'+
     '<a class="btn ghost" href="/.auth/logout?post_logout_redirect_uri=/" style="text-decoration:none">Wyloguj</a></div>':
     '<div class="inline-actions"><a class="btn" href="/.auth/login/github?post_login_redirect_uri=/" style="text-decoration:none">Zaloguj przez GitHub</a></div>')+
    (blocked?'<div class="warning" style="margin-top:12px"><strong>Rozbieżne dane.</strong> Żadne zmiany nie zostały automatycznie nadpisane. Porównaj i zapisz obie kopie, zanim wybierzesz źródło.</div>'+
@@ -449,8 +498,8 @@ window.GymCloud=(()=>{
   owner=localStorage.getItem(LAST_OWNER)||null;
   if(owner){restore();await recoverPendingCache();}
   await login();
-  window.addEventListener('online',()=>{if(principal)void sync();else void login();});
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(principal)void sync();else void login();}});
+  window.addEventListener('online',()=>{if(!principal)void login();else if(blocked)void refreshMissingFromAzure();else void sync();});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(!principal)void login();else if(blocked)void refreshMissingFromAzure();else void sync();}});
  }
 
  // Standalone import: does not reconcile, delete, hydrate or overwrite the
