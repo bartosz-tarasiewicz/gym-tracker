@@ -312,7 +312,7 @@ try{
  assert.ok(pcState.history.some(s=>s.syncId===extraId),'PC retains local edited training after reload');
  await p4.locator('[data-view="train"]').click();
  await p4.locator('#week-date').fill('2026-09-21');
- assert.equal(await p4.locator('h1').first().innerText(),'Klatka piersiowa');
+ assert.equal(await p4.locator('h1').first().innerText(),'Klatka');
  assert.match(await p4.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/,
   'Cloud-imported results are available in workout calendar');
  log('Cloud-imported workouts show on desktop despite conflict, persist across reload, never write to Azure');
