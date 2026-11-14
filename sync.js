@@ -149,26 +149,34 @@ window.GymCloud=(()=>{
  async function includeRemoteOnly(fresh){
   const local=workoutRecords(getState());
   const union=new Map(local);
-  let added=0,divergent=0;
+  let added=0,updated=0,divergent=0;
+  const unsubmitted=new Set(getState().unsavedDates||[]);
   for(const [id,row] of fresh){
    const current=local.get(id);
+   const formKey=String(current?.record?.date)+'|'+String(current?.record?.day);
    if(current&&!current.isEmpty){
-    if(current.kind!==row.kind||current.sig!==row.sig)divergent++;
+    if(current.kind===row.kind&&current.sig===row.sig)continue;
+    const last=base.get(id);
+    // This device has not edited the row since its last Azure revision:
+    // safely refresh the value edited/saved on the other device.
+    if(last&&last.sig===current.sig&&!unsubmitted.has(formKey)&&
+       !pending.has(id)&&!tombstones.has(id)&&current.kind===row.kind){
+     union.set(id,{...row,record:clone(row.record)});
+     base.set(id,{etag:row.etag,sig:row.sig,kind:row.kind});
+     updated++;
+    }else divergent++;
     continue;
    }
    union.set(id,{id,kind:row.kind,record:clone(row.record),sig:row.sig,isEmpty:false});
-   // Never update the base revision of an existing divergent local record.
-   if(!current||current.isEmpty){
-    base.set(id,{etag:row.etag,sig:row.sig,kind:row.kind});
-    added++;
-   }
+   base.set(id,{etag:row.etag,sig:row.sig,kind:row.kind});
+   added++;
   }
-  if(added){
+  if(added||updated){
    // Apply to cache ONLY, never schedule a cloud write from a cloud read.
    await hydrate(cloudState(union));
    persist();
   }
-  return {added,divergent};
+  return {added,updated,divergent};
  }
  async function refreshMissingFromAzure(){
   if(!principal||busy||flushBusy||importBusy)return;
@@ -179,9 +187,9 @@ window.GymCloud=(()=>{
    const result=await includeRemoteOnly(latest);
    blocked=true; // unresolved local-only/divergent records must not auto-upload
    persist();
-   status('conflict',result.added
-    ?'✓ Pobrano '+result.added+' brakujących treningów z Azure. Inne lokalne zmiany zachowano.'
-    :'✓ Odczytano Azure. Istniejące lokalne zmiany zachowano, bez nadpisywania.');
+   status('conflict',(result.added||result.updated)
+    ?'✓ Azure: '+result.added+' nowych i '+result.updated+' zaktualizowanych treningów. Niezapisane zmiany lokalne zachowano.'
+    :'✓ Odczytano Azure. Istniejące lokalne zmiany zachowano.');
   }catch(e){
    status('offline','⚠ Nie udało się pobrać treningów z Azure; lokalne dane zachowano.');
    console.warn('Read-only Azure refresh:',e.message);
