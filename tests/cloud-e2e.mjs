@@ -356,6 +356,17 @@ try{
  // A workout created on the iPhone on 13 Nov may exist only locally when
  // normal synchronization is blocked by an unrelated older record.
  const day13Id='draft:2026-11-13-5';
+ // Earlier legacy test created a 13 Nov draft on the mocked server. Remove
+ // only that mock row to reproduce an iPhone-local-only 13 Nov workout.
+ store.delete(day13Id);
+ const desktop13=await context({storageState:{cookies:[],origins:[{origin:url,localStorage:[
+  {name:'zenek-gym-v1',value:JSON.stringify(conflictSeed)}
+ ]}]}});
+ const pc13=await desktop13.newPage();pc13.on('pageerror',e=>errors.push(e.message));
+ await pc13.goto(url,{waitUntil:'domcontentloaded'});
+ await pc13.locator('#cloud-merge-safe').waitFor();
+ assert.equal(JSON.parse(await pc13.evaluate(()=>localStorage.getItem('zenek-gym-v1')))
+  .sessions?.['2026-11-13-5'],undefined,'Desktop begins without November 13');
  const day13={date:'2026-11-13',day:5,started:'2026-11-13T09:00:00Z',notes:'Friday legs on phone',
   coreEnabled:{},exercises:{legpress:{machine:'MG-PL70',variants:{'MG-PL70':{sets:[{kg:'55',reps:'12',done:true}],warmups:[],rir:'2'}}}}};
  const phoneState={version:2,selectedDate:'2026-11-13',activeDay:5,view:'train',
@@ -381,16 +392,16 @@ try{
  assert.equal(JSON.stringify(store.get(day13Id).record),uploadedRow,'Re-uploading unchanged day must be idempotent');
  assert.equal(operations.length,beforeSingleDay+1,'Repeated upload never adds duplicate writes');
  // Desktop is still in conflict from earlier, but can download the missing date.
- await p4.locator('#cloud-sync').click();
- await p4.waitForFunction(id=>{
+ await pc13.locator('#cloud-sync').click();
+ await pc13.waitForFunction(id=>{
   const st=JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}');
   return st.sessions?.['2026-11-13-5']?.date==='2026-11-13';
  },day13Id);
  assert.equal(operations.length,beforeSingleDay+1,'Desktop refresh is strictly read-only');
- await p4.locator('[data-view="train"]').click();
- await p4.locator('#week-date').fill('2026-11-13');
- assert.equal(await p4.locator('.set-row [data-type="work"][data-field="kg"]').first().inputValue(),'55');
- assert.match(await p4.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/);
+ await pc13.locator('[data-view="train"]').click();
+ await pc13.locator('#week-date').fill('2026-11-13');
+ assert.equal(await pc13.locator('.set-row [data-type="work"][data-field="kg"]').first().inputValue(),'55');
+ assert.match(await pc13.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/);
  log('13 Nov uploaded from phone as one record and downloaded on desktop without reconciling journals');
 
  assert.deepEqual(errors,[],'Uncaught JS errors: '+errors.join(';'));
