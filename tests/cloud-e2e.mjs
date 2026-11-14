@@ -18,6 +18,8 @@ const server=http.createServer(async(req,res)=>{
   let raw='';for await(const p of req)raw+=p;
   const body=JSON.parse(raw),old=store.get(id);
   if((old?.etag||null)!==body.expectedEtag)return json(res,409,{error:'workout_changed'});
+  if(req.method==='PUT'&&!old&&[...store].some(([key,row])=>key!==id&&row.record?.date===body.record?.date))
+   return json(res,409,{error:'workout_date_exists'});
   if(req.method==='DELETE'){store.delete(id);operations.push({id,method:'DELETE'});return json(res,200,{ok:true,id,deleted:true});}
   const etag='"'+(++version)+'"';
   store.set(id,{kind:id.split(':')[0],record:structuredClone(body.record),etag});operations.push({id,method:'PUT'});
@@ -61,6 +63,8 @@ try{
  await input(p1).fill('42.5');
  await p1.locator('.set-row input[data-type="work"][data-field="reps"]').first().fill('13');
  await p1.locator('.done-button[data-type="work"]').first().click();
+ assert.equal(store.size,0,'Typing must not write to Azure until Save');
+ await p1.locator('#save-training').click();
  await until(()=>JSON.stringify([...store]).includes('"kg":"42.5"'),'upload first workout');
  assert.equal(store.size,1,'Only one modified workout may be created; not the entire journal');
  assert.ok([...store.keys()][0].startsWith('draft:'));
@@ -82,60 +86,46 @@ try{
  log('Second device loads authoritative Azure data over blank local templates');
 
  await input(p1).fill('47.5');
+ const firstId=[...store.keys()][0];
+ assert.equal(store.get(firstId).record.exercises.shoulder.variants['MG-PL23'].sets[0].kg,'42.5',
+  'Typing must not change the server before Save');
+ await p1.locator('#save-training').click();
  await until(()=>JSON.stringify([...store]).includes('"kg":"47.5"'),'update first workout');
+ const idsBeforeEdit=[...store.keys()].sort();
  await input(p2).fill('50');
- await p2.locator('[data-view="settings"]').click();
- await p2.waitForFunction(()=>document.querySelector('#cloud-info')?.textContent?.includes('Równoczesna')||document.querySelector('#cloud-info')?.textContent?.includes('zmienił'));
- assert.ok(JSON.stringify([...store]).includes('"kg":"47.5"'));
- assert.equal(await p2.locator('#cloud-download').isDisabled(),true);
- log('Concurrent change to the same workout is blocked by per-row ETag');
- const pairDownload=p2.waitForEvent('download',{timeout:8000});
- await p2.locator('#cloud-backup-both').click();
- const pair=JSON.parse(fs.readFileSync(await (await pairDownload).path(),'utf8'));
- assert.equal(pair.format,'gym-tracker-safety-backup-v04');
- assert.ok(JSON.stringify(pair.local).includes('"kg":"50"'));
- assert.ok(JSON.stringify(pair.cloud).includes('"kg":"47.5"'));
- log('One downloaded JSON contains both complete workout copies');
+ await p2.locator('#save-training').click();
+ await until(()=>JSON.stringify([...store]).includes('"kg":"50"'),'second device overwrites same training');
+ assert.deepEqual([...store.keys()].sort(),idsBeforeEdit,'Both devices use the same existing Azure row');
+ assert.equal(store.get(firstId).record.exercises.shoulder.variants['MG-PL23'].sets[0].kg,'50');
+ log('Both devices overwrite the same saved date without duplicates');
 
- p2.once('dialog',d=>d.accept());
- const useCloud=await p2.locator('#cloud-download');
- await useCloud.click();
- await p2.locator('[data-view="train"]').click();
- assert.equal(await input(p2).inputValue(),'47.5');
- log('Explicit conflict resolution restores authoritative Azure workout');
-
- // Simulate a network outage. Offline changes must enter a persistent queue,
- // survive a reload, and upload when the network is restored.
+ // Offline Save must never claim an Azure success and must retain the local form.
  await p2.route('**/api/workouts**',route=>route.abort('internetdisconnected'));
  await input(p2).fill('51.5');
- await p2.locator('[data-view="settings"]').click();
- const ownerKey='zenek-gym-cloud-v04-'+encodeURIComponent('github:test-user-1');
- await p2.waitForFunction(key=>{
-  const m=JSON.parse(localStorage.getItem(key)||'null');return !!m?.pending?.length;
- },ownerKey);
- assert.ok(JSON.parse(await p2.evaluate(key=>localStorage.getItem(key),ownerKey)).pending.length>0);
- const beforeLocal=JSON.parse(await p2.evaluate(()=>localStorage.getItem('zenek-gym-v1')));
- console.log('BEFORE RELOAD:',JSON.stringify(beforeLocal).includes('"kg":"51.5"'),beforeLocal.savedAt);
- assert.ok(JSON.stringify(beforeLocal).includes('"kg":"51.5"'),'Local cache must reflect offline edit before reload');
+ p2.once('dialog',d=>d.accept());
+ await p2.locator('#save-training').click();
+ const localOffline=JSON.parse(await p2.evaluate(()=>localStorage.getItem('zenek-gym-v1')));
+ assert.ok(JSON.stringify(localOffline).includes('"kg":"51.5"'),'Offline Save preserved edited data locally');
+ assert.ok(localOffline.unsavedDates.some(k=>k.includes('2026-')),'Local unsaved changes are tracked');
+ assert.equal(store.get(firstId).record.exercises.shoulder.variants['MG-PL23'].sets[0].kg,'50');
  await p2.reload({waitUntil:'domcontentloaded'});
- const afterLocal=JSON.parse(await p2.evaluate(()=>localStorage.getItem('zenek-gym-v1')));
- console.log('AFTER RELOAD:',JSON.stringify(afterLocal).includes('"kg":"51.5"'),afterLocal.savedAt,'CLOUD:',(await p2.locator('#cloud-info').count())?(await p2.locator('#cloud-info').textContent()):'hidden');
- await p2.locator('[data-view="train"]').click();
  await p2.locator('[data-day="2"]').click();await p2.locator('[data-item="1"]').click();
- assert.equal(await input(p2).inputValue(),'51.5','Offline edit must survive reload');
+ assert.equal(await input(p2).inputValue(),'51.5','Unsaved data survives reload');
  await p2.unroute('**/api/workouts**');
- await p2.locator('[data-view="settings"]').click();
- await p2.locator('#cloud-sync').click();
- await until(()=>JSON.stringify([...store]).includes('"kg":"51.5"'),'offline queue replay');
- log('Offline edit persisted across reload and uploaded when connection returned');
+ await p2.locator('#save-training').click();
+ await until(()=>JSON.stringify([...store]).includes('"kg":"51.5"'),'online retry Save');
+ assert.deepEqual([...store.keys()].sort(),idsBeforeEdit,'Retry overwrites existing record');
+ log('Offline form edits persist and retry updates Azure successfully');
 
  // Distinct workouts should be independently writable even from stale devices.
  await p1.locator('[data-day="1"]').click();await p1.locator('[data-item="0"]').click();
  await input(p1).fill('61');
+ await p1.locator('#save-training').click();
  await until(()=>JSON.stringify([...store]).includes('"kg":"61"'),'Tuesday workout');
  await p2.locator('[data-view="train"]').click();
  await p2.locator('[data-day="5"]').click();await p2.locator('[data-item="0"]').click();
  await input(p2).fill('54');
+ await p2.locator('#save-training').click();
  await until(()=>JSON.stringify([...store]).includes('"kg":"54"'),'Friday workout');
  assert.ok(store.size>=3,'Three different workouts should be stored separately');
  log('Separate training days update independently without global journal conflicts');
@@ -143,8 +133,9 @@ try{
  const fridayId=[...store.keys()].find(id=>id.startsWith('draft:')&&id.endsWith('-5'));
  assert.ok(fridayId,'Friday workout is stored under existing date/day draft ID');
  await p2.locator('.done-button[data-type="work"]').first().click();
+ await p2.locator('#save-training').click();
  await until(()=>store.get(fridayId)?.record?.exercises?.legpress?.variants?.['MG-PL70']?.sets?.[0]?.done===true,
-  'Friday auto-save set');
+  'Friday saved set');
  const cursor=operations.length;
  await p2.locator('[data-week="-7"]').click();
  assert.equal(await input(p2).inputValue(),'50','Previous Friday without history shows default 50 kg');
@@ -152,7 +143,7 @@ try{
  assert.equal(await input(p2).inputValue(),'54','Original Friday result loads after week navigation');
  assert.equal(await p2.locator('#finish').count(),0,'No mandatory finish control');
  assert.equal(operations.slice(cursor).filter(x=>x.method==='PUT').length,0,'Browsing other dates creates no cloud writes');
- log('Browsing dates does not create records; results auto-save on the original day');
+ log('Browsing dates does not create records; Save commits only one date');
 
  // Seed an actual finished workout from the prior Friday in the mock Azure API.
  const historicId='history:import-2026-11-06-5';
