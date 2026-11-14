@@ -335,8 +335,6 @@ async function saveSelectedWorkout(){
  const previous=storedDay();
  if(!previous){toast('Nie ma jeszcze wyników do zapisania');return;}
  const input=cloneWorkout(pendingHistoryEdit?.draft||previous);
- const original=JSON.stringify(input);
- const existing=state.history.find(h=>h.date===date&&h.day===day);
  if(!window.GymCloud?.saveWorkoutForDate){alert('Odśwież aplikację, żeby użyć nowego zapisu.');return;}
  savingWorkout=true;
  const button=document.getElementById('save-training');
@@ -442,7 +440,7 @@ function trainHTML(){
   '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Wstecz</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
  const isHistory=!!savedHistoryRecord();
  const notes='<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, ból, uwagi…">'+esc(s.notes||'')+'</textarea>'+
-  '<button type="button" id="save-training" class="btn full save-training-btn">'+(isHistory?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+
+  '<button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+
 
   '<p class="hint">Kliknij Zapisz, aby '+(saved?'zaktualizować istniejący':'utworzyć nowy')+' trening w Azure. Zmiany przed zapisem pozostają na tym urządzeniu.</p></div>';
  return calendar+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
@@ -576,7 +574,11 @@ document.addEventListener('input',event=>{const t=event.target;
  for(const [key,entry] of Object.entries(state.sessions||{})){
   if(locallyUnsaved.has(entry.date+'|'+entry.day))preserved[key]=entry;
  }
- state=normalize({...state,history:data.history,sessions:preserved,savedAt:Date.now()});
+ const retainedHistory=data.history.filter(entry=>!locallyUnsaved.has(entry.date+'|'+entry.day));
+ for(const entry of state.history||[]){
+  if(locallyUnsaved.has(entry.date+'|'+entry.day))retainedHistory.push(entry);
+ }
+ state=normalize({...state,history:retainedHistory,sessions:preserved,savedAt:Date.now()});
  GymStorage.save(state);await GymStorage.flush();render()
 },backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{if(state.view==='settings')render()}});
   if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW:',e))})();
