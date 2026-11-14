@@ -103,6 +103,25 @@ const CORE=[
 const dateKey=()=>{const d=new Date();const p=x=>String(x).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`};
 const todayDay=()=>{const d=new Date().getDay();return {1:0,2:1,3:2,4:3,5:5}[d]??0};
 const initial=()=>({version:2,selectedDate:dateKey(),selectedRecordId:'',activeDay:todayDay(),activeExercise:0,activeArea:'main',activeCore:0,view:'train',sessions:{},history:[],savedAt:0});
+const TRAINING_TYPES=[0,1,2,5,3,-1,-2];
+const trainingName=day=>({0:'Klatka',1:'Plecy',2:'Barki, biceps, triceps',
+  5:'Nogi, pośladki i core',3:'Les Mills GRIT Strength',
+  '-1':'Dzień wolny / regeneracja','-2':'Inny trening'})[day]||'Inny trening';
+function dayRecord(data,date){
+ const sessions=Object.values(data.sessions||{}).filter(x=>x?.date===date);
+ const unsaved=(data.unsavedDates||[]);
+ const pending=sessions.find(x=>unsaved.includes(date+'|'+x.day));
+ if(pending)return pending;
+ const historical=(data.history||[]).filter(x=>x?.date===date);
+ if(historical.length)return historical[historical.length-1];
+ return sessions.find(x=>x.planOverride===true||
+    String(x.notes||'').trim()||Object.keys(x.exercises||{}).length) || null;
+}
+function trainingTypeForDate(date,data=state){
+ const record=dayRecord(data,date);
+ const day=Number(record?.day);
+ return record&&TRAINING_TYPES.includes(day)?day:GymWeek.dayIndex(date);
+}
 let state=initial();
 let pendingHistoryEdit=null;
 // History edits are isolated from the Azure-synced state until explicit Save.
@@ -144,27 +163,64 @@ function normalize(data){if(!data||typeof data!=='object'||!Array.isArray(data.h
   s.history=s.history.map(h=>({...h,day:h.day===4?5:h.day}));
   const moved={};for(const [key,x] of Object.entries(s.sessions)){const originalDay=x.day;if(originalDay===4)x.day=5;const newKey=originalDay===4&&key.endsWith('-4')?key.slice(0,-1)+'5':key;moved[newKey]=x} s.sessions=moved;
  }
- s.version=2;s.selectedDate=/^\d{4}-\d{2}-\d{2}$/.test(s.selectedDate||'')?s.selectedDate:dateKey();s.activeDay=GymWeek.dayIndex(s.selectedDate);s.selectedRecordId=String(s.selectedRecordId||'');s.activeExercise=Math.max(0,Number(s.activeExercise)||0);s.activeCore=Math.max(0,Math.min(9,Number(s.activeCore)||0));return s;
+ s.version=2;s.selectedDate=/^\d{4}-\d{2}-\d{2}$/.test(s.selectedDate||'')?s.selectedDate:dateKey();s.activeDay=trainingTypeForDate(s.selectedDate,s);s.selectedRecordId=String(s.selectedRecordId||'');s.activeExercise=Math.max(0,Number(s.activeExercise)||0);s.activeCore=Math.max(0,Math.min(9,Number(s.activeCore)||0));return s;
 }
 function selectDate(date){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime()))return;
  if(date===state.selectedDate)return;
  if(!abandonHistoryEdit())return;
  state.selectedDate=date;state.selectedRecordId='';
- state.activeDay=GymWeek.dayIndex(date);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
+ state.activeDay=trainingTypeForDate(date,state);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
  save(false);render();
 }
 const sessionKey=()=>state.selectedDate+'-'+state.activeDay;
 function storedDay(){
+ const candidate=Object.values(state.sessions).find(x=>
+  x?.date===state.selectedDate&&Number(x.day)===state.activeDay);
  const unsaved=(state.unsavedDates||[]).includes(state.selectedDate+'|'+state.activeDay);
- if(unsaved&&state.sessions[sessionKey()])return state.sessions[sessionKey()];
- return editableHistoryRecord()||state.sessions[sessionKey()]||null;
+ if(unsaved&&candidate)return candidate;
+ return editableHistoryRecord()||candidate||null;
 }
 function activeSession(create=false){
  const existing=storedDay();if(existing)return existing;
  const fresh={date:state.selectedDate,day:state.activeDay,started:new Date().toISOString(),exercises:{},coreEnabled:{},notes:''};
  if(create)state.sessions[sessionKey()]=fresh;
  return fresh;
+}
+// Changing a calendar day chooses a different template, NOT a different
+// global weekday plan. Old form values are kept as inactive per-plan snapshots.
+function changeTrainingType(next){
+ next=Number(next);
+ if(!TRAINING_TYPES.includes(next)||next===state.activeDay)return;
+ const previousDay=state.activeDay,date=state.selectedDate;
+ const original=cloneWorkout(storedDay()||{
+  date,day:previousDay,started:new Date().toISOString(),
+  exercises:{},coreEnabled:{},notes:''
+ });
+ const snapshots=cloneWorkout(original.planSnapshots||{});
+ snapshots[String(previousDay)]={exercises:cloneWorkout(original.exercises||{}),
+  coreEnabled:cloneWorkout(original.coreEnabled||{}),notes:original.notes||''};
+ const chosen=snapshots[String(next)]||{exercises:{},coreEnabled:{},notes:''};
+ const hasSets=Object.values(original.exercises||{}).some(log=>
+  Object.values(log?.variants&&Object.keys(log.variants).length?log.variants:{[log?.machine||'BODY']:log})
+   .some(v=>(v?.sets||[]).some(x=>x.done)));
+ if(hasSets&&!confirm('Ten dzień ma już wykonane serie. Zmienić trening na „'+trainingName(next)+'”?'+
+  '\nPoprzednie wyniki pozostaną w kopii tego dnia i wrócą po wybraniu wcześniejszego rodzaju, dopóki ich nie zmienisz.'))return;
+ const draft={...original,date,day:next,planOverride:true,planSnapshots:snapshots,
+  exercises:cloneWorkout(chosen.exercises),coreEnabled:cloneWorkout(chosen.coreEnabled),
+  notes:chosen.notes||''};
+ delete draft.syncId;
+ // Pending editing is now represented by a persisted local form. The existing
+ // Azure history row remains intact until the explicit Save button succeeds.
+ pendingHistoryEdit=null;
+ for(const [key,s] of Object.entries(state.sessions))if(s?.date===date)delete state.sessions[key];
+ state.sessions[date+'-'+next]=draft;
+ state.unsavedDates=(state.unsavedDates||[]).filter(x=>!x.startsWith(date+'|'));
+ state.unsavedDates.push(date+'|'+next);
+ state.activeDay=next;state.activeArea='main';state.activeExercise=0;state.activeCore=0;
+ state.selectedRecordId='';
+ save(false);render();
+ toast('Wybrano: '+trainingName(next)+'. Kliknij Zapisz, aby zatwierdzić.');
 }
 function defaultLog(item){return {machine:item.options[0],sets:item.work.map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),warmups:(item.warm||[]).map(([kg,reps])=>({kg:String(kg),reps:String(reps),done:false})),rir:'',variants:{}};}
 function exerciseLog(item,create=false){
@@ -221,6 +277,7 @@ function workoutProjection(data){
   for(const [key,session] of Object.entries(data?.sessions||{}).sort(([x],[y])=>x.localeCompare(y))){
     if(!session||typeof session!=='object'){drafts.push({key,unknown:session});continue;}
     const record={key};
+    if(session.planOverride===true)record.planOverride=session.day;
     if(String(session.notes||'').trim())record.notes=String(session.notes);
     const core=Object.entries(session.coreEnabled||{}).filter(([,enabled])=>!!enabled).map(([id])=>id).sort();
     if(core.length)record.core=core;
@@ -318,7 +375,7 @@ function meaningfulSignature(data){
 function save(sync=true){
  if(sync&&pendingHistoryEdit)return;
  // Form changes stay on the device until Save is clicked.
- if(sync&&state.view==='train'&&state.activeDay>=0&&state.activeDay!==3){
+ if(sync&&state.view==='train'&&TRAINING_TYPES.includes(state.activeDay)){
   const key=state.selectedDate+'|'+state.activeDay;
   state.unsavedDates=[...new Set([...(state.unsavedDates||[]),key])];
   sync=false;
@@ -331,7 +388,7 @@ let savingWorkout=false;
 async function saveSelectedWorkout(){
  if(savingWorkout)return;
  const date=state.selectedDate,day=state.activeDay;
- if(![0,1,2,5].includes(day)){toast('Wybierz dzień z treningiem');return;}
+ if(!TRAINING_TYPES.includes(day)){toast('Wybierz rodzaj treningu');return;}
  const previous=storedDay();
  if(!previous){toast('Nie ma jeszcze wyników do zapisania');return;}
  const input=cloneWorkout(pendingHistoryEdit?.draft||previous);
@@ -361,7 +418,7 @@ async function saveSelectedWorkout(){
    return;
   }
   // Keep only the canonical Azure record for this training day locally.
-  state.history=state.history.filter(h=>!(h.date===date&&Number(h.day)===day));
+  state.history=state.history.filter(h=>h.date!==date);
   for(const [key,s] of Object.entries(state.sessions||{})){
    if(s.date===date&&Number(s.day)===day)delete state.sessions[key];
   }
