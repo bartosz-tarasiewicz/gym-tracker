@@ -546,7 +546,55 @@ async function importDatabaseFile(file){
  else alert(msg+'\nPozostałe daty w bazie zostały zachowane.');
 }
 
-function csv(){const rows=[['date','day','exercise','machine','set','kg','reps_or_seconds','measure','rir','source','status']];for(const s of [...state.history,...Object.values(state.sessions)])for(const {item,log} of allLogged(s)){const variants=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [machine,v] of Object.entries(variants))(v.sets||[]).forEach((x,j)=>{if(x.done)rows.push([s.date,PLAN[s.day]?.name||s.day,item.title,machine,j+1,x.kg,x.reps,measure(item),v.rir||'',s.source||'aplikacja',state.history.includes(s)?'finished':'draft'])})}return rows.map(r=>r.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(',')).join('\r\n')}
+function csvDatabase(data){
+ const rows=[['date','day','record_id','kind','exercise_id','exercise','machine','set_type',
+ 'set_no','kg','reps_or_seconds','done','rir','notes','source','started','core_enabled']];
+ for(const row of data.workouts){
+  const s=row.record||{},exercises=s.exercises||{};
+  let wrote=false;
+  const dayItems=[...(PLAN[s.day]?.items||[]),...CORE];
+  for(const [id,log] of Object.entries(exercises)){
+   const item=dayItems.find(e=>e.id===id),label=item?.title||id;
+   const variants=log?.variants&&Object.keys(log.variants).length?
+    log.variants:{[log?.machine||'BODY']:log};
+   for(const [machine,v] of Object.entries(variants)){
+    let wroteSet=false;
+    for(const [type,list] of [['warmup',v?.warmups||[]],['work',v?.sets||[]]]){
+     list.forEach((set,j)=>{
+      rows.push([s.date,s.day,row.id,row.kind,id,label,machine,type,j+1,
+       set.kg??'',set.reps??'',set.done===true?'yes':'no',v?.rir||'',
+       s.notes||'',s.source||'',s.started||'',s.coreEnabled?.[id]===true?'yes':'no']);
+      wroteSet=true;wrote=true;
+     });
+    }
+    if(!wroteSet){
+     rows.push([s.date,s.day,row.id,row.kind,id,label,machine,'', '',
+      '', '', '',v?.rir||'',s.notes||'',s.source||'',s.started||'',
+      s.coreEnabled?.[id]===true?'yes':'no']);
+     wrote=true;
+    }
+   }
+  }
+  if(!wrote)rows.push([s.date,s.day,row.id,row.kind,'','','','','','','','',
+    '',s.notes||'',s.source||'',s.started||'','']);
+ }
+ // BOM for Excel's UTF-8 recognition. CSV is a reporting export; JSON is lossless.
+ const quoted=x=>{
+  const raw=String(x??'');
+  return '"'+raw.replaceAll('"','""')+'"';
+ };
+ return '\uFEFF'+rows.map(r=>r.map(quoted).join(',')).join('\r\n');
+}
+async function exportDatabaseFile(format){
+ const result=await GymCloud.exportDatabase();
+ if(!result.ok){alert(result.reason);return}
+ const db=result.data,day=dateKey();
+ if(format==='json')download('gym-tracker-azure-'+day+'.json',
+  JSON.stringify(db,null,2),'application/json');
+ else download('gym-tracker-azure-'+day+'.csv',csvDatabase(db),'text/csv;charset=utf-8');
+ toast('Wyeksportowano '+db.workouts.length+' rekordów z Azure.');
+}
+
 function download(name,content,mime){const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000)}
 function mutateSet(field,j,type,value){const {item}=currentItem(),v=currentVariant(item,true);const arr=type==='warm'?v.warmups:v.sets;arr[j][field]=value;save()}
 function changeArea(area){state.activeArea=area;save(false);render()}
@@ -559,7 +607,7 @@ document.addEventListener('click',async event=>{
  if(b.dataset.machine!==undefined){switchVariant(currentItem().item,b.dataset.machine);save();render();return}
  if(b.dataset.nudge!==undefined){const {item}=currentItem(),v=currentVariant(item,true),row=(b.dataset.type==='warm'?v.warmups:v.sets)[Number(b.dataset.set)];if(!row)return;const n=Number(row.reps)||0;row.reps=String(Math.max(0,n+Number(b.dataset.nudge)*(item.mode?.startsWith('sec')?5:1)));save();render();return}
   if(b.id&&b.id.startsWith('cloud-')){try{await GymCloud.action(b.id)}catch(e){console.warn('Cloud action:',e);toast('Błąd synchronizacji — lokalne dane zachowane')}render();return;}
- if(b.dataset.view){if(state.view==='train'&&b.dataset.view!=='train'&&!abandonHistoryEdit())return;state.view=b.dataset.view;save(false);render();return}
+ if(b.dataset.view){if(state.view==='train'&&b.dataset.view!=='train'&&!abandonHistoryEdit())return;const previous=state.view;state.view=b.dataset.view;save(false);render();if(previous!==state.view&&window.GymCloud)void GymCloud.refreshAutomatically();return}
  if(b.dataset.day!==undefined){const date=b.dataset.date;if(date)selectDate(date);return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
  if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);save(false);render();return}
@@ -568,9 +616,8 @@ document.addEventListener('click',async event=>{
  if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;save(false);render();return}
  if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item,true);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
  if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item,true);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession(true).coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
- if(b.id==='export'){download('gym-tracker-backup-'+dateKey()+'.json',JSON.stringify(state,null,2),'application/json');return}
- if(b.id==='exportcsv'){download('gym-tracker-series-'+dateKey()+'.csv',csv(),'text/csv;charset=utf-8');return}
- if(b.id==='copy-report'){const t=document.getElementById('report');t.focus();t.select();try{await navigator.clipboard.writeText(t.value);toast('Skopiowano raport')}catch{toast('Raport zaznaczony — skopiuj ręcznie')}return}
+ if(b.id==='export'){await exportDatabaseFile('json');return}
+ if(b.id==='exportcsv'){await exportDatabaseFile('csv');return}
 });
 document.addEventListener('change',async event=>{const el=event.target;
  if(window.GymProgress?.handleChange?.(el,render))return;
@@ -579,8 +626,12 @@ document.addEventListener('change',async event=>{const el=event.target;
  if(el.id==='machine'){switchVariant(currentItem().item,el.value);save();render()}
  else if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;save()}
  else if(el.id==='enable-core'){activeSession(true).coreEnabled[currentItem().item.id]=el.checked;save();render()}
- else if(el.id==='import-additive'){const file=el.files?.[0];if(!file)return;try{await addHistoricalWorkouts(file)}catch(e){console.error('Additive import:',e);toast('Nie zaimportowano: sprawdź format pliku i Azure')}finally{el.value=''}}
- else if(el.id==='import'){const file=el.files?.[0];if(!file)return;try{pendingHistoryEdit=null;if(file.size>10*1024*1024)throw Error('Backup too large');const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object')throw Error('Invalid structure');if(!confirm('Import zastąpi lokalny dziennik. Kontynuować?'))return;state=normalize(data);save();await GymStorage.flush();render();toast('Kopia przywrócona')}catch(e){console.error(e);toast('Błąd importu JSON')}}
+ else if(el.id==='import-database'){
+  const file=el.files?.[0];if(!file)return;
+  try{await importDatabaseFile(file)}
+  catch(e){console.error('Database import:',e);alert(e.message||'Nie udało się zaimportować pliku.')}
+  finally{el.value=''}
+ }
 });
 document.addEventListener('input',event=>{const t=event.target;
  if(t.dataset.field){mutateSet(t.dataset.field,Number(t.dataset.set),t.dataset.type,t.value)}
