@@ -691,11 +691,19 @@ window.GymCloud=(()=>{
   }finally{importBusy=false;}
  }
 
+ // Wait for the app's automatic refresh to finish before an explicit
+ // import/export request. Fast navigation must not produce a spurious error.
+ async function waitUntilAvailable(){
+  for(let i=0;i<100&&(busy||flushBusy||importBusy);i++){
+   await new Promise(resolve=>setTimeout(resolve,40));
+  }
+  return !(busy||flushBusy||importBusy);
+ }
  // Read the ACTUAL Azure database on demand; never label a local cache
  // or a stale initial snapshot as a complete database backup.
  async function exportDatabase(){
   if(!principal)return {ok:false,reason:'Zaloguj się przez GitHub, aby pobrać bazę Azure.'};
-  if(importBusy)return {ok:false,reason:'Trwa import. Eksport ponów po jego zakończeniu.'};
+  if(!(await waitUntilAvailable()))return {ok:false,reason:'Trwa synchronizacja. Spróbuj ponownie.'};
   try{
    const rows=serverRows(await request());
    remote=rows;
@@ -737,7 +745,7 @@ window.GymCloud=(()=>{
  // Only dates present in the supplied JSON are touched; no DELETE requests.
  async function importDatabase(rows,commit=false){
   if(!principal)return {ok:false,reason:'Zaloguj się do Azure przez GitHub.'};
-  if(busy||flushBusy||importBusy)return {ok:false,reason:'Trwa synchronizacja. Ponów operację.'};
+  if(!(await waitUntilAvailable()))return {ok:false,reason:'Trwa synchronizacja. Ponów operację.'};
   if(!Array.isArray(rows)||rows.length<1||rows.length>2000)
    return {ok:false,reason:'Nieprawidłowa liczba treningów w pliku.'};
   const dates=new Set(),ids=new Set();
