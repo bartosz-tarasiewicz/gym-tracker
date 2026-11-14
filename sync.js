@@ -6,7 +6,7 @@ window.GymCloud=(()=>{
  let getState=()=>({sessions:{},history:[]}),applySnapshot=async()=>{},backup=()=>{},onStatusChange=()=>{};
  let workoutRecords=()=>new Map(),cloudState=()=>({sessions:{},history:[]}),meaningfulSignature=()=>'',hasWorkoutData=()=>false,workoutDetails=()=>({});
  let principal=null,owner=null,base=new Map(),pending=new Map(),remote=new Map(),tombstones=new Set();
- let initialized=false,busy=false,blocked=false,backedUp=false,flushTimer=null,flushBusy=false,flag='offline',message='Zapis lokalny aktywny';
+ let initialized=false,busy=false,blocked=false,backedUp=false,flushTimer=null,flushBusy=false,importBusy=false,flag='offline',message='Zapis lokalny aktywny';
  let lastMergePreview=null;
  const clone=o=>JSON.parse(JSON.stringify(o));
  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -246,7 +246,7 @@ window.GymCloud=(()=>{
   }
  }
  async function sync(){
-  if(!principal||busy||blocked)return;
+  if(!principal||busy||blocked||importBusy)return;
   busy=true;
   try {
    const snapshotBefore=dataSignature(getState());
@@ -452,6 +452,72 @@ window.GymCloud=(()=>{
   window.addEventListener('online',()=>{if(principal)void sync();else void login();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(principal)void sync();else void login();}});
  }
+
+ // Standalone import: does not reconcile, delete, hydrate or overwrite the
+ // current local/Azure journal, including when a separate sync conflict exists.
+ async function importMissingHistory(incoming,commit=false,excludedDates=[]){
+  if(!principal)return {ready:false,reason:'Zaloguj się do Azure przez GitHub, aby importować treningi.'};
+  if(busy||flushBusy||importBusy)return {ready:false,reason:'Trwa operacja w Azure. Ponów import po jej zakończeniu.'};
+  if(!Array.isArray(incoming)||incoming.length<1||incoming.length>100)
+   return {ready:false,reason:'Nieprawidłowa lista importowanych treningów.'};
+  importBusy=true;
+  try{
+   const cloud=serverRows(await request());
+   const local=workoutRecords(getState());
+   const keys=new Set(),ids=new Set();
+   const register=(id,row)=>{
+    if(row.isEmpty)return;
+    ids.add(id);
+    const date=row.record?.date,day=row.record?.day;
+    if(date&&day!==null&&day!==undefined)keys.add(String(date)+'|'+String(day));
+   };
+   for(const [id,row] of local)register(id,row);
+   for(const [id,row] of cloud)register(id,row);
+   const excluded=new Set(excludedDates);
+   const today=new Date();
+   const todayKey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+   const additions=[];
+   let skipped=0;
+   for(const record of incoming){
+    const key=String(record?.date)+'|'+String(record?.day);
+    if(record?.date>=todayKey||excluded.has(record?.date)||ids.has(record?.syncId)||keys.has(key)){skipped++;continue;}
+    // Prevent two imported sessions from silently resolving to the same day.
+    if(!/^history:[a-zA-Z0-9:_-]+$/.test(record?.syncId||'')||!record?.exercises||
+      typeof record.exercises!=='object')throw Error('Nieprawidłowy rekord importu');
+    additions.push(clone(record));keys.add(key);ids.add(record.syncId);
+   }
+   if(!commit)return {ready:true,additions,skipped,imported:[],failed:0};
+   const imported=[];
+   let failed=0;
+   for(const record of additions){
+    try{
+     // Re-read before every insert: another device may have just imported this date.
+     const latest=serverRows(await request());
+     const collides=[...latest].some(([id,row])=>id===record.syncId||
+       (row.record?.date===record.date&&Number(row.record?.day)===Number(record.day)));
+     if(collides){skipped++;continue;}
+     // createEntity behind the API: expectedEtag:null NEVER replaces any existing ID.
+     const body={...record};delete body.syncId;
+     const result=await request('PUT',record.syncId,{record:body,expectedEtag:null});
+     const item={id:record.syncId,kind:'history',record:body,etag:result.etag||null,
+       sig:recordSignature(record.syncId,'history',body),isEmpty:false};
+     remote.set(item.id,item);
+     base.set(item.id,{etag:item.etag,sig:item.sig,kind:'history'});
+     imported.push(record);
+     persist();
+    }catch(e){
+     if(e.message==='REVISION_CONFLICT'){skipped++;continue;}
+     failed++;console.warn('Import of historical workout failed:',record.date,e.message);
+     break; // Stop after a network error; committed entries are still returned.
+    }
+   }
+   return {ready:true,imported,skipped,failed,additions:[]};
+  }catch(e){
+   console.warn('Historical import unavailable:',e.message);
+   return {ready:false,reason:'Nie udało się pobrać lub zapisać danych w Azure: '+e.message};
+  }finally{importBusy=false;}
+ }
+
  async function prepareHistoryImport(){
   if(!principal)return {ready:false,reason:'Zaloguj się do Azure przez GitHub w sekcji chmury.'};
   if(blocked)return {ready:false,reason:'W Azure jest konflikt danych. Najpierw rozwiąż konflikt synchronizacji.'};
@@ -462,5 +528,5 @@ window.GymCloud=(()=>{
    return {ready:false,reason:'Azure nie jest aktualnie zsynchronizowane. Nie importowano niczego.'};
   return {ready:true};
  }
- return {init,schedule,markDeleted,action,html,prepareHistoryImport,getStatus:()=>flag};
+ return {init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,getStatus:()=>flag};
 })();
