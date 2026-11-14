@@ -163,9 +163,8 @@ try{
  assert.match(await phone.locator('h1').first().innerText(),/Dzień wolny/);
  assert.equal(store.size,beforeRest,'Selecting rest without Save does not modify Azure');
  await phone.locator('#notes').fill('Regeneracja po długim tygodniu');
- console.log('NOTE-STATE-BEFORE-SAVE',JSON.stringify(JSON.parse(await phone.evaluate(()=>localStorage.getItem('zenek-gym-v1'))).sessions));
  await phone.locator('#save-training').click();
- await waitFor(()=>[...store.values()].some(x=>x.record?.date==='2026-11-16'&&x.record.day===-1),'saved rest day');
+ await waitFor(()=>[...store.values()].some(x=>x.record?.date==='2026-11-16'&&x.record.day===-1&&x.record.notes==='Regeneracja po długim tygodniu'),'saved rest day');
  const restId=[...store.keys()].find(id=>store.get(id).record.date==='2026-11-16');
  assert.equal(store.get(restId).record.planOverride,true);
  assert.equal(store.get(restId).record.notes,'Regeneracja po długim tygodniu');
@@ -229,6 +228,9 @@ try{
  // A different device reads the per-date selection from Azure and gets the
  // same workout form, not the canonical weekly plan for that weekday.
  await pc.reload({waitUntil:'domcontentloaded'});
+ await pc.waitForFunction(()=>[...(JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}').sessions?Object.values(JSON.parse(localStorage.getItem('zenek-gym-v1')).sessions):[]),
+  ...(JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}').history||[])].some(s=>s.date==='2026-11-16'&&s.day===5));
+ await pc.locator('[data-view="train"]').click();
  await pc.locator('#week-date').fill('2026-11-16');
  assert.equal(await pc.locator('#workout-type').inputValue(),'5','PC shows legs on Monday');
  assert.match(await pc.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/);
@@ -264,6 +266,8 @@ try{
  assert.equal(store.get(originalId).record.planSnapshots['5'].exercises.legpress
   .variants['MG-PL70'].sets[0].kg,'55','Original historical legs data are preserved');
  await pc.reload({waitUntil:'domcontentloaded'});
+ await pc.waitForFunction(()=>[...(JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}').history||[])].some(s=>s.date==='2026-11-13'&&s.day===0));
+ await pc.locator('[data-view="train"]').click();
  await pc.locator('#week-date').fill('2026-11-13');
  assert.equal(await pc.locator('#workout-type').inputValue(),'0',
   'Desktop receives historical training type edits from Azure');
