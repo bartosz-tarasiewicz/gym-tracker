@@ -194,6 +194,9 @@ window.GymCloud=(()=>{
   // content, not by generated timestamps or navigation-created templates.
   const next=new Map();
   for(const [id,item] of desired){
+   // Edits in an open form are local until the user clicks Save.
+   const formKey=String(item.record?.date)+'|'+String(item.record?.day);
+   if((getState().unsavedDates||[]).includes(formKey))continue;
    const known=base.get(id);
    if(!known&&item.isEmpty)continue; // opening an exercise is not a cloud write
    if(known?.sig===item.sig)continue;
