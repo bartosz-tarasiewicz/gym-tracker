@@ -643,7 +643,7 @@ window.GymCloud=(()=>{
  // by whatever historical identifier the browser happened to cache.
  async function saveWorkoutForDate(workout){
   if(!principal)return {ok:false,reason:'Zaloguj się przez GitHub w zakładce Dane.'};
-  if(busy||flushBusy||importBusy)return {ok:false,reason:'Trwa synchronizacja. Spróbuj ponownie.'};
+  if(!(await waitUntilAvailable()))return {ok:false,reason:'Trwa synchronizacja. Spróbuj ponownie.'};
   if(!workout||!/^\d{4}-\d{2}-\d{2}$/.test(workout.date||'')||
       ![-2,-1,0,1,2,3,5].includes(Number(workout.day)))
    return {ok:false,reason:'Nieprawidłowa data lub dzień treningowy.'};
