@@ -249,6 +249,29 @@ try{
  assert.equal(legBackup.record.planSnapshots['-1'].notes,'Regeneracja po długim tygodniu');
  log('Full database export preserves overrides, activity notes and plan snapshots');
 
+ // Switching a historical, completed workout also reuses its existing history ID.
+ await phone.locator('[data-view="train"]').click();
+ await phone.locator('#week-date').fill('2026-11-13');
+ assert.equal(await phone.locator('#workout-type').inputValue(),'5');
+ const oldHistorySize=store.size;
+ phone.once('dialog',d=>{assert.match(d.message(),/wykonane serie/);void d.accept();});
+ await phone.locator('#workout-type').selectOption('0');
+ assert.equal(await phone.locator('.exercise-tab').count(),4);
+ await phone.locator('#save-training').click();
+ await waitFor(()=>store.get(originalId)?.record?.day===0,'history workout switched from legs to chest');
+ assert.equal(store.size,oldHistorySize,'Existing historical ID is reused for a changed type');
+ assert.equal(store.get(originalId).record.planSnapshots['5'].exercises.legpress
+  .variants['MG-PL70'].sets[0].kg,'55','Original historical legs data are preserved');
+ await pc.reload({waitUntil:'domcontentloaded'});
+ await pc.locator('#week-date').fill('2026-11-13');
+ assert.equal(await pc.locator('#workout-type').inputValue(),'0',
+  'Desktop receives historical training type edits from Azure');
+ await pc.locator('#week-date').fill('2026-11-20');
+ assert.equal(await pc.locator('#workout-type').inputValue(),'5',
+  'Next Friday still uses the default leg workout');
+ log('Historical session changes type using same cloud ID without altering next Friday');
+
+
  assert.deepEqual(errors,[],'Uncaught browser JavaScript errors: '+errors.join('; '));
  log('No JavaScript errors');
  console.log('SUCCESS: per-date workout overrides, rest/GRIT and cross-device persistence alongside full Azure import/export');
