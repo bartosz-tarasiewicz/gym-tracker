@@ -244,7 +244,12 @@ try{
  const third=await context({storageState:{cookies:[],origins:[{origin:url,localStorage:[{name:'zenek-gym-v1',value:JSON.stringify(localSeed)}]}]}});
  const p3=await third.newPage();p3.on('pageerror',e=>errors.push(e.message));await p3.goto(url,{waitUntil:'domcontentloaded'});
  await p3.locator('[data-view="settings"]').click();
- await p3.waitForFunction(()=>document.querySelector('#cloud-info')?.textContent?.includes('dwa różne dzienniki'));
+ await p3.waitForFunction(id=>{
+  const local=JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}');
+  return !!document.querySelector('#cloud-merge-safe')&&(local.history||[]).some(h=>h.syncId===id);
+ },historicId);
+ assert.equal(await p3.locator('#cloud-sync').innerText(),'↻ Pobierz brakujące z Azure');
+ assert.ok((await p3.locator('#cloud-info').innerText()).includes('Pobrano'),'Cloud-only history is added automatically on first mismatch');
  assert.equal(await p3.locator('#cloud-merge-safe').isDisabled(),true,'Safe merge requires both backups first');
  const safetyFile=p3.waitForEvent('download',{timeout:8000});
  await p3.locator('#cloud-backup-both').click();
@@ -270,7 +275,11 @@ try{
  const fourth=await context({storageState:{cookies:[],origins:[{origin:url,localStorage:[{name:'zenek-gym-v1',value:JSON.stringify(conflictSeed)}]}]}});
  const p4=await fourth.newPage();p4.on('pageerror',e=>errors.push(e.message));await p4.goto(url,{waitUntil:'domcontentloaded'});
  await p4.locator('[data-view="settings"]').click();
- await p4.waitForFunction(()=>document.querySelector('#cloud-info')?.textContent?.includes('dwa różne dzienniki'));
+ await p4.waitForFunction(id=>{
+  const local=JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}');
+  return !!document.querySelector('#cloud-merge-safe')&&(local.history||[]).some(h=>h.syncId===id);
+ },historicId);
+ assert.equal(await p4.locator('#cloud-sync').innerText(),'↻ Pobierz brakujące z Azure');
  const backupConflict=p4.waitForEvent('download',{timeout:8000});
  await p4.locator('#cloud-backup-both').click();await backupConflict;
  const recordBeforeConflict=JSON.stringify(store.get(extraId).record);
@@ -279,6 +288,35 @@ try{
  assert.equal(JSON.stringify(store.get(extraId).record),recordBeforeConflict,'Safe merge refuses conflicting same-ID edits');
  assert.match(await p4.locator('#cloud-info').innerText(),/ręcznej decyzji/);
  log('Same-ID conflicting workout is preserved for manual review; no blind overwrite');
+
+ // New imported workouts must appear on a PC without whole-journal merging.
+ // Even when one existing cloud ID has conflicting edits, reads are safe.
+ const pcStoreId='history:imported-after-desktop-login-2026-09-21';
+ const pcStoreRecord={date:'2026-09-21',day:0,source:'Imported on iPhone',started:'2026-09-21T08:00:00Z',
+  exercises:{flat:{machine:'MG-PL13',variants:{'MG-PL13':{sets:[{kg:'50',reps:'10',done:true}],warmups:[],rir:'2'}}}},coreEnabled:{},notes:''};
+ store.set(pcStoreId,{kind:'history',record:pcStoreRecord,etag:'"new-iphone-import"'});
+ const operationsBeforeRead=operations.length;
+ await p4.locator('#cloud-sync').click();
+ await p4.waitForFunction(id=>{
+  const state=JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}');
+  return (state.history||[]).some(s=>s.syncId===id);
+ },pcStoreId);
+ assert.equal(operations.length,operationsBeforeRead,'Read-only refresh never uploads, edits, or deletes workouts');
+ assert.equal(JSON.stringify(store.get(extraId).record),recordBeforeConflict,'Conflicting workouts stay unchanged');
+ await p4.reload({waitUntil:'domcontentloaded'});
+ await p4.locator('[data-view="settings"]').click();
+ await p4.waitForFunction(()=>!!document.querySelector('#cloud-merge-safe'));
+ assert.equal(operations.length,operationsBeforeRead,'Restarting with saved conflict does not upload local-only records');
+ const pcState=JSON.parse(await p4.evaluate(()=>localStorage.getItem('zenek-gym-v1')));
+ assert.ok(pcState.history.some(s=>s.syncId===pcStoreId),'Cloud imported session survives desktop reload');
+ assert.ok(pcState.history.some(s=>s.syncId===extraId),'PC retains local edited training after reload');
+ await p4.locator('[data-view="train"]').click();
+ await p4.locator('#week-date').fill('2026-09-21');
+ assert.equal(await p4.locator('h1').first().innerText(),'Klatka piersiowa');
+ assert.match(await p4.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/,
+  'Cloud-imported results are available in workout calendar');
+ log('Cloud-imported workouts show on desktop despite conflict, persist across reload, never write to Azure');
+
 
  // The user only wants to import previous training dates, not reconcile
  // the two journals and never touch 13 November 2026.
@@ -315,7 +353,7 @@ try{
 
  assert.deepEqual(errors,[],'Uncaught JS errors: '+errors.join(';'));
  log('No uncaught JavaScript errors');
- console.log('SUCCESS: date-first Azure, explicit Save, conflict-independent archive import, safe reconciliation');
+ console.log('SUCCESS: date-first Azure, import and read-only cross-device hydration without overwrites');
 }finally{
  await browser.close();await new Promise(resolve=>server.close(resolve));
 }
