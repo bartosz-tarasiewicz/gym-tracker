@@ -302,6 +302,14 @@ window.GymCloud=(()=>{
    if(!initialized){
     const hadMeta=restore();
     if(hadMeta){
+     if(blocked){
+      const pulled=await includeRemoteOnly(now);
+      status('conflict',pulled.added?'✓ Pobrano '+pulled.added+' brakujących treningów z Azure. Lokalne zmiany zachowano.':
+       '⚠ Istnieją różnice lokalne — niczego nie nadpisano.');
+      return;
+     }
+     // Fetch new cloud-only records first, before deriving pending local writes.
+     await includeRemoteOnly(now);
      // Offline edits performed since the last completed read must be queued
      // against the previously known per-workout revisions.
      pendingSnapshot();
@@ -323,6 +331,7 @@ window.GymCloud=(()=>{
     }
     initialized=true;
    } else {
+    await includeRemoteOnly(now);
     pendingSnapshot();
    }
    // If another device changed a record with no pending local changes, Azure
