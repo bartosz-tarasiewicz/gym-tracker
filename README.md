@@ -2,6 +2,12 @@
 
 PWA na iPhone i Windows (HTML/CSS/JS, bez etapu kompilacji). Hosting: Azure Static Web Apps. Historia treningów i sesje w Azure Table Storage, z lokalnym buforem do pracy offline. Zakres testów i infrastruktury jest opisany w `docs/AZURE_AUTHORITY_V04.md`.
 
+## Zmiana rodzaju treningu tylko na wybrany dzień
+
+Nad formularzem treningu znajdziesz pole **Rodzaj treningu w wybranym dniu**. Obejmuje wszystkie cztery gotowe treningi siłowe (klatka, plecy, barki/biceps/triceps, nogi), GRIT, dzień wolny oraz **Inny trening** (notatka o innej aktywności). Każda data domyślnie ma swój standardowy dzień planu: poniedziałek klatka, wtorek plecy, środa ramiona/barki, czwartek GRIT, piątek nogi, weekend wolny. Możesz jednak przełączyć tylko konkretną datę, także w weekend.
+
+Zmiana rodzaju treningu nie modyfikuje planu w innych dniach ani innych tygodniach. Wpisane już serie są przechowywane w polu `planSnapshots` danego dnia podczas przełączania szablonów; gdy wrócisz do poprzedniego rodzaju treningu, wartości zostaną przywrócone. Przy zmianie dnia z potwierdzonymi seriami pojawia się potwierdzenie. Przełączenie działa początkowo lokalnie, a przycisk **Zapisz trening / Zapisz zmiany / Zapisz dzień** aktualizuje jedyny istniejący rekord tej daty w Azure. Weekend i GRIT w trybie bez serii mogą mieć notatkę. Oznaczenie dnia wolnego na dniu treningowym również zapisuje się w Azure, dzięki czemu jest widoczne na komputerze i iPhonie. JSON export/import zachowuje te ustawienia.
+
 ## Zapisywanie treningów — jeden formularz, jeden rekord na datę
 
 Na telefonie i komputerze przejdź do **Trening**, wybierz datę, uzupełnij wyniki i kliknij **✓ Zapisz trening** albo **✓ Zapisz zmiany**. Aplikacja odczytuje aktualne rekordy w Azure i, jeżeli dla tej daty istnieje trening, zapisuje nowe wartości (serie, ciężary, powtórzenia, RIR, notatki) **do jego obecnego ID**. Nie tworzy drugiego wpisu — nawet jeżeli lokalny trening na urządzeniu ma inny identyfikator. Gdy wybrana data nie istnieje w Azure, tworzy jeden nowy rekord. Każdy zapis jest weryfikowany odczytem Azure. Jeśli sieć jest niedostępna, zmiany pozostają w lokalnej kopii i wymagają ponownego kliknięcia Zapisz po odzyskaniu połączenia. Sama edycja pól bez przycisku Zapisz nie zmienia Azure. Inne daty pozostają nietknięte.
@@ -29,6 +35,7 @@ Po zapisaniu na jednym urządzeniu drugie automatycznie pobiera zmiany po otwarc
 **Zdjęcia:** zdjęcia ćwiczeń CORE są osadzone z zewnętrznych źródeł; jeśli serwis źródłowy blokuje wyświetlenie, może pojawić się komunikat o niedostępności. Zawsze widać tytuł ćwiczenia i źródło obrazu.
 
 ## Historia wersji
+- v0.8: per-data wybór treningu, GRIT, dzień wolny i inna aktywność bez zmiany planu tygodniowego.
 - v0.7: prosty import aktualizujący istniejące daty i pełny eksport Azure JSON/CSV.
 - v0.5: kalendarz Pn–Nd na ekranie Trening, edycja wybranego dnia, przywrócone warianty, CORE photo, trendy.
 - v0.4: Azure-authoritative per-workout records, ETag i kolejka offline.
