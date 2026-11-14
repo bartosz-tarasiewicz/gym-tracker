@@ -123,8 +123,14 @@ async function handle(request,context){
    catch(e){return reply(e.statusCode===413?413:400,{error:e.statusCode===413?'record_too_large':'invalid_record'});}
    const entity={partitionKey:part,rowKey:key,entryId:id,kind,packed,updatedAt:new Date().toISOString()};
    try{
-    if(body.expectedEtag===null)await t.createEntity(entity);
-    else await t.updateEntity(entity,'Replace',{etag:body.expectedEtag,matchConditions:'IfNotModified'});
+    if(body.expectedEtag===null){
+     // Prevent a second ID being created for a date already present in Azure.
+     // Normal updates target the pre-existing record's ID and ETag.
+     const workouts=await list(t,part);
+     if(workouts.some(x=>x.id!==id&&x.record?.date===body.record.date))
+      return reply(409,{error:'workout_date_exists'});
+     await t.createEntity(entity);
+    }else await t.updateEntity(entity,'Replace',{etag:body.expectedEtag,matchConditions:'IfNotModified'});
     const saved=await t.getEntity(part,key);
     return reply(200,{ok:true,id,etag:saved.etag||null});
    }catch(e){
