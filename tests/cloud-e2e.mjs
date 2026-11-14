@@ -50,7 +50,7 @@ const session=(date,day,kg,notes)=>({date,day,notes,coreEnabled:{},started:date+
 const row=(date,kg,notes,id='history:import-'+date)=>({id,kind:'history',
  record:session(date,5,kg,notes)});
 const uploadFile=async(page,data,confirm=true)=>{
- if(confirm)page.once('dialog',d=>d.accept());
+ if(confirm)page.once('dialog',d=>{console.log('IMPORT DIALOG:',d.type(),d.message());void d.accept();});
  await page.locator('#import-database').setInputFiles({name:'data.json',mimeType:'application/json',
   buffer:Buffer.from(JSON.stringify(data))});
 };
@@ -86,6 +86,7 @@ try{
             row('2026-10-30',60,'New training','history:new-2026-10-30')]
  };
  await uploadFile(phone,imported);
+ console.log('AFTER IMPORT',JSON.stringify([...store]).slice(0,1500),await phone.locator('#cloud-info').innerText());
  await waitFor(()=>store.get(originalId)?.record?.notes==='Overwritten notes','upsert changed date');
  await waitFor(()=>[...store.values()].some(x=>x.record.date==='2026-10-30'),'add new date');
  assert.equal(store.size,3,'Existing date updated, missing date created, omitted date preserved');
