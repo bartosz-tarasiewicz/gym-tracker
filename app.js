@@ -454,11 +454,21 @@ function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?
  const rows=(v.sets||[]).filter(x=>x.done);if(!rows.length)continue;lines.push(`  ${machineName(k)} (${unit(k)}): ${rows.map(x=>`${x.kg||'masa ciała'} × ${x.reps} ${measure(item)}`).join(' | ')}; RIR ${v.rir||'—'}`)}
  }if(s.notes)lines.push(`\nNotatka: ${s.notes}`);return lines.join('\n')}
 function historyHTML(){return GymProgress.html(state,{PLAN,CORE,MACHINE,allLogged,sessionReport,machineName,unit,measure})}
-function settingsHTML(){const draft=Object.values(state.sessions).map(s=>sessionReport(s)).join('\n\n')||'Brak rozpoczętych treningów';return `<section class="hero"><div class="eyebrow">Dane i kopie</div><h1>Bezpieczny zapis</h1><p class="muted">Wyniki synchronizujemy z Azure. Na urządzeniu przechowujemy tylko pamięć podręczną i kolejkę zmian na wypadek utraty połączenia. Kopia JSON jest dodatkowym zabezpieczeniem.</p></section>
- <div class="panel"><h2>➕ Import starszych treningów</h2><p class="muted">Wybierz plik JSON z wcześniejszymi wynikami. Dodamy <strong>tylko brakujące daty</strong>, bez scalania dzienników i bez nadpisywania istniejących treningów. <strong>13.11.2026 zostaje pominięty.</strong></p><div class="label">Plik JSON z treningami</div><input type="file" id="import-additive" accept=".json,application/json" style="width:100%;margin:10px 0;color:#ccd8e1"><p class="hint">Wystarczy zalogowanie do Azure. Ten import działa również przy osobnym komunikacie o rozbieżności synchronizacji.</p></div>
- <div class="panel"><h2>Eksport danych</h2><div class="inline-actions"><button class="btn" id="export">↓ Kopia JSON</button><button class="btn secondary" id="exportcsv">↓ Serie CSV</button></div><hr class="hr"><div class="label">Przywrócenie kopii JSON</div><input type="file" id="import" accept="application/json,.json" style="width:100%;margin:12px 0;color:#ccd8e1"><div class="warning">Import zastępuje dotychczasowe treningi na tym urządzeniu. Najpierw zrób kopię JSON.</div></div>
- <div class="panel"><h2>Awaryjny raport tekstowy</h2><p class="muted">Raport można zaznaczyć ręcznie, nawet jeśli funkcja kopiowania zawiedzie. Obejmuje potwierdzone serie z rozpoczętych treningów.</p><textarea readonly id="report" class="report">${esc(draft)}</textarea><div class="inline-actions"><button class="btn secondary" id="copy-report">Kopiuj raport</button></div></div>
- <div class="panel"><h2>iPhone i Azure</h2><p class="hint">Na iPhonie: Safari → Udostępnij → Dodaj do ekranu początkowego. Logowanie do chmury odbywa się przez GitHub. Wybór daty lub samo oglądanie treningu nie tworzy nowych rekordów.</p><p class="hint">Hosting: Azure Static Web Apps Free. Dane: Azure Table Storage. Przy braku połączenia zmiany trafiają do kolejki offline.</p></div>${window.GymCloud?.html?.()||''}`}
+function settingsHTML(){
+ return '<section class="hero"><div class="eyebrow">Dane</div><h1>Import i eksport</h1>'+
+  '<p class="muted">Dane treningów przechowujemy w Azure. Poniższe operacje dotyczą całej bazy przypisanej do zalogowanego konta GitHub.</p></section>'+
+  '<div class="panel"><h2>Import danych</h2>'+
+  '<p class="muted">Treningi z pliku <strong>nadpiszą treningi o tych samych datach</strong>. Brakujące zostaną dodane. Daty, których nie ma w pliku, pozostaną bez zmian.</p>'+
+  '<label class="label" for="import-database">Wybierz plik JSON</label>'+
+  '<input type="file" id="import-database" accept="application/json,.json" style="width:100%;margin:12px 0;color:#ccd8e1">'+
+  '<p class="hint">Przed importem zobaczysz liczbę aktualizowanych i dodawanych treningów. Import nigdy nie usuwa innych dat.</p></div>'+
+  '<div class="panel"><h2>Eksport całej bazy</h2>'+
+  '<p class="muted">Pobieramy aktualne rekordy bezpośrednio z Azure, a nie wyłącznie dane przechowywane na tym urządzeniu.</p>'+
+  '<div class="inline-actions"><button class="btn" id="export">↓ Cała baza JSON</button>'+
+  '<button class="btn secondary" id="exportcsv">↓ Cała baza CSV</button></div>'+
+  '<p class="hint">JSON zachowuje pełną strukturę i nadaje się do późniejszego importu. CSV zawiera tabelę wszystkich ćwiczeń, serii i notatek do analizy.</p></div>'+
+  (window.GymCloud?.html?.()||'');
+}
 
 const importKey=record=>String(record.date)+'|'+String(record.day);
 function checkHistoryImport(payload){
