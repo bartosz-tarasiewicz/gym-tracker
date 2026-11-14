@@ -80,6 +80,7 @@ try {
  await page.locator('[data-view="train"]').click();
  assert.equal(await page.locator('.week-grid .week-day').count(),7,'Seven-day calendar is available on Azure');
  assert.equal(await page.locator('#save-training').count(),1,'One explicit Save action is displayed');
+ assert.equal(await page.locator('#workout-type').count(),1,'Per-date workout type selection exists');
  await page.locator('[data-view="history"]').click();
  assert.equal(await page.locator('#trend-exercise').count(),1,'History contains trend filters');
  assert.equal(await page.locator('.history-edit-button').count(),0,'No editing in History');

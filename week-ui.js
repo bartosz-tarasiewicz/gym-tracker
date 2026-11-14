@@ -24,11 +24,18 @@ window.GymWeek=(()=>{
   for(const rec of all)if(meaningful(rec))dateCounts.set(rec.date,(dateCounts.get(rec.date)||0)+1);
   const cells=names.map((name,i)=>{
    const date=shift(first,i),count=dateCounts.get(date)||0,selectedNow=selected===date;
-   return '<button type="button" class="week-day '+(selectedNow?'active':'')+(count?' has-data':'')+'" data-date="'+date+'" data-day="'+dayIndex(date)+'" aria-label="'+name+' '+date+(count?' — '+count+' treningów':'')+'" aria-pressed="'+selectedNow+'"><span class="week-name">'+name+'</span><span class="week-number">'+parse(date).getDate()+'</span><span class="week-dot">'+(count?'●':'')+'</span></button>';
+   const entries=all.filter(x=>x?.date===date);
+   const pending=entries.find(x=>(state.unsavedDates||[]).includes(date+'|'+x.day));
+   const latest=pending||entries.find(x=>x.planOverride===true)||entries[0];
+   const changed=latest?.planOverride===true&&Number(latest.day)!==dayIndex(date);
+   const mark=count?'●':changed?(Number(latest.day)===-1?'☾':Number(latest.day)===3?'⚡':'↔'):'';
+   const namesByType={0:'Klatka',1:'Plecy',2:'Barki',3:'GRIT',5:'Nogi','-1':'Dzień wolny','-2':'Inny trening'};
+   const detail=changed?' — '+(namesByType[latest.day]||'Zmieniony trening'):'';
+   return '<button type="button" class="week-day '+(selectedNow?'active':'')+(count?' has-data':'')+'" data-date="'+date+'" data-day="'+dayIndex(date)+'" aria-label="'+name+' '+date+esc(detail)+(count?' — '+count+' treningów':'')+'" aria-pressed="'+selectedNow+'"><span class="week-name">'+name+'</span><span class="week-number">'+parse(date).getDate()+'</span><span class="week-dot">'+mark+'</span></button>';
   }).join('');
   const weekEnd=shift(first,6);
   const heading=parse(first).toLocaleDateString('pl-PL',{day:'numeric',month:'short'})+' – '+parse(weekEnd).toLocaleDateString('pl-PL',{day:'numeric',month:'short',year:'numeric'});
-  return '<div class="panel week-panel"><div class="week-top"><div><div class="eyebrow">Wybierz dzień treningu</div><strong>'+esc(heading)+'</strong></div><div class="week-actions"><button type="button" data-week="-7" aria-label="Poprzedni tydzień">‹</button><button type="button" data-week="today">Dziś</button><button type="button" data-week="7" aria-label="Następny tydzień">›</button></div></div><div class="week-grid day-tabs">'+cells+'</div><div class="week-bottom"><span><span class="week-dot-legend">●</span> Dzień z zapisanymi seriami</span><label>Inna data <input type="date" id="week-date" value="'+esc(selected)+'" aria-label="Przejdź do daty"></label></div></div>';
+  return '<div class="panel week-panel"><div class="week-top"><div><div class="eyebrow">Wybierz dzień treningu</div><strong>'+esc(heading)+'</strong></div><div class="week-actions"><button type="button" data-week="-7" aria-label="Poprzedni tydzień">‹</button><button type="button" data-week="today">Dziś</button><button type="button" data-week="7" aria-label="Następny tydzień">›</button></div></div><div class="week-grid day-tabs">'+cells+'</div><div class="week-bottom"><span><span class="week-dot-legend">●</span> Zapisane serie · ↔ inny trening · ☾ wolne</span><label>Inna data <input type="date" id="week-date" value="'+esc(selected)+'" aria-label="Przejdź do daty"></label></div></div>';
  }
  return {html,iso,shift,dayIndex};
 })();

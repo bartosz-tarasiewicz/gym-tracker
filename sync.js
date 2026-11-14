@@ -643,9 +643,9 @@ window.GymCloud=(()=>{
  // by whatever historical identifier the browser happened to cache.
  async function saveWorkoutForDate(workout){
   if(!principal)return {ok:false,reason:'Zaloguj się przez GitHub w zakładce Dane.'};
-  if(busy||flushBusy||importBusy)return {ok:false,reason:'Trwa synchronizacja. Spróbuj ponownie.'};
+  if(!(await waitUntilAvailable()))return {ok:false,reason:'Trwa synchronizacja. Spróbuj ponownie.'};
   if(!workout||!/^\d{4}-\d{2}-\d{2}$/.test(workout.date||'')||
-      ![0,1,2,5].includes(Number(workout.day)))
+      ![-2,-1,0,1,2,3,5].includes(Number(workout.day)))
    return {ok:false,reason:'Nieprawidłowa data lub dzień treningowy.'};
   const record=clone(workout),date=record.date,day=Number(record.day);
   const sourceId=record.syncId;
@@ -653,7 +653,7 @@ window.GymCloud=(()=>{
   importBusy=true;
   try{
    const snapshot=serverRows(await request());
-   const sameDay=[...snapshot.values()].filter(x=>x.record?.date===date&&Number(x.record?.day)===day);
+   const sameDay=[...snapshot.values()].filter(x=>x.record?.date===date);
    if(sameDay.length>1)
     return {ok:false,reason:'W Azure istnieje więcej niż jeden trening z tej daty. Nie chcę usuwać żadnego z nich automatycznie.'};
    const existing=sameDay[0]||null;
@@ -752,7 +752,7 @@ window.GymCloud=(()=>{
   for(const item of rows){
    const rec=item?.record;
    if(!rec||typeof rec!=='object'||Array.isArray(rec)||!/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')||
-     !Number.isInteger(Number(rec.day))||![0,1,2,3,4,5,-1].includes(Number(rec.day))||
+     !Number.isInteger(Number(rec.day))||![-2,-1,0,1,2,3,4,5].includes(Number(rec.day))||
      !rec.exercises||typeof rec.exercises!=='object'||Array.isArray(rec.exercises)||
      !['draft','history'].includes(item.kind)||! /^(draft|history):[a-zA-Z0-9:_-]{3,195}$/.test(item.id||'')||
      dates.has(rec.date)||ids.has(item.id))
