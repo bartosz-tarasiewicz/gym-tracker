@@ -416,7 +416,7 @@ function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?
  }if(s.notes)lines.push(`\nNotatka: ${s.notes}`);return lines.join('\n')}
 function historyHTML(){return GymProgress.html(state,{PLAN,CORE,MACHINE,allLogged,sessionReport,machineName,unit,measure})}
 function settingsHTML(){const draft=Object.values(state.sessions).map(s=>sessionReport(s)).join('\n\n')||'Brak rozpoczętych treningów';return `<section class="hero"><div class="eyebrow">Dane i kopie</div><h1>Bezpieczny zapis</h1><p class="muted">Wyniki synchronizujemy z Azure. Na urządzeniu przechowujemy tylko pamięć podręczną i kolejkę zmian na wypadek utraty połączenia. Kopia JSON jest dodatkowym zabezpieczeniem.</p></section>
- <div class="panel"><h2>➕ Dodaj starsze treningi</h2><p class="muted">Uzupełnij historię z pliku JSON. Aplikacja sprawdzi aktualne dane Azure i <strong>pominie daty, dla których istnieje już trening</strong>. Żadnych nadpisań, żadnych duplikatów.</p><div class="label">Plik z historią (format gym-tracker-history-additive-v1)</div><input type="file" id="import-additive" accept=".json,application/json" style="width:100%;margin:10px 0;color:#ccd8e1"><p class="hint">Wymaga zalogowania i zakończonej synchronizacji Azure. Przed importem możesz pobrać kopię JSON poniżej.</p></div>
+ <div class="panel"><h2>➕ Import starszych treningów</h2><p class="muted">Wybierz plik JSON z wcześniejszymi wynikami. Dodamy <strong>tylko brakujące daty</strong>, bez scalania dzienników i bez nadpisywania istniejących treningów. <strong>13.11.2026 zostaje pominięty.</strong></p><div class="label">Plik JSON z treningami</div><input type="file" id="import-additive" accept=".json,application/json" style="width:100%;margin:10px 0;color:#ccd8e1"><p class="hint">Wystarczy zalogowanie do Azure. Ten import działa również przy osobnym komunikacie o rozbieżności synchronizacji.</p></div>
  <div class="panel"><h2>Eksport danych</h2><div class="inline-actions"><button class="btn" id="export">↓ Kopia JSON</button><button class="btn secondary" id="exportcsv">↓ Serie CSV</button></div><hr class="hr"><div class="label">Przywrócenie kopii JSON</div><input type="file" id="import" accept="application/json,.json" style="width:100%;margin:12px 0;color:#ccd8e1"><div class="warning">Import zastępuje dotychczasowe treningi na tym urządzeniu. Najpierw zrób kopię JSON.</div></div>
  <div class="panel"><h2>Awaryjny raport tekstowy</h2><p class="muted">Raport można zaznaczyć ręcznie, nawet jeśli funkcja kopiowania zawiedzie. Obejmuje potwierdzone serie z rozpoczętych treningów.</p><textarea readonly id="report" class="report">${esc(draft)}</textarea><div class="inline-actions"><button class="btn secondary" id="copy-report">Kopiuj raport</button></div></div>
  <div class="panel"><h2>iPhone i Azure</h2><p class="hint">Na iPhonie: Safari → Udostępnij → Dodaj do ekranu początkowego. Logowanie do chmury odbywa się przez GitHub. Wybór daty lub samo oglądanie treningu nie tworzy nowych rekordów.</p><p class="hint">Hosting: Azure Static Web Apps Free. Dane: Azure Table Storage. Przy braku połączenia zmiany trafiają do kolejki offline.</p></div>${window.GymCloud?.html?.()||''}`}
@@ -450,29 +450,45 @@ async function addHistoricalWorkouts(file){
  if(file.size>1024*1024)throw Error('File exceeds 1 MB');
  const payload=JSON.parse(await file.text());
  const incoming=checkHistoryImport(payload);
- if(!window.GymCloud?.prepareHistoryImport)throw Error('Azure sync not ready');
- const status=await GymCloud.prepareHistoryImport();
- if(!status.ready){toast(status.reason);return}
- // Azure has just been fetched; never import on top of stale data.
- const existingKeys=new Set([...state.history,...Object.values(state.sessions)].map(importKey));
- const existingIds=new Set(state.history.map(x=>x.syncId));
- const additions=incoming.filter(x=>!existingKeys.has(importKey(x))&&!existingIds.has(x.syncId));
- const skipped=incoming.length-additions.length;
- if(!additions.length){toast('Wszystkie '+incoming.length+' treningów są już zapisane — nic nie zmieniono');return}
- const dates=additions.map(x=>x.date).join(', ');
- if(!confirm('Dodać '+additions.length+' brakujących treningów do Azure?\\nDaty: '+dates+
-    '\\nPominięte istniejące: '+skipped+'.\\nDane obecnych treningów pozostają bez zmian.'))return;
- // New entries receive their original stable IDs, never replace old records.
- state.history.push(...additions);
- state.history.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||
-   String(a.started||'').localeCompare(String(b.started||'')));
- save();
- await GymStorage.flush();
- await GymCloud.action('cloud-sync');
+ if(!window.GymCloud?.importMissingHistory)throw Error('Azure importer not available');
+ // 13 November 2026 is excluded as requested. The original 6 November entry
+ // and any other existing date are also skipped, never replaced.
+ const excluded=['2026-11-13'];
+ const preview=await GymCloud.importMissingHistory(incoming,false,excluded);
+ if(!preview.ready){alert(preview.reason);return}
+ if(!preview.additions.length){
+  toast('Wszystkie starsze treningi są już zapisane lub zostały pominięte.');
+  return;
+ }
+ const dates=preview.additions.map(x=>x.date).join(', ');
+ if(!confirm('Dodać '+preview.additions.length+' wcześniejszych treningów do Azure?\n'+
+   'Daty: '+dates+'\n'+
+   'Pominięte istniejące lub wykluczone: '+preview.skipped+'.\n'+
+   '13.11.2026 NIE będzie importowany.\n'+
+   'Nie zmienimy żadnego istniejącego treningu.'))return;
+ const result=await GymCloud.importMissingHistory(incoming,true,excluded);
+ if(!result.ready){alert(result.reason);return}
+ if(result.imported.length){
+  const localKeys=new Set([...state.history,...Object.values(state.sessions)].map(importKey));
+  for(const record of result.imported){
+   if(!localKeys.has(importKey(record))){
+    state.history.push(record);
+    localKeys.add(importKey(record));
+   }
+  }
+  state.history.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||
+    String(a.started||'').localeCompare(String(b.started||'')));
+  // Entries are already created in Azure. Do not trigger unrelated journal sync.
+  save(false);
+  await GymStorage.flush();
+ }
  render();
- const flag=GymCloud.getStatus();
- toast(flag==='synced'?'Dodano '+additions.length+' treningów do Azure · pominięto '+skipped:
-   'Dodano '+additions.length+' lokalnie; synchronizacja Azure oczekuje. Sprawdź status chmury.');
+ if(result.failed){
+  alert('Zaimportowano '+result.imported.length+' treningów. Kolejny zapis nie powiódł się.'+
+   '\nPozostałych nie zmieniono. Ten sam plik można bezpiecznie zaimportować ponownie.');
+ }else{
+  toast('Zaimportowano '+result.imported.length+' treningów; pominięto '+result.skipped+'.');
+ }
 }
 
 function csv(){const rows=[['date','day','exercise','machine','set','kg','reps_or_seconds','measure','rir','source','status']];for(const s of [...state.history,...Object.values(state.sessions)])for(const {item,log} of allLogged(s)){const variants=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [machine,v] of Object.entries(variants))(v.sets||[]).forEach((x,j)=>{if(x.done)rows.push([s.date,PLAN[s.day]?.name||s.day,item.title,machine,j+1,x.kg,x.reps,measure(item),v.rir||'',s.source||'aplikacja',state.history.includes(s)?'finished':'draft'])})}return rows.map(r=>r.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(',')).join('\r\n')}
