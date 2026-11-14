@@ -1,26 +1,18 @@
-# Gym Tracker — v0.5 · Azure Primary · trening wybierany datą
+# Gym Tracker — v0.7 · Azure Primary · trening wybierany datą
 
 PWA na iPhone i Windows (HTML/CSS/JS, bez etapu kompilacji). Hosting: Azure Static Web Apps. Historia treningów i sesje w Azure Table Storage, z lokalnym buforem do pracy offline. Zakres testów i infrastruktury jest opisany w `docs/AZURE_AUTHORITY_V04.md`.
-
-## Rozwiązywanie konfliktu danych (bez utraty treningów)
-
-Jeśli w **Dane → Treningi w Azure** pojawia się „Rozbieżne dane”, **nie wybieraj** natychmiast „Przyjmij z Azure” ani „Wyślij lokalne zmiany” — oba przyciski mogą zastąpić istniejące rekordy. Najpierw kliknij **Pobierz obie kopie JSON** i upewnij się, że plik został zapisany na urządzeniu. Potem możesz użyć **Scal bez nadpisywania**: funkcja odczytuje bieżące dane Azure, porównuje każdy rekord po ID i dacie/dniu planu, wysyła wyłącznie brakujące, niezmienione rekordy z lokalnej pamięci i uzupełnia brakujące z Azure. Każdy nowy zapis do Azure wymaga nieistniejącego rekordu (ETag=null). Gdy ten sam ID ma inne wyniki, ta sama data/dzień ma różne ID lub kolejka nie jest czysta, funkcja odmówi scalenia i zachowa obie kopie — nie zgaduje, który trening jest poprawny. Funkcję przetestowano na dwóch niezależnych dziennikach i kolizji tego samego ID.
 
 ## Zapisywanie treningów — jeden formularz, jeden rekord na datę
 
 Na telefonie i komputerze przejdź do **Trening**, wybierz datę, uzupełnij wyniki i kliknij **✓ Zapisz trening** albo **✓ Zapisz zmiany**. Aplikacja odczytuje aktualne rekordy w Azure i, jeżeli dla tej daty istnieje trening, zapisuje nowe wartości (serie, ciężary, powtórzenia, RIR, notatki) **do jego obecnego ID**. Nie tworzy drugiego wpisu — nawet jeżeli lokalny trening na urządzeniu ma inny identyfikator. Gdy wybrana data nie istnieje w Azure, tworzy jeden nowy rekord. Każdy zapis jest weryfikowany odczytem Azure. Jeśli sieć jest niedostępna, zmiany pozostają w lokalnej kopii i wymagają ponownego kliknięcia Zapisz po odzyskaniu połączenia. Sama edycja pól bez przycisku Zapisz nie zmienia Azure. Inne daty pozostają nietknięte.
 
-Po zapisaniu na jednym urządzeniu na drugim odśwież Azure w zakładce **Dane**; nie trzeba importować, scalać dzienników ani wybierać osobnego przycisku wysyłania. Gdy dwa wpisy istniały już dla jednej daty, automatyczny zapis wstrzymuje się zamiast usuwać dane bez wiedzy użytkownika.
+Po zapisaniu na jednym urządzeniu drugie automatycznie pobiera zmiany po otwarciu lub wznowieniu aplikacji. Nie trzeba importować ani scalać dzienników. Gdy dwa wpisy istniały już dla jednej daty, automatyczny zapis wstrzymuje się zamiast usuwać dane bez wiedzy użytkownika.
 
-## Treningi zaimportowane na innym urządzeniu
+## Zakładka Dane: import i eksport
 
-Po imporcie na iPhonie zaloguj się na komputerze **tym samym kontem GitHub**. Aplikacja czyta brakujące rekordy z Azure nawet gdy lokalny dziennik na komputerze różni się od chmurowego. Jeśli zobaczysz status konfliktu, kliknij **Dane → Treningi w Azure → Pobierz brakujące z Azure**. Ten odczyt dodaje brakujące treningi do lokalnego widoku i zapisuje je w pamięci podręcznej **bez jakichkolwiek zmian w Azure**. Treningów o tych samych ID, lecz różnych wynikach, nie zastępuje. Dwie osobne sesje z tą samą datą i różnymi ID pozostają oddzielnymi wpisami. Trwałe konflikty blokują automatyczny zapis do chmury, ale nie pobieranie nowych wpisów. Blokada jest zachowywana po odświeżeniu strony, żeby nie wysłać niezweryfikowanych zmian przypadkiem.
-
-## Dodawanie wcześniejszych treningów bez nadpisywania
-
-W zakładce **Dane → Import starszych treningów** wybierz prywatny plik `gym-tracker-history-additive-v1` (trzymany poza kodem i hostingiem). Wystarczy zalogowanie do Azure przez GitHub. **Import działa również przy rozbieżności między lokalnym dziennikiem a Azure; nie wymaga scalania całych dzienników.** Następnie wyświetla liczbę brakujących dat i potwierdzenie. Istniejące rekordy o tym samym dniu planu i dacie lub tym samym `syncId` są pomijane (sprawdzane w Azure i na urządzeniu); import jest powtarzalny (idempotentny). **Data 2026-11-13 jest wykluczona**, zgodnie z prośbą o pominięcie wczorajszego treningu. Nowe rekordy powstają przez Azure create-only (`expectedEtag:null`) i nigdy nie zastępują istniejących wpisów. Nowe wpisy synchronizują się w Azure pod własnymi stabilnymi `history:*` ID. Dla bezpieczeństwa zrób **Kopię JSON** przed importem. Stary przycisk „Przywrócenie kopii JSON” nadal jest operacją zastępującą i nie służy do uzupełniania historii.
-
-**Prywatność:** osobiste pliki z treningami nie są dołączane do repozytorium ani publikowane w aplikacji — import odbywa się wyłącznie z pliku wybranego przez zalogowaną osobę na jej urządzeniu.
+- **Import danych** przyjmuje pliki Gym Tracker JSON: pełny eksport `gym-tracker-db-export-v1`, starsze kopie `{sessions,history}` oraz pliki `gym-tracker-history-additive-v1`. Przed zapisem aplikacja wyświetla podsumowanie: ile dat zostanie nadpisanych, ile dodanych, a ile jest identycznych. Istniejący rekord identyfikuje **po dacie**, zachowuje jego identyfikator w Azure i podmienia wartości wyłącznie dla dat uwzględnionych w imporcie. Daty nieobecne w JSON pozostają nietknięte. Zapis jest chroniony wersją rekordu (ETag). Import jest możliwy również przy odrębnym, niezwiązanym z nim komunikacie o rozbieżności synchronizacji. W razie błędu w połowie importu aplikacja podaje, do której daty doszła; ponowny import tego samego pliku jest bezpieczny.
+- **Eksport całej bazy** odczytuje bieżące rekordy z Azure z konta GitHub, niezależnie od lokalnego cache. JSON zachowuje strukturę, identyfikatory i wszystkie pola wyników; CSV rozwija wszystkie serie robocze i rozgrzewkowe, notatki i metadane do tabeli (do analizy, nie jako kopia odtwarzalna 1:1). Eksport nie działa bez połączenia — nie przedstawia lokalnego cache jako pełnej bazy.
+- **Awaryjny raport tekstowy** oraz manualny przycisk **Odśwież Azure** zostały usunięte z interfejsu. Aplikacja synchronizuje dane po otwarciu, wznowieniu, powrocie sieci i wejściu do zakładki. Wszelkie niezapisane lokalne zmiany są chronione przed nadpisaniem.
 
 ## Jak korzystać
 
@@ -28,7 +20,7 @@ W zakładce **Dane → Import starszych treningów** wybierz prywatny plik `gym-
 2. Jeśli tego dnia istnieje trening, formularz otwiera **istniejący wpis do edycji** i zachowuje jego `syncId`. Jeżeli go nie ma, wyświetla niewykonane serie z proponowanym ciężarem i liczbą powtórzeń.
 3. **Edycja już zakończonego treningu:** po zmianie ciężaru, serii lub RIR kliknij **Zapisz zmiany** pod notatkami. Do tego momentu korekty nie trafiają do chmury. Kliknięcie zastępuje dotychczasową zawartość tego samego rekordu `history:*` (nie tworzy drugiej sesji). Przy opuszczeniu formularza z niezapisanymi poprawkami pojawi się ostrzeżenie.
 4. Wybieraj alternatywną maszynę, hantle lub wyciąg z widocznych przycisków; każdy wariant ma osobne serie. Przy powtórzeniach działają przyciski **− / +**.
-5. Potwierdź serię przyciskiem ✓. Zmiany oraz korekty wpisów są zapisywane automatycznie; **nie trzeba kończyć treningu**. Niewykonane wartości domyślne nie tworzą rekordu w Azure. Korekty już zakończonych treningów są zatwierdzane ręcznie przyciskiem **Zapisz zmiany**.
+5. Potwierdź serię przyciskiem ✓. Zmiany pozostają w lokalnym buforze do kliknięcia **Zapisz**; **nie trzeba kończyć treningu**. Niewykonane wartości domyślne nie tworzą rekordu w Azure. Korekty już zakończonych treningów są zatwierdzane ręcznie przyciskiem **Zapisz zmiany**.
 6. **CORE BONUS** ma 10 opcjonalnych ćwiczeń ze zdjęciami poglądowymi i źródłami. Czwartek (GRIT) oraz sobota/niedziela nie są rejestrowane.
 7. W **Progresie** wybierz ćwiczenie, wariant sprzętu, ciężar/powtórzenia/objętość i liczbę ostatnich treningów. Wykres bazuje wyłącznie na wykonanych seriach z zakończonej historii i autosave'owanych sesji.
 
@@ -37,6 +29,7 @@ W zakładce **Dane → Import starszych treningów** wybierz prywatny plik `gym-
 **Zdjęcia:** zdjęcia ćwiczeń CORE są osadzone z zewnętrznych źródeł; jeśli serwis źródłowy blokuje wyświetlenie, może pojawić się komunikat o niedostępności. Zawsze widać tytuł ćwiczenia i źródło obrazu.
 
 ## Historia wersji
+- v0.7: prosty import aktualizujący istniejące daty i pełny eksport Azure JSON/CSV.
 - v0.5: kalendarz Pn–Nd na ekranie Trening, edycja wybranego dnia, przywrócone warianty, CORE photo, trendy.
 - v0.4: Azure-authoritative per-workout records, ETag i kolejka offline.
 

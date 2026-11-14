@@ -468,22 +468,14 @@ window.GymCloud=(()=>{
   }
  }
  function html(){
-  const signed=!!principal,disabled=backedUp?'':'disabled';
-  return '<div class="panel"><h2>☁️ Treningi w Azure</h2>'+
-   '<p class="muted">Azure jest głównym źródłem danych. Urządzenie przechowuje cache i kolejkę zmian bez internetu; zapis pojedynczego treningu nie zastępuje całego dziennika.</p>'+
+  return '<div class="panel"><h2>☁️ Połączenie z bazą</h2>'+
    '<div class="detail" id="cloud-info" role="status">'+esc(message)+'</div>'+
-   (signed?'<p class="hint">Zalogowano: '+esc(principal.userDetails||principal.identityProvider)+'</p>'+
-    '<div class="inline-actions"><button class="btn secondary" id="cloud-sync">'+(blocked?'↻ Pobierz brakujące z Azure':'↻ Odśwież Azure')+'</button>'+
-    '<a class="btn ghost" href="/.auth/logout?post_logout_redirect_uri=/" style="text-decoration:none">Wyloguj</a></div>':
-    '<div class="inline-actions"><a class="btn" href="/.auth/login/github?post_login_redirect_uri=/" style="text-decoration:none">Zaloguj przez GitHub</a></div>')+
-   (blocked?'<div class="warning" style="margin-top:12px"><strong>Rozbieżne dane.</strong> Żadne zmiany nie zostały automatycznie nadpisane. Porównaj i zapisz obie kopie, zanim wybierzesz źródło.</div>'+
-    preview()+(lastMergePreview?mergeSummary(lastMergePreview):'')+
-    '<div class="inline-actions"><button class="btn secondary" id="cloud-backup-both">↓ Pobierz obie kopie JSON</button></div>'+
-    '<div class="inline-actions"><button class="btn" id="cloud-merge-safe" '+(backedUp?'':'disabled')+'>⇄ Scal bez nadpisywania</button></div>'+
-    '<div class="inline-actions"><button class="btn secondary" id="cloud-download" '+disabled+'>Przyjmij z Azure</button>'+
-    '<button class="btn ghost" id="cloud-upload" '+disabled+'>Wyślij lokalne zmiany</button></div>':
-    '<p class="hint">'+(pending.size?'Lokalne zmiany oczekujące na wysłanie: '+pending.size+'.':'Brak oczekujących zmian.')+'</p>')+
-   '<p class="hint">W przypadku błędu offline nadal zapisujemy każdą zmianę lokalnie. Eksport JSON pozostaje dostępny.</p></div>';
+   (principal?'<p class="hint">Zalogowano: '+esc(principal.userDetails||principal.identityProvider)+'</p>'+
+    '<a class="btn ghost" href="/.auth/logout?post_logout_redirect_uri=/" style="text-decoration:none">Wyloguj</a>':
+    '<a class="btn" href="/.auth/login/github?post_login_redirect_uri=/" style="text-decoration:none">Zaloguj przez GitHub</a>')+
+   '<p class="hint">Treningi pobierają się automatycznie po otwarciu aplikacji, jej ponownym uaktywnieniu lub powrocie internetu. Zapisywanie zmian wykonuje przycisk Zapisz w treningu.</p>'+
+   (blocked?'<p class="hint">Uwaga: część dawnych lokalnych zmian różni się od Azure. Nie będą automatycznie nadpisywane. Import i eksport działają niezależnie od tej blokady.</p>':'')+
+   '</div>';
  }
  async function recoverPendingCache(){
   // The write-ahead journal is independent of IndexedDB/localStorage's
@@ -699,6 +691,132 @@ window.GymCloud=(()=>{
   }finally{importBusy=false;}
  }
 
+ // Wait for the app's automatic refresh to finish before an explicit
+ // import/export request. Fast navigation must not produce a spurious error.
+ async function waitUntilAvailable(){
+  for(let i=0;i<100&&(busy||flushBusy||importBusy);i++){
+   await new Promise(resolve=>setTimeout(resolve,40));
+  }
+  return !(busy||flushBusy||importBusy);
+ }
+ // Read the ACTUAL Azure database on demand; never label a local cache
+ // or a stale initial snapshot as a complete database backup.
+ async function exportDatabase(){
+  if(!principal)return {ok:false,reason:'Zaloguj się przez GitHub, aby pobrać bazę Azure.'};
+  if(!(await waitUntilAvailable()))return {ok:false,reason:'Trwa synchronizacja. Spróbuj ponownie.'};
+  try{
+   const rows=serverRows(await request());
+   remote=rows;
+   const workouts=[...rows.values()].map(x=>({id:x.id,kind:x.kind,record:clone(x.record)}));
+   workouts.sort((a,b)=>String(a.record.date||'').localeCompare(String(b.record.date||''))||a.id.localeCompare(b.id));
+   return {ok:true,data:{format:'gym-tracker-db-export-v1',version:1,
+    exportedAt:new Date().toISOString(),workouts}};
+  }catch(e){return {ok:false,reason:'Nie udało się odczytać całej bazy z Azure. Nie pobrano niepełnej kopii.'};}
+ }
+ const importDate=x=>x?.record?.date;
+ function importSummary(rows,cloud){
+  const byDate=new Map();
+  for(const row of cloud.values()){
+   const date=importDate(row);
+   if(!date)continue;
+   if(!byDate.has(date))byDate.set(date,[]);
+   byDate.get(date).push(row);
+  }
+  const changes=[],conflicts=[];
+  for(const item of rows){
+   const found=byDate.get(item.record.date)||[];
+   if(found.length>1){
+    conflicts.push(item.record.date);continue;
+   }
+   const current=found[0];
+   const targetId=current?.id||item.id;
+   const targetKind=current?.kind||item.kind;
+   const sig=recordSignature(targetId,targetKind,item.record);
+   changes.push({date:item.record.date,item,
+    action:!current?'added':current.sig===sig?'unchanged':'updated',
+    id:targetId,kind:targetKind,etag:current?.etag||null});
+  }
+  return {changes,conflicts,
+   added:changes.filter(x=>x.action==='added').length,
+   updated:changes.filter(x=>x.action==='updated').length,
+   unchanged:changes.filter(x=>x.action==='unchanged').length};
+ }
+ // Import is an UPSERT by DATE (not an ID-based restore).
+ // Only dates present in the supplied JSON are touched; no DELETE requests.
+ async function importDatabase(rows,commit=false){
+  if(!principal)return {ok:false,reason:'Zaloguj się do Azure przez GitHub.'};
+  if(!(await waitUntilAvailable()))return {ok:false,reason:'Trwa synchronizacja. Ponów operację.'};
+  if(!Array.isArray(rows)||rows.length<1||rows.length>2000)
+   return {ok:false,reason:'Nieprawidłowa liczba treningów w pliku.'};
+  const dates=new Set(),ids=new Set();
+  for(const item of rows){
+   const rec=item?.record;
+   if(!rec||typeof rec!=='object'||Array.isArray(rec)||!/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')||
+     !Number.isInteger(Number(rec.day))||![0,1,2,3,4,5,-1].includes(Number(rec.day))||
+     !rec.exercises||typeof rec.exercises!=='object'||Array.isArray(rec.exercises)||
+     !['draft','history'].includes(item.kind)||! /^(draft|history):[a-zA-Z0-9:_-]{3,195}$/.test(item.id||'')||
+     dates.has(rec.date)||ids.has(item.id))
+    return {ok:false,reason:'Niepoprawny lub powtórzony trening w JSON. Sprawdź daty i strukturę pliku.'};
+   dates.add(rec.date);ids.add(item.id);
+  }
+  importBusy=true;
+  let imported=[],failed=null,preview=null;
+  try{
+   let cloud=serverRows(await request());
+   preview=importSummary(rows,cloud);
+   if(preview.conflicts.length)
+    return {ok:false,reason:'Azure ma już wiele rekordów dla dat: '+preview.conflicts.join(', ')+'. Nie nadpisano niczego.'};
+   if(!commit)return {ok:true,preview:{added:preview.added,updated:preview.updated,
+    unchanged:preview.unchanged,total:rows.length}};
+   for(const change of preview.changes){
+    if(change.action==='unchanged'){imported.push(change);continue;}
+    try{
+     // Re-read current ETags for each date. Reject concurrent changes rather
+     // than blindly replacing an entry another device is editing.
+     cloud=serverRows(await request());
+     const live=importSummary([change.item],cloud);
+     if(live.conflicts.length)throw Error('MULTIPLE_ENTRIES');
+     const current=live.changes[0];
+     const id=current.id,kind=current.kind;
+     const body=clone(change.item.record);
+     delete body.syncId;
+     if(current.action!=='unchanged'){
+      await request('PUT',id,{record:body,expectedEtag:current.etag});
+     }
+     imported.push({...current,action:current.action});
+     // Only clear background writes for the dates actually imported.
+     for(const [key,op] of [...pending]){
+      if(op.record?.date===change.date)pending.delete(key);
+     }
+     tombstones.delete(id);
+     persist();
+    }catch(e){
+     failed=change.date;
+     console.warn('Database import stopped for date:',change.date,e.message);
+     break;
+    }
+   }
+   const final=serverRows(await request());
+   remote=final;
+   const saved=imported.map(x=>final.get(x.id)).filter(Boolean);
+   for(const row of saved)base.set(row.id,{etag:row.etag,sig:row.sig,kind:row.kind});
+   persist();
+   const totals={added:imported.filter(x=>x.action==='added').length,
+    updated:imported.filter(x=>x.action==='updated').length,
+    unchanged:imported.filter(x=>x.action==='unchanged').length};
+   return {ok:true,totals,saved:saved.map(x=>({id:x.id,kind:x.kind,record:clone(x.record)})),
+    failedDate:failed};
+  }catch(e){
+   console.warn('Database import failed',e.message);
+   return {ok:false,reason:'Nie udało się odczytać/zapisać Azure. Dane pozostałych dni nie zostały usunięte.'};
+  }finally{importBusy=false;}
+ }
+ async function refreshAutomatically(){
+  if(!principal)return;
+  if(blocked)await refreshMissingFromAzure();
+  else await sync();
+ }
+
  async function prepareHistoryImport(){
   if(!principal)return {ready:false,reason:'Zaloguj się do Azure przez GitHub w sekcji chmury.'};
   if(blocked)return {ready:false,reason:'W Azure jest konflikt danych. Najpierw rozwiąż konflikt synchronizacji.'};
@@ -709,5 +827,5 @@ window.GymCloud=(()=>{
    return {ready:false,reason:'Azure nie jest aktualnie zsynchronizowane. Nie importowano niczego.'};
   return {ready:true};
  }
- return {init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,saveWorkoutForDate,getStatus:()=>flag};
+ return {init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,saveWorkoutForDate,exportDatabase,importDatabase,refreshAutomatically,getStatus:()=>flag};
 })();
