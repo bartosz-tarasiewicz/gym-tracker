@@ -641,7 +641,7 @@ window.GymCloud=(()=>{
  async function saveWorkoutForDate(workout){
   if(!principal)return {ok:false,reason:'Zaloguj się przez GitHub w zakładce Dane.'};
   if(busy||flushBusy||importBusy)return {ok:false,reason:'Trwa synchronizacja. Spróbuj ponownie.'};
-  if(!workout||!/^\\d{4}-\\d{2}-\\d{2}$/.test(workout.date||'')||
+  if(!workout||!/^\d{4}-\d{2}-\d{2}$/.test(workout.date||'')||
       ![0,1,2,5].includes(Number(workout.day)))
    return {ok:false,reason:'Nieprawidłowa data lub dzień treningowy.'};
   const record=clone(workout),date=record.date,day=Number(record.day);
