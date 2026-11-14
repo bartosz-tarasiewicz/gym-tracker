@@ -80,12 +80,15 @@ test('Per-workout create, optimistic update, stale conflict and deletion',async(
  assert.equal((await handle(req('uA'),context)).jsonBody.workouts.length,0);
  assert.equal((await handle(req('uB'),context)).jsonBody.workouts.length,0);
 });
-test('Different workouts update independently and do not conflict',async()=>{
- const a='draft:2026-11-13-0',b='draft:2026-11-13-5';
+test('Different dates update independently, but same date cannot create duplicate ID',async()=>{
+ const a='draft:2026-11-13-5',b='draft:2026-11-06-5';
  const pk=partition(who('separate'));
- const r1=await handle(req('separate','PUT',a,{record:{date:'2026-11-13',notes:'A'},expectedEtag:null}),context);
- const r2=await handle(req('separate','PUT',b,{record:{date:'2026-11-13',notes:'B'},expectedEtag:null}),context);
- assert.equal(r1.status,200);assert.equal(r2.status,200);
+ const r1=await handle(req('separate','PUT',a,{record:{date:'2026-11-13',day:5,notes:'A'},expectedEtag:null}),context);
+ const blocked=await handle(req('separate','PUT','history:duplicate-Nov-13',{
+  record:{date:'2026-11-13',day:5,notes:'should-not-exist'},expectedEtag:null}),context);
+ const r2=await handle(req('separate','PUT',b,{record:{date:'2026-11-06',day:5,notes:'B'},expectedEtag:null}),context);
+ assert.equal(r1.status,200);assert.equal(blocked.status,409);assert.equal(blocked.jsonBody.error,'workout_date_exists');
+ assert.equal(r2.status,200);
  assert.notEqual(rowKey(a),rowKey(b));
  const rowsNow=(await handle(req('separate'),context)).jsonBody.workouts;
  assert.equal(rowsNow.length,2);
