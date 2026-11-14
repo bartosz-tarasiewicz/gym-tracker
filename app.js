@@ -278,6 +278,7 @@ function workoutProjection(data){
     if(!session||typeof session!=='object'){drafts.push({key,unknown:session});continue;}
     const record={key};
     if(session.planOverride===true)record.planOverride=session.day;
+    if(session.planSnapshots&&Object.keys(session.planSnapshots).length)record.planSnapshots=session.planSnapshots;
     if(String(session.notes||'').trim())record.notes=String(session.notes);
     const core=Object.entries(session.coreEnabled||{}).filter(([,enabled])=>!!enabled).map(([id])=>id).sort();
     if(core.length)record.core=core;
