@@ -389,7 +389,7 @@ async function saveSelectedWorkout(){
  if(savingWorkout)return;
  const date=state.selectedDate,day=state.activeDay;
  if(!TRAINING_TYPES.includes(day)){toast('Wybierz rodzaj treningu');return;}
- const previous=storedDay();
+ const previous=storedDay()||([-1,3,-2].includes(day)?activeSession(true):null);
  if(!previous){toast('Nie ma jeszcze wyników do zapisania');return;}
  const input=cloneWorkout(pendingHistoryEdit?.draft||previous);
  if(!window.GymCloud?.saveWorkoutForDate){alert('Odśwież aplikację, żeby użyć nowego zapisu.');return;}
@@ -459,8 +459,26 @@ function setsHTML(list,type,item){
 function selectedDayReports(){return state.history.filter(h=>h.date===state.selectedDate&&h.day===state.activeDay)}
 function trainHTML(){
  const calendar=GymWeek.html(state),d=state.activeDay;
- if(d===-1)return calendar+'<section class="hero"><div class="eyebrow">Dzień bez planu</div><h1>Regeneracja</h1><p class="muted">Sobota i niedziela są wolne od rejestrowania treningów. Możesz wybrać dowolny dzień w kalendarzu.</p></section>';
- if(d===3)return calendar+'<section class="hero"><div class="eyebrow">Dzień poza dziennikiem</div><h1>Czwartek</h1><p class="muted">Les Mills GRIT Strength pozostaje poza Gym Trackerem. Nie tworzymy serii ani wpisu do Azure.</p></section>';
+ const standard=GymWeek.dayIndex(state.selectedDate);
+ const typeSelector='<div class="panel workout-type-panel">'+
+  '<label class="label" for="workout-type">Rodzaj treningu w wybranym dniu</label>'+
+  '<select class="equipment" id="workout-type" aria-label="Rodzaj treningu">'+
+   TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+(x===standard?' (domyślnie)':'')+'</option>').join('')+
+  '</select><p class="hint">Zmiana dotyczy wyłącznie '+esc(state.selectedDate)+
+  '. Stały plan tygodniowy pozostaje bez zmian.</p></div>';
+ if([-1,3,-2].includes(d)){
+  const note=storedDay()?.notes||'';
+  const details=d===-1?'Dzień bez treningu — regeneracja.':d===3?
+   'Les Mills GRIT Strength — bez liczenia serii.':'Zapisz dowolną inną aktywność w notatkach.';
+  return calendar+typeSelector+'<section class="hero compact-hero"><div class="eyebrow">'+
+   esc(state.selectedDate)+'</div><h1>'+esc(trainingName(d))+'</h1><p class="muted">'+
+   esc(details)+'</p></section>'+
+   '<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div>'+
+   '<textarea class="notes" id="notes" placeholder="Opcjonalny opis dnia lub aktywności…">'+
+   esc(note)+'</textarea>'+
+   '<button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień</button>'+
+   '<p class="hint">Zapis w Azure dotyczy tylko tej daty. Możesz później zmienić rodzaj treningu.</p></div>';
+ }
  const s=activeSession(),day=PLAN[d],{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
  const old=selectedDayReports(),saved=storedDay(),coreActive=state.activeArea==='core',enabled=isCoreEnabled(item);
  const tabs=day.items.map((e,i)=>{
@@ -503,7 +521,7 @@ function trainHTML(){
   '<button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+
 
   '<p class="hint">Kliknij Zapisz, aby '+(saved?'zaktualizować istniejący':'utworzyć nowy')+' trening w Azure. Zmiany przed zapisem pozostają na tym urządzeniu.</p></div>';
- return calendar+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
+ return calendar+typeSelector+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
 }
 function allLogged(s){const items=[...(PLAN[s.day]?.items||[]),...CORE];const archived={'core-deadbug':'Dead Bug (archiwalne)','core-suitcase':'Suitcase Carry (archiwalne)'};return Object.entries(s.exercises||{}).map(([id,log])=>({item:items.find(x=>x.id===id)||{id,title:archived[id]||('Ćwiczenie archiwalne: '+id),mode:id==='core-suitcase'?'secSide':'reps'},log}));}
 function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?.name||s.day}`,`Źródło: ${s.source||'zapis użytkownika'}`];for(const {item,log} of allLogged(s)){
@@ -679,6 +697,7 @@ document.addEventListener('click',async event=>{
 document.addEventListener('change',async event=>{const el=event.target;
  if(window.GymProgress?.handleChange?.(el,render))return;
  if(el.id==='week-date'){selectDate(el.value);return}
+ if(el.id==='workout-type'){changeTrainingType(el.value);return}
  if(el.id==='session-picker'){if(!abandonHistoryEdit()){render();return}state.selectedRecordId=el.value;save(false);render();return}
  if(el.id==='machine'){switchVariant(currentItem().item,el.value);save();render()}
  else if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;save()}
