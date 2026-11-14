@@ -344,60 +344,66 @@ try{
 
 
 
- // A workout created on the iPhone on 13 Nov may exist only locally when
- // normal synchronization is blocked by an unrelated older record.
- const day13Id='draft:2026-11-13-5';
- // Earlier legacy test created a 13 Nov draft on the mocked server. Remove
- // only that mock row to reproduce an iPhone-local-only 13 Nov workout.
- store.delete(day13Id);
+ // Real bug: phone uses a local draft, but Azure has 13 Nov under an old history ID.
+ const staleDraftId='draft:2026-11-13-5';
+ store.delete(staleDraftId);
+ const existingNov13='history:previously-saved-nov-13';
+ const oldCloud={date:'2026-11-13',day:5,started:'2026-11-13T08:00:00Z',notes:'Old version',coreEnabled:{},
+  exercises:{legpress:{machine:'MG-PL70',variants:{'MG-PL70':{sets:[{kg:'50',reps:'10',done:true}],warmups:[],rir:'2'}}}}};
+ store.set(existingNov13,{kind:'history',record:structuredClone(oldCloud),etag:'"cloud-nov-13-old"'});
  const desktop13=await context({storageState:{cookies:[],origins:[{origin:url,localStorage:[
   {name:'zenek-gym-v1',value:JSON.stringify(conflictSeed)}
  ]}]}});
  const pc13=await desktop13.newPage();pc13.on('pageerror',e=>errors.push(e.message));
  await pc13.goto(url,{waitUntil:'domcontentloaded'});
  await pc13.locator('#cloud-merge-safe').waitFor();
- assert.equal(JSON.parse(await pc13.evaluate(()=>localStorage.getItem('zenek-gym-v1')))
-  .sessions?.['2026-11-13-5'],undefined,'Desktop begins without November 13');
- const day13={date:'2026-11-13',day:5,started:'2026-11-13T09:00:00Z',notes:'Friday legs on phone',
-  coreEnabled:{},exercises:{legpress:{machine:'MG-PL70',variants:{'MG-PL70':{sets:[{kg:'55',reps:'12',done:true}],warmups:[],rir:'2'}}}}};
+ await pc13.locator('[data-view="train"]').click();
+ await pc13.locator('#week-date').fill('2026-11-13');
+ assert.equal(await input(pc13).inputValue(),'50','PC initially displays cloud result');
+
+ const localNov13={date:'2026-11-13',day:5,started:'2026-11-13T09:00:00Z',
+  notes:'Extra dumbbells 3x12',coreEnabled:{},
+  exercises:{legpress:{machine:'MG-PL70',variants:{'MG-PL70':{sets:[{kg:'55',reps:'12',done:true}],warmups:[],rir:'1'}}}}};
  const phoneState={version:2,selectedDate:'2026-11-13',activeDay:5,view:'train',
-  activeArea:'main',activeExercise:0,sessions:{'2026-11-13-5':day13},history:[],savedAt:3};
+  activeArea:'main',activeExercise:0,unsavedDates:['2026-11-13|5'],
+  sessions:{'2026-11-13-5':localNov13},history:[],savedAt:3};
  const phone=await context({storageState:{cookies:[],origins:[{origin:url,localStorage:[
   {name:'zenek-gym-v1',value:JSON.stringify(phoneState)}
  ]}]}});
  const p5=await phone.newPage();p5.on('pageerror',e=>errors.push(e.message));
  await p5.goto(url,{waitUntil:'domcontentloaded'});
- await p5.locator('#push-selected-workout').waitFor();
- assert.equal(await p5.locator('#push-selected-workout').innerText(),'☁️ Wyślij ten trening do Azure');
- assert.equal(store.has(day13Id),false,'Phone-only November 13 is not yet in Azure');
- const beforeSingleDay=operations.length;
- p5.on('dialog',d=>{if(d.type()==='confirm')assert.match(d.message(),/2026-11-13/);void d.accept();});
- await p5.locator('#push-selected-workout').click();
- await until(()=>store.has(day13Id),'Selected November 13 workout is uploaded');
- assert.equal(store.get(day13Id).record.date,'2026-11-13');
- assert.deepEqual(operations.slice(beforeSingleDay),[{id:day13Id,method:'PUT'}],
-  'Selected-day upload only writes this one workout, not the whole conflicted journal');
- const uploadedRow=JSON.stringify(store.get(day13Id).record);
- await p5.locator('#push-selected-workout').click();
- await pause(350);
- assert.equal(JSON.stringify(store.get(day13Id).record),uploadedRow,'Re-uploading unchanged day must be idempotent');
- assert.equal(operations.length,beforeSingleDay+1,'Repeated upload never adds duplicate writes');
- // Desktop is still in conflict from earlier, but can download the missing date.
+ await p5.locator('#save-training').waitFor();
+ assert.equal(await input(p5).inputValue(),'55','Phone preserves local changes');
+ assert.equal(await p5.locator('#push-selected-workout').count(),0,'Only one Save button is needed');
+ const recordsBefore=[...store.keys()].sort(),opCursor=operations.length;
+ await p5.locator('#save-training').click();
+ await until(()=>store.get(existingNov13)?.record?.exercises?.legpress?.variants?.['MG-PL70']?.sets?.[0]?.kg==='55',
+  'Phone Save overwrites existing Azure row');
+ assert.deepEqual([...store.keys()].sort(),recordsBefore,'Date Save creates no extra cloud row');
+ assert.equal(store.has(staleDraftId),false,'Old draft ID was not inserted into Azure');
+ assert.deepEqual(operations.slice(opCursor),[{id:existingNov13,method:'PUT'}],'Only existing row is modified');
+ assert.equal(store.get(existingNov13).record.notes,'Extra dumbbells 3x12','Notes saved with weights and RIR');
+ await p5.locator('#save-training').click();
+ await pause(200);
+ assert.equal(operations.length,opCursor+1,'Repeated Save of unchanged data is idempotent');
+
+ await pc13.locator('[data-view="settings"]').click();
  await pc13.locator('#cloud-sync').click();
  await pc13.waitForFunction(id=>{
-  const st=JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}');
-  return st.sessions?.['2026-11-13-5']?.date==='2026-11-13';
- },day13Id);
- assert.equal(operations.length,beforeSingleDay+1,'Desktop refresh is strictly read-only');
+  const local=JSON.parse(localStorage.getItem('zenek-gym-v1')||'{}');
+  return (local.history||[]).some(x=>x.syncId===id&&
+   x.exercises?.legpress?.variants?.['MG-PL70']?.sets?.[0]?.kg==='55');
+ },existingNov13);
  await pc13.locator('[data-view="train"]').click();
  await pc13.locator('#week-date').fill('2026-11-13');
- assert.equal(await pc13.locator('.set-row [data-type="work"][data-field="kg"]').first().inputValue(),'55');
- assert.match(await pc13.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/);
- log('13 Nov uploaded from phone as one record and downloaded on desktop without reconciling journals');
+ assert.equal(await input(pc13).inputValue(),'55','Desktop receives saved result');
+ assert.equal(await pc13.locator('#notes').inputValue(),'Extra dumbbells 3x12',
+  'Desktop sees saved notes');
+ log('One date, one cloud row: Save overwrites Nov 13 and desktop sees changes');
 
  assert.deepEqual(errors,[],'Uncaught JS errors: '+errors.join(';'));
  log('No uncaught JavaScript errors');
- console.log('SUCCESS: cross-device read, 13 Nov explicit phone upload and safe Azure single-record writes');
+ console.log('SUCCESS: one date one record: shared Save edits from phone and PC without duplicates');
 }finally{
  await browser.close();await new Promise(resolve=>server.close(resolve));
 }
