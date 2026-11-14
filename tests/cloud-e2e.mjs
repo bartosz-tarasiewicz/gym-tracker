@@ -222,7 +222,7 @@ try{
  };
  await p2.locator('[data-view="settings"]').click();
  assert.equal(await p2.locator('#import-additive').count(),1);
- p2.once('dialog',dialog=>{assert.match(dialog.message(),/Dodać 1 brakujących treningów/);dialog.accept()});
+ p2.once('dialog',dialog=>{assert.match(dialog.message(),/Dodać 1 wcześniejszych treningów/);dialog.accept()});
  await p2.locator('#import-additive').setInputFiles({name:'import-test.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(sourceImport))});
  await until(()=>store.has('history:test-import-2026-10-26'),'new history workout upload');
  assert.equal(JSON.stringify(store.get(historicId).record),savedFriday,'Existing 6 Nov workout is never overwritten');
@@ -280,9 +280,42 @@ try{
  assert.match(await p4.locator('#cloud-info').innerText(),/ręcznej decyzji/);
  log('Same-ID conflicting workout is preserved for manual review; no blind overwrite');
 
+ // The user only wants to import previous training dates, not reconcile
+ // the two journals and never touch 13 November 2026.
+ const blockedImport={
+  format:'gym-tracker-history-additive-v1',
+  history:[
+   {syncId:'history:old-2026-10-12',date:'2026-10-12',day:0,
+    exercises:{flat:{machine:'MG-PL13',variants:{'MG-PL13':{sets:[{kg:'60',reps:'10',done:true}],warmups:[],rir:'2'}}}}},
+   {syncId:'history:exclude-2026-11-13',date:'2026-11-13',day:5,
+    exercises:{legpress:{machine:'MG-PL70',variants:{'MG-PL70':{sets:[{kg:'50',reps:'10',done:true}],warmups:[],rir:'1'}}}}},
+   {syncId:'history:duplicate-date-2026-11-06',date:'2026-11-06',day:5,
+    exercises:{legpress:{machine:'MG-PL70',variants:{'MG-PL70':{sets:[{kg:'99',reps:'10',done:true}],warmups:[],rir:'1'}}}}}
+  ]
+ };
+ const remoteConflictSnapshot=JSON.stringify(store.get(extraId).record);
+ const originalFriday=JSON.stringify(store.get(historicId).record);
+ assert.match(await p4.locator('#cloud-info').innerText(),/ręcznej decyzji/,'Sync conflict is still visible');
+ p4.once('dialog',d=>{assert.match(d.message(),/13\.11\.2026 NIE będzie importowany/);d.accept();});
+ await p4.locator('#import-additive').setInputFiles({name:'older-only.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(blockedImport))});
+ await until(()=>store.has('history:old-2026-10-12'),'older workouts import even with a separate sync conflict');
+ assert.equal(store.has('history:exclude-2026-11-13'),false,'Yesterday must never be imported');
+ assert.equal(store.has('history:duplicate-date-2026-11-06'),false,'Existing Friday is not duplicated');
+ assert.equal(JSON.stringify(store.get(extraId).record),remoteConflictSnapshot,'Separate existing conflict remains untouched');
+ assert.equal(JSON.stringify(store.get(historicId).record),originalFriday,'Existing 6 Nov training remains untouched');
+ const phoneAfterImport=JSON.parse(await p4.evaluate(()=>localStorage.getItem('zenek-gym-v1')));
+ assert.ok(phoneAfterImport.history.some(x=>x.syncId==='history:old-2026-10-12'),'Imported past date is visible locally');
+ assert.ok(phoneAfterImport.history.some(x=>x.syncId===extraId),'Phone-specific unsynced workout remains untouched');
+ const nAfterBlockedImport=store.size;
+ await p4.locator('#import-additive').setInputFiles({name:'older-again.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(blockedImport))});
+ await pause(450);
+ assert.equal(store.size,nAfterBlockedImport,'Repeating import must not create a second entry');
+ log('Historical import works while sync is blocked, excludes 13 Nov and never replaces existing workouts');
+
+
  assert.deepEqual(errors,[],'Uncaught JS errors: '+errors.join(';'));
  log('No uncaught JavaScript errors');
- console.log('SUCCESS: date-first Azure, explicit Save, additive import and safe conflict reconciliation');
+ console.log('SUCCESS: date-first Azure, explicit Save, conflict-independent archive import, safe reconciliation');
 }finally{
  await browser.close();await new Promise(resolve=>server.close(resolve));
 }
