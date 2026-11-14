@@ -163,6 +163,7 @@ try{
  assert.match(await phone.locator('h1').first().innerText(),/Dzień wolny/);
  assert.equal(store.size,beforeRest,'Selecting rest without Save does not modify Azure');
  await phone.locator('#notes').fill('Regeneracja po długim tygodniu');
+ console.log('NOTE-STATE-BEFORE-SAVE',JSON.stringify(JSON.parse(await phone.evaluate(()=>localStorage.getItem('zenek-gym-v1'))).sessions));
  await phone.locator('#save-training').click();
  await waitFor(()=>[...store.values()].some(x=>x.record?.date==='2026-11-16'&&x.record.day===-1),'saved rest day');
  const restId=[...store.keys()].find(id=>store.get(id).record.date==='2026-11-16');
