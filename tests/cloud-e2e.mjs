@@ -152,9 +152,99 @@ try{
  assert.ok(store.has(preservedId));
  log('Full JSON roundtrip can restore an existing date on desktop without dropping omitted data');
 
+
+ // A particular date may override the standard weekday plan without changing
+ // other weeks, and its selection persists as a normal Azure workout record.
+ await phone.locator('[data-view="train"]').click();
+ await phone.locator('#week-date').fill('2026-11-16');
+ assert.equal(await phone.locator('#workout-type').inputValue(),'0','Monday defaults to chest');
+ const beforeRest=store.size;
+ await phone.locator('#workout-type').selectOption('-1');
+ assert.match(await phone.locator('h1').first().innerText(),/Dzień wolny/);
+ assert.equal(store.size,beforeRest,'Selecting rest without Save does not modify Azure');
+ await phone.locator('#notes').fill('Regeneracja po długim tygodniu');
+ await phone.locator('#save-training').click();
+ await waitFor(()=>[...store.values()].some(x=>x.record?.date==='2026-11-16'&&x.record.day===-1),'saved rest day');
+ const restId=[...store.keys()].find(id=>store.get(id).record.date==='2026-11-16');
+ assert.equal(store.get(restId).record.planOverride,true);
+ assert.equal(store.get(restId).record.notes,'Regeneracja po długim tygodniu');
+ assert.equal(store.size,beforeRest+1);
+ await phone.reload({waitUntil:'domcontentloaded'});
+ await phone.locator('#week-date').fill('2026-11-16');
+ assert.equal(await phone.locator('#workout-type').inputValue(),'-1','Rest day survives reload');
+
+ // Replace the rest day with leg day, fill a set, and save under the SAME ID.
+ await phone.locator('#workout-type').selectOption('5');
+ assert.equal(await phone.locator('.exercise-tab').count(),5,'Leg day template appears on a Monday');
+ assert.equal(await phone.locator('.set-row [data-type="work"][data-field="kg"]').first().inputValue(),'50');
+ await phone.locator('.done-button[data-type="work"]').first().click();
+ await phone.locator('#save-training').click();
+ await waitFor(()=>store.get(restId)?.record?.day===5,'Monday changed to legs');
+ assert.equal(store.size,beforeRest+1,'Switching workout does not create a second record for date');
+ assert.equal(store.get(restId).record.exercises.legpress.variants['MG-PL70'].sets[0].done,true);
+ assert.equal(store.get(restId).record.planOverride,true);
+ log('Date-level rest and alternative leg plan survive reload and upsert a single Azure row');
+
+ // Switching to another plan with confirmed sets requires consent. Previous
+ // sets are retained in inactive snapshots and restored when switching back.
+ phone.once('dialog',d=>{assert.match(d.message(),/wykonane serie/);void d.accept();});
+ await phone.locator('#workout-type').selectOption('-1');
+ assert.match(await phone.locator('#notes').inputValue(),/Regeneracja/);
+ assert.equal(store.get(restId).record.day,5,'Switch remains local until Save');
+ await phone.locator('#workout-type').selectOption('5');
+ assert.match(await phone.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/,
+  'Previously recorded legs sets are restored after switching back');
+ await phone.locator('#save-training').click();
+ assert.equal(store.get(restId).record.day,5);
+ log('Changing workout does not lose previously entered sets before Save');
+
+ // Thursday originally GRIT with no standard logging. Selecting a regular
+ // workout that date must expose the correct form and persist across devices.
+ await phone.locator('#week-date').fill('2026-11-19');
+ assert.equal(await phone.locator('#workout-type').inputValue(),'3','Thursday defaults to GRIT');
+ await phone.locator('#workout-type').selectOption('0');
+ assert.equal(await phone.locator('.exercise-tab').count(),4,'Thursday can host chest instead of GRIT');
+ await phone.locator('#save-training').click();
+ await waitFor(()=>[...store.values()].some(x=>x.record?.date==='2026-11-19'&&x.record.day===0),'Thursday chest save');
+ const nov19Id=[...store.keys()].find(id=>store.get(id).record.date==='2026-11-19');
+ assert.equal(store.get(nov19Id).record.planOverride,true);
+
+ // Weekend can be used for another activity and keep notes.
+ await phone.locator('#week-date').fill('2026-11-15');
+ assert.equal(await phone.locator('#workout-type').inputValue(),'-1','Sunday defaults to rest');
+ await phone.locator('#workout-type').selectOption('-2');
+ await phone.locator('#notes').fill('Basen — 45 minut');
+ await phone.locator('#save-training').click();
+ await waitFor(()=>[...store.values()].some(x=>x.record?.date==='2026-11-15'&&x.record.day===-2),'other activity on Sunday');
+ log('GRIT and weekends support alternative workouts and note-only activities');
+
+ // A different device reads the per-date selection from Azure and gets the
+ // same workout form, not the canonical weekly plan for that weekday.
+ await pc.reload({waitUntil:'domcontentloaded'});
+ await pc.locator('#week-date').fill('2026-11-16');
+ assert.equal(await pc.locator('#workout-type').inputValue(),'5','PC shows legs on Monday');
+ assert.match(await pc.locator('.done-button[data-type="work"]').first().getAttribute('class'),/checked/);
+ await pc.locator('#week-date').fill('2026-11-19');
+ assert.equal(await pc.locator('#workout-type').inputValue(),'0','PC shows chest on Thursday');
+ await pc.locator('#week-date').fill('2026-11-23');
+ assert.equal(await pc.locator('#workout-type').inputValue(),'0','Next Monday stays on standard chest plan');
+ log('Workout overrides are specific to date and synchronized to another device');
+
+ // Complete JSON export/import preserves rest-day metadata, switched plans and
+ // the inactive per-plan set snapshots for lossless recovery.
+ await phone.locator('[data-view="settings"]').click();
+ const altExport=phone.waitForEvent('download');
+ await phone.locator('#export').click();
+ const altJson=JSON.parse(fs.readFileSync(await (await altExport).path(),'utf8'));
+ assert.ok(altJson.workouts.some(x=>x.record?.date==='2026-11-16'&&x.record?.day===5));
+ assert.ok(altJson.workouts.some(x=>x.record?.date==='2026-11-15'&&x.record?.day===-2));
+ const legBackup=altJson.workouts.find(x=>x.record?.date==='2026-11-16');
+ assert.equal(legBackup.record.planSnapshots['-1'].notes,'Regeneracja po długim tygodniu');
+ log('Full database export preserves overrides, activity notes and plan snapshots');
+
  assert.deepEqual(errors,[],'Uncaught browser JavaScript errors: '+errors.join('; '));
  log('No JavaScript errors');
- console.log('SUCCESS: full Azure import/export, date overwrite, non-deletion and two-device refresh');
+ console.log('SUCCESS: per-date workout overrides, rest/GRIT and cross-device persistence alongside full Azure import/export');
 }finally{
  await browser.close();
  await new Promise(resolve=>server.close(resolve));
