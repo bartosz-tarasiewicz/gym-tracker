@@ -22,6 +22,8 @@ jobs:
           npm install --no-save playwright@1.56.1
           npx playwright install --with-deps chromium
       - name: Test deployed Gym Tracker
+        env:
+          GYM_REQUIRE_LATEST_UI: '1'
         run: node tests/azure-e2e.mjs
       - name: Verify cloud API rejects anonymous requests
         run: node tests/azure-api-anonymous.mjs
