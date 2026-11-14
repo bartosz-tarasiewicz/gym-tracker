@@ -1,4 +1,4 @@
-const CACHE='gym-tracker-shell-v15';
+const CACHE='gym-tracker-shell-v16';
 const SHELL=['./','./index.html','./storage.js','./sync.js','./week-ui.js','./progress-ui.js','./app.js','./manifest.webmanifest','./icon.svg','./icon-apple.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('gym-tracker-shell-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
