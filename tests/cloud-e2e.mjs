@@ -333,7 +333,8 @@ try{
  };
  const remoteConflictSnapshot=JSON.stringify(store.get(extraId).record);
  const originalFriday=JSON.stringify(store.get(historicId).record);
- assert.match(await p4.locator('#cloud-info').innerText(),/ręcznej decyzji/,'Sync conflict is still visible');
+ await p4.locator('[data-view="settings"]').click();
+ assert.equal(await p4.locator('#cloud-merge-safe').count(),1,'Unresolved sync conflict remains visible in settings');
  p4.once('dialog',d=>{assert.match(d.message(),/13\.11\.2026 NIE będzie importowany/);d.accept();});
  await p4.locator('#import-additive').setInputFiles({name:'older-only.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(blockedImport))});
  await until(()=>store.has('history:old-2026-10-12'),'older workouts import even with a separate sync conflict');
