@@ -178,8 +178,15 @@ try{
  assert.equal(await phone.locator('.exercise-tab').count(),5,'Leg day template appears on a Monday');
  assert.equal(await phone.locator('.set-row [data-type="work"][data-field="kg"]').first().inputValue(),'50');
  await phone.locator('.done-button[data-type="work"]').first().click();
+ const monitorDialog=d=>{console.log('DAY-SWITCH DIALOG:',d.type(),d.message());void d.accept()};
+ phone.on('dialog',monitorDialog);
  await phone.locator('#save-training').click();
- await waitFor(()=>store.get(restId)?.record?.day===5,'Monday changed to legs');
+ try{await waitFor(()=>store.get(restId)?.record?.day===5,'Monday changed to legs')}
+ catch(e){
+  console.log('DAY-SWITCH STORE:',JSON.stringify([...store]).slice(-4200));
+  console.log('DAY-SWITCH LOCAL:',await phone.evaluate(()=>localStorage.getItem('zenek-gym-v1')));
+  throw e;
+ }finally{phone.off('dialog',monitorDialog);}
  assert.equal(store.size,beforeRest+1,'Switching workout does not create a second record for date');
  assert.equal(store.get(restId).record.exercises.legpress.variants['MG-PL70'].sets[0].done,true);
  assert.equal(store.get(restId).record.planOverride,true);
