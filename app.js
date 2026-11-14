@@ -406,6 +406,7 @@ function trainHTML(){
  const isHistory=!!savedHistoryRecord();
  const notes='<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, ból, uwagi…">'+esc(s.notes||'')+'</textarea>'+
   '<button type="button" id="save-training" class="btn full save-training-btn">'+(isHistory?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+
+  (saved?'<button type="button" id="push-selected-workout" class="btn secondary full" style="margin-top:9px">☁️ Wyślij ten trening do Azure</button><p class="hint">Jeśli trening jest widoczny tylko na telefonie, wyślij wyłącznie ten dzień. Inne daty pozostaną bez zmian.</p>':'')+
   '<p class="hint">'+(isHistory?'Zapis nadpisuje wyniki tego treningu w Azure, zachowując jego identyfikator. Do kliknięcia „Zapisz zmiany” korekty nie są wysyłane.':'Nowe wyniki są również zapisywane automatycznie, żeby nie stracić serii przy utracie połączenia.')+'</p></div>';
  return calendar+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
 }
@@ -499,6 +500,20 @@ document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
  if(window.GymProgress?.handleClick?.(b,render))return;
  if(b.id==='save-training'){await saveSelectedWorkout();return;}
+ if(b.id==='push-selected-workout'){
+  if(pendingHistoryEdit&&historyEditChanged()){
+   alert('Najpierw kliknij „Zapisz zmiany”, aby zatwierdzić poprawki tego treningu na telefonie.');
+   return;
+  }
+  const old=savedHistoryRecord();
+  const id=old?(old.syncId||''):'draft:'+sessionKey();
+  const outcome=await window.GymCloud?.uploadWorkoutById?.(id);
+  if(!outcome){alert('Aktualizuj aplikację, aby włączyć bezpieczny zapis do Azure.');return;}
+  if(outcome.canceled)return;
+  alert(outcome.reason);
+  render();
+  return;
+ }
  if(b.dataset.week!==undefined){selectDate(b.dataset.week==='today'?dateKey():GymWeek.shift(state.selectedDate,Number(b.dataset.week)));return}
  if(b.dataset.date!==undefined){selectDate(b.dataset.date);return}
  if(b.dataset.machine!==undefined){switchVariant(currentItem().item,b.dataset.machine);save();render();return}
