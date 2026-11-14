@@ -470,74 +470,80 @@ function settingsHTML(){
   (window.GymCloud?.html?.()||'');
 }
 
-const importKey=record=>String(record.date)+'|'+String(record.day);
-function checkHistoryImport(payload){
- if(!payload||payload.format!=='gym-tracker-history-additive-v1'||!Array.isArray(payload.history))throw Error('Unsupported additive import');
- if(payload.history.length===0||payload.history.length>100)throw Error('Unexpected import size');
- const seenKeys=new Set(),seenIds=new Set(),clean=[];
- for(const record of payload.history){
-  if(!record||typeof record!=='object'||typeof record.syncId!=='string'||
-    !/^history:[a-zA-Z0-9:_-]{3,100}$/.test(record.syncId)||
-    !/^\d{4}-\d{2}-\d{2}$/.test(record.date)||
-    GymWeek.iso(new Date(record.date+'T12:00:00'))!==record.date||
-    GymWeek.dayIndex(record.date)!==Number(record.day)||
-    ![0,1,2,5].includes(Number(record.day))||
-    !record.exercises||typeof record.exercises!=='object'||Array.isArray(record.exercises))
-    throw Error('Invalid imported workout');
-  const key=importKey(record);
-  if(seenKeys.has(key)||seenIds.has(record.syncId))throw Error('Duplicate workout within import');
-  seenKeys.add(key);seenIds.add(record.syncId);
-  const variants=Object.values(record.exercises).flatMap(log=>log&&typeof log==='object'?
-   Object.values(log.variants&&typeof log.variants==='object'?log.variants:{[log.machine||'BODY']:log}):[]);
-  if(!variants.length||!variants.some(v=>Array.isArray(v?.sets)&&v.sets.some(s=>s?.done&&String(s.reps??'').trim()!=='')))throw Error('No confirmed sets');
-  clean.push(JSON.parse(JSON.stringify(record)));
+function parseDatabaseImport(payload){
+ const copy=x=>JSON.parse(JSON.stringify(x));
+ let rows=[];
+ if(payload?.format==='gym-tracker-db-export-v1'&&Array.isArray(payload.workouts)){
+  rows=payload.workouts.map(x=>({id:x.id,kind:x.kind,record:copy(x.record)}));
+ }else if(payload?.format==='gym-tracker-history-additive-v1'&&Array.isArray(payload.history)){
+  rows=payload.history.map(x=>({id:x.syncId||'history:import-'+x.date+'-'+x.day,
+   kind:'history',record:copy(x)}));
+ }else if(payload&&Array.isArray(payload.history)&&payload.sessions&&
+    typeof payload.sessions==='object'&&!Array.isArray(payload.sessions)){
+  // Previous Gym Tracker backups used {sessions,history}.
+  rows=[
+   ...Object.entries(payload.sessions).map(([key,x])=>({
+    id:'draft:'+key,kind:'draft',record:copy(x)})),
+   ...payload.history.map(x=>({id:x.syncId||'history:import-'+x.date+'-'+x.day,
+    kind:'history',record:copy(x)}))
+  ];
+ }else throw Error('Nieobsługiwany format JSON. Wybierz eksport Gym Tracker.');
+ if(!rows.length)throw Error('Plik nie zawiera treningów.');
+ if(rows.length>2000)throw Error('Zbyt wiele rekordów w imporcie.');
+ const seenDates=new Set(),seenIds=new Set();
+ for(const row of rows){
+  const rec=row?.record;
+  if(!rec||typeof rec!=='object'||Array.isArray(rec)||
+    !/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')||
+    Number.isNaN(new Date(rec.date+'T12:00:00Z').getTime())||
+    new Date(rec.date+'T12:00:00Z').toISOString().slice(0,10)!==rec.date||
+    !Number.isInteger(Number(rec.day))||
+    !rec.exercises||typeof rec.exercises!=='object'||Array.isArray(rec.exercises)||
+    !['draft','history'].includes(row.kind)||
+    !/^(draft|history):[a-zA-Z0-9:_-]{3,195}$/.test(row.id||'')||
+    row.id.split(':')[0]!==row.kind||
+    seenDates.has(rec.date)||seenIds.has(row.id))
+   throw Error('Plik zawiera niepoprawne lub zduplikowane daty treningów.');
+  seenDates.add(rec.date);seenIds.add(row.id);
+  delete rec.syncId; // The cloud ID is stored in the row wrapper, not the record.
  }
- return clean;
+ return rows;
 }
-async function addHistoricalWorkouts(file){
+async function importDatabaseFile(file){
  if(!file)return;
- if(file.size>1024*1024)throw Error('File exceeds 1 MB');
- const payload=JSON.parse(await file.text());
- const incoming=checkHistoryImport(payload);
- if(!window.GymCloud?.importMissingHistory)throw Error('Azure importer not available');
- // 13 November 2026 is excluded as requested. The original 6 November entry
- // and any other existing date are also skipped, never replaced.
- const excluded=['2026-11-13'];
- const preview=await GymCloud.importMissingHistory(incoming,false,excluded);
- if(!preview.ready){alert(preview.reason);return}
- if(!preview.additions.length){
-  toast('Wszystkie starsze treningi są już zapisane lub zostały pominięte.');
-  return;
- }
- const dates=preview.additions.map(x=>x.date).join(', ');
- if(!confirm('Dodać '+preview.additions.length+' wcześniejszych treningów do Azure?\n'+
-   'Daty: '+dates+'\n'+
-   'Pominięte istniejące lub wykluczone: '+preview.skipped+'.\n'+
-   '13.11.2026 NIE będzie importowany.\n'+
-   'Nie zmienimy żadnego istniejącego treningu.'))return;
- const result=await GymCloud.importMissingHistory(incoming,true,excluded);
- if(!result.ready){alert(result.reason);return}
- if(result.imported.length){
-  const localKeys=new Set([...state.history,...Object.values(state.sessions)].map(importKey));
-  for(const record of result.imported){
-   if(!localKeys.has(importKey(record))){
-    state.history.push(record);
-    localKeys.add(importKey(record));
-   }
+ if(file.size>12*1024*1024)throw Error('Plik przekracza 12 MB.');
+ const rows=parseDatabaseImport(JSON.parse(await file.text()));
+ const preview=await GymCloud.importDatabase(rows,false);
+ if(!preview.ok)throw Error(preview.reason);
+ const {added,updated,unchanged,total}=preview.preview;
+ if(!confirm('Zaimportować '+total+' treningów do Azure?\n'+
+   'Nadpisane istniejące: '+updated+'\n'+
+   'Dodane nowe: '+added+'\n'+
+   'Bez zmian: '+unchanged+'\n\n'+
+   'Treningi z dat, których nie ma w pliku, pozostaną w bazie.'))return;
+ const result=await GymCloud.importDatabase(rows,true);
+ if(!result.ok)throw Error(result.reason);
+ const updatedDates=new Set(result.saved.map(x=>x.record.date));
+ if(updatedDates.size){
+  // Keep unrelated local days intact; imported days adopt the Azure identity.
+  state.history=state.history.filter(x=>!updatedDates.has(x.date));
+  state.sessions=Object.fromEntries(Object.entries(state.sessions).filter(([,x])=>!updatedDates.has(x.date)));
+  state.unsavedDates=(state.unsavedDates||[]).filter(key=>!updatedDates.has(key.split('|')[0]));
+  for(const x of result.saved){
+   const record=JSON.parse(JSON.stringify(x.record));
+   if(x.kind==='history')state.history.push({...record,syncId:x.id});
+   else state.sessions[x.id.slice(6)]=record;
   }
-  state.history.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||
-    String(a.started||'').localeCompare(String(b.started||'')));
-  // Entries are already created in Azure. Do not trigger unrelated journal sync.
-  save(false);
-  await GymStorage.flush();
+  state.history.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  pendingHistoryEdit=null;state.selectedRecordId='';
+  save(false);await GymStorage.flush();
  }
  render();
- if(result.failed){
-  alert('Zaimportowano '+result.imported.length+' treningów. Kolejny zapis nie powiódł się.'+
-   '\nPozostałych nie zmieniono. Ten sam plik można bezpiecznie zaimportować ponownie.');
- }else{
-  toast('Zaimportowano '+result.imported.length+' treningów; pominięto '+result.skipped+'.');
- }
+ const stats=result.totals;
+ const msg='Import: '+stats.updated+' nadpisanych, '+stats.added+' dodanych, '+stats.unchanged+' bez zmian.';
+ if(result.failedDate)alert(msg+'\nNie udało się zapisać '+result.failedDate+
+    '. Pozostałe dni nie zostały usunięte. Ponów import pliku.');
+ else alert(msg+'\nPozostałe daty w bazie zostały zachowane.');
 }
 
 function csv(){const rows=[['date','day','exercise','machine','set','kg','reps_or_seconds','measure','rir','source','status']];for(const s of [...state.history,...Object.values(state.sessions)])for(const {item,log} of allLogged(s)){const variants=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [machine,v] of Object.entries(variants))(v.sets||[]).forEach((x,j)=>{if(x.done)rows.push([s.date,PLAN[s.day]?.name||s.day,item.title,machine,j+1,x.kg,x.reps,measure(item),v.rir||'',s.source||'aplikacja',state.history.includes(s)?'finished':'draft'])})}return rows.map(r=>r.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(',')).join('\r\n')}
