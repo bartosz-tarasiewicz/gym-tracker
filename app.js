@@ -346,7 +346,10 @@ async function saveSelectedWorkout(){
    const draftKey=sessionKey();
    if(pendingHistoryEdit){
     const e=pendingHistoryEdit,at=e.id?state.history.findIndex(h=>h.syncId===e.id):e.index;
-    if(at>=0)state.history[at]={...cloneWorkout(e.draft),syncId:state.history[at].syncId};
+    if(at>=0){
+     state.history[at]={...cloneWorkout(e.draft),syncId:state.history[at].syncId};
+     state.selectedRecordId=state.history[at].syncId||'';
+    }
     pendingHistoryEdit=null;
    }else{
     state.sessions[draftKey]=cloneWorkout(input);
