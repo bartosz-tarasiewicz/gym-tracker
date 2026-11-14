@@ -653,7 +653,7 @@ window.GymCloud=(()=>{
   importBusy=true;
   try{
    const snapshot=serverRows(await request());
-   const sameDay=[...snapshot.values()].filter(x=>x.record?.date===date&&Number(x.record?.day)===day);
+   const sameDay=[...snapshot.values()].filter(x=>x.record?.date===date);
    if(sameDay.length>1)
     return {ok:false,reason:'W Azure istnieje więcej niż jeden trening z tej daty. Nie chcę usuwać żadnego z nich automatycznie.'};
    const existing=sameDay[0]||null;
