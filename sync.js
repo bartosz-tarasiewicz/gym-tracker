@@ -636,6 +636,58 @@ window.GymCloud=(()=>{
   }finally{importBusy=false;}
  }
 
+ // A regular form Save: find the server record by workout date/day, not
+ // by whatever historical identifier the browser happened to cache.
+ async function saveWorkoutForDate(workout){
+  if(!principal)return {ok:false,reason:'Zaloguj się przez GitHub w zakładce Dane.'};
+  if(busy||flushBusy||importBusy)return {ok:false,reason:'Trwa synchronizacja. Spróbuj ponownie.'};
+  if(!workout||!/^\\d{4}-\\d{2}-\\d{2}$/.test(workout.date||'')||
+      ![0,1,2,5].includes(Number(workout.day)))
+   return {ok:false,reason:'Nieprawidłowa data lub dzień treningowy.'};
+  const record=clone(workout),date=record.date,day=Number(record.day);
+  const sourceId=record.syncId;
+  delete record.syncId;
+  importBusy=true;
+  try{
+   const snapshot=serverRows(await request());
+   const sameDay=[...snapshot.values()].filter(x=>x.record?.date===date&&Number(x.record?.day)===day);
+   if(sameDay.length>1)
+    return {ok:false,reason:'W Azure istnieje więcej niż jeden trening z tej daty. Nie chcę usuwać żadnego z nich automatycznie.'};
+   const existing=sameDay[0]||null;
+   const id=existing?.id || (sourceId&&/^(draft|history):[a-zA-Z0-9:_-]+$/.test(sourceId)?
+     sourceId:'draft:'+date+'-'+day);
+   const kind=existing?.kind||(id.startsWith('history:')?'history':'draft');
+   const sig=recordSignature(id,kind,record);
+   if(!existing||existing.sig!==sig){
+    try{
+     await request('PUT',id,{record,expectedEtag:existing?.etag||null});
+    }catch(e){
+     if(e.message==='REVISION_CONFLICT')
+      return {ok:false,reason:'Ten trening zmienił się właśnie na drugim urządzeniu. Otwórz go ponownie i zapisz aktualne wyniki.'};
+     throw e;
+    }
+   }
+   const fresh=serverRows(await request());
+   const saved=fresh.get(id);
+   if(!saved||saved.sig!==sig)return {ok:false,reason:'Nie udało się potwierdzić zapisu w Azure.'};
+   remote=fresh;
+   base.set(id,{etag:saved.etag,sig:saved.sig,kind});
+   // The old local draft/history ID must never be replayed by the offline
+   // queue after this form was saved under an existing server-side ID.
+   const stale=[...pending].filter(([key,job])=>
+      (job.record?.date===date&&Number(job.record?.day)===day)||key===id);
+   for(const [key] of stale)pending.delete(key);
+   for(const key of [...tombstones]){
+    if(key===id)tombstones.delete(key);
+   }
+   persist();
+   return {ok:true,id,kind,record,already:existing?.sig===sig};
+  }catch(e){
+   console.warn('Form workout save failed',e.message);
+   return {ok:false,reason:'Zapis do Azure nie powiódł się. Wyniki na tym urządzeniu pozostają bez zmian.'};
+  }finally{importBusy=false;}
+ }
+
  async function prepareHistoryImport(){
   if(!principal)return {ready:false,reason:'Zaloguj się do Azure przez GitHub w sekcji chmury.'};
   if(blocked)return {ready:false,reason:'W Azure jest konflikt danych. Najpierw rozwiąż konflikt synchronizacji.'};
@@ -646,5 +698,5 @@ window.GymCloud=(()=>{
    return {ready:false,reason:'Azure nie jest aktualnie zsynchronizowane. Nie importowano niczego.'};
   return {ready:true};
  }
- return {init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,getStatus:()=>flag};
+ return {init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,saveWorkoutForDate,getStatus:()=>flag};
 })();
