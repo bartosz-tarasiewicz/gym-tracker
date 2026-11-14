@@ -576,6 +576,66 @@ window.GymCloud=(()=>{
   }finally{importBusy=false;}
  }
 
+ // Explicit per-day upload (not a journal merge). Only create missing Azure
+ // workouts, or update a row whose last known ETag matches the current cloud ETag.
+ // Never create duplicates or overwrite another device's edits.
+ async function uploadWorkoutById(id){
+  if(!principal)return {ok:false,reason:'Zaloguj się przez GitHub w zakładce Dane na telefonie.'};
+  if(busy||flushBusy||importBusy)return {ok:false,reason:'Trwa operacja w Azure. Spróbuj ponownie.'};
+  if(!/^(history|draft):[a-zA-Z0-9:_-]{3,195}$/.test(String(id||'')))
+   return {ok:false,reason:'Nieprawidłowy identyfikator treningu.'};
+  const local=workoutRecords(getState()).get(id);
+  if(!local||local.isEmpty||!local.record?.date)return {ok:false,reason:'Brak zapisanych wyników dla tego dnia.'};
+  importBusy=true; // isolate from normal sync and archive importer
+  try{
+   const latest=serverRows(await request());
+   remote=latest;
+   const entry=latest.get(id);
+   if(entry&&(entry.kind!==local.kind||String(entry.record.date)!==String(local.record.date)||
+      Number(entry.record.day)!==Number(local.record.day)))
+    return {ok:false,reason:'Rekord w Azure ma niezgodną datę lub typ. Nic nie zmieniono.'};
+   const sameDay=[...latest.values()].filter(x=>x.id!==id&&x.record?.date===local.record.date&&
+     Number(x.record?.day)===Number(local.record.day));
+   if(sameDay.length)return {ok:false,reason:'Azure ma już inny trening z tej daty. Nie tworzę duplikatu ani nie nadpisuję wyników.'};
+   if(entry?.sig===local.sig){
+    base.set(id,{etag:entry.etag,sig:entry.sig,kind:entry.kind});
+    const queued=pending.get(id);
+    if(queued?.sig===local.sig)pending.delete(id);
+    persist();
+    return {ok:true,already:true,reason:'Ten trening jest już zapisany w Azure. Sprawdź konto i odśwież aplikację na komputerze.'};
+   }
+   if(entry){
+    const original=base.get(id);
+    if(!original?.etag||original.etag!==entry.etag||original.kind!==local.kind)
+     return {ok:false,reason:'Trening w Azure różni się od wersji na telefonie. Nie nadpisano go. Zrób kopię danych i sprawdź konflikt.'};
+   }
+   if(!confirm('Wysłać trening z '+local.record.date+' do Azure?\n'+
+      (entry?'Zaktualizowany zostanie tylko TEN rekord przy zachowaniu kontroli wersji.':'Dopisany zostanie tylko TEN trening.')+
+      '\nPozostałe dni nie zostaną zmienione.'))return {ok:false,canceled:true};
+   // Refresh local row to guard against edits during confirmation.
+   const current=workoutRecords(getState()).get(id);
+   if(!current||current.sig!==local.sig)
+    return {ok:false,reason:'Wyniki zmieniły się podczas operacji. Ponów zapis, aby wysłać aktualną wersję.'};
+   const answer=await request('PUT',id,{record:clone(local.record),expectedEtag:entry?.etag||null});
+   // Verify the actual committed cloud row before claiming success.
+   const check=serverRows(await request()),confirmed=check.get(id);
+   if(!confirmed||confirmed.sig!==local.sig)
+    return {ok:false,reason:'Nie udało się potwierdzić zapisu w Azure. Sprawdź stan synchronizacji.'};
+   remote=check;
+   base.set(id,{etag:confirmed.etag,sig:confirmed.sig,kind:local.kind});
+   // Remove just this now-satisfied pending operation; retain all others.
+   const queued=pending.get(id);
+   if(queued?.sig===local.sig)pending.delete(id);
+   persist();
+   return {ok:true,already:false,reason:'Trening '+local.record.date+' zapisano w Azure. Na komputerze pobierz brakujące treningi.'};
+  }catch(e){
+   if(e.message==='REVISION_CONFLICT')
+    return {ok:false,reason:'Ktoś zmienił ten trening w Azure. Nie nadpisano żadnych wyników.'};
+   console.warn('Single-day Azure upload:',e.message);
+   return {ok:false,reason:'Nie udało się wysłać treningu do Azure. Dane lokalne zostały zachowane.'};
+  }finally{importBusy=false;}
+ }
+
  async function prepareHistoryImport(){
   if(!principal)return {ready:false,reason:'Zaloguj się do Azure przez GitHub w sekcji chmury.'};
   if(blocked)return {ready:false,reason:'W Azure jest konflikt danych. Najpierw rozwiąż konflikt synchronizacji.'};
@@ -586,5 +646,5 @@ window.GymCloud=(()=>{
    return {ready:false,reason:'Azure nie jest aktualnie zsynchronizowane. Nie importowano niczego.'};
   return {ready:true};
  }
- return {init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,getStatus:()=>flag};
+ return {init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,getStatus:()=>flag};
 })();
