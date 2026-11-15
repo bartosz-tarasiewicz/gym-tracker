@@ -1,31 +1,41 @@
 name: Gym Tracker cloud browser tests
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
   push:
     branches: [main]
     paths:
-      - 'sync.js'
-      - 'profiles.js'
-      - 'photos.js'
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - 'index.html'
       - 'assets/**'
-      - 'progress-ui.js'
-      - 'app.js'
-      - 'storage.js'
-      - 'tests/cloud-e2e.mjs'
+      - '**/package*.json'
       - '.github/workflows/gym-cloud-e2e.yml'
 jobs:
   cloud-e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      GYM_WEBKIT: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install Playwright
-        run: |
-          npm install --no-save playwright@1.56.1
-          npx playwright install --with-deps chromium
-      - name: Execute two-device sync tests
-        run: node tests/cloud-e2e.mjs
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix api
+      - run: npx playwright install --with-deps chromium webkit
+      - name: UI, two-device sync and API regression tests
+        run: npm test
+      - name: Report and failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

@@ -463,7 +463,7 @@ function toast(str){const t=document.getElementById('toast');t.textContent=str;t
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:PLAN[state.activeDay].items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
-function render(){window.GymProfiles?.render();document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():settingsHTML()}
+function render(){window.GymProfiles?.render();document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():settingsHTML()}
 function setsHTML(list,type,item){
  return (list||[]).map((s,j)=>{
   const head=type==='warm'?'R'+(j+1):String(j+1);
@@ -556,6 +556,8 @@ function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?
  const rows=(v.sets||[]).filter(x=>x.done);if(!rows.length)continue;lines.push(`  ${machineName(k)} (${unit(k)}): ${rows.map(x=>`${x.kg||'masa ciała'} × ${x.reps} ${measure(item)}`).join(' | ')}; RIR ${v.rir||'—'}`)}
  }if(s.notes)lines.push(`\nNotatka: ${s.notes}`);return lines.join('\n')}
 function historyHTML(){return GymProgress.html(state,{PLAN,CORE,MACHINE,allLogged,sessionReport,machineName,unit,measure})}
+// Cloud refresh must not detach the file input while a native file picker is open.
+function renderCloudPanel(){const panel=document.getElementById('cloud-panel');if(panel)panel.innerHTML=window.GymCloud?.html?.()||'';}
 function settingsHTML(){
  return '<section class="hero"><div class="eyebrow">Dane</div><h1>Import i eksport</h1>'+
   '<p class="muted">Dane treningów przechowujemy w Azure. Poniższe operacje dotyczą wyłącznie bazy aktywnego profilu.</p></section>'+
@@ -569,7 +571,7 @@ function settingsHTML(){
   '<div class="inline-actions"><button class="btn" id="export">↓ Baza profilu JSON</button>'+
   '<button class="btn secondary" id="exportcsv">↓ Baza profilu CSV</button></div>'+
   '<p class="hint">JSON zachowuje pełną strukturę i nadaje się do późniejszego importu. CSV zawiera tabelę wszystkich ćwiczeń, serii i notatek do analizy.</p></div>'+
-  (window.GymCloud?.html?.()||'');
+  '<div id="cloud-panel">'+(window.GymCloud?.html?.()||'')+'</div>';
 }
 
 function parseDatabaseImport(payload){
@@ -756,6 +758,6 @@ window.gymProfileCanLeave=()=>!savingWorkout&&abandonHistoryEdit();
  }
  state=normalize({...state,history:retainedHistory,sessions:preserved,savedAt:Date.now()});
  GymStorage.save(state);await GymStorage.flush();render()
-},backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{if(state.view==='settings')render()}});
+},backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{if(state.view==='settings')renderCloudPanel()}});
   window.GymProfiles?.ready();
   if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW:',e))})();

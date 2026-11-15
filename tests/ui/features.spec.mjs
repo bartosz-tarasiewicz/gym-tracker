@@ -1,0 +1,138 @@
+import {test,expect,date,reps,weight,done,seed,record,upload} from './fixtures.mjs';
+
+test('calendar: weeks, arbitrary date, today, no writes from navigation',async({app:p,db})=>{
+ await date(p,'2026-12-31');await p.locator('[data-week="7"]').click();await expect(p.locator('#week-date')).toHaveValue('2027-01-07');
+ await p.locator('[data-week="-7"]').click();await expect(p.locator('#week-date')).toHaveValue('2026-12-31');
+ await p.locator('[data-week="today"]').click();const today=await p.evaluate(()=>GymWeek.iso(new Date()));await expect(p.locator('#week-date')).toHaveValue(today);
+ await expect(p.locator('.week-day')).toHaveCount(7);expect(db.operations).toEqual([]);
+});
+
+test('sets: require reps, toggle completion, nudge floor, RIR and added set persist',async({app:p})=>{
+ await date(p);await reps(p).fill('');await done(p).click();await expect(done(p)).not.toHaveClass(/checked/);await expect(p.locator('#toast')).toContainText('Uzupełnij');
+ await reps(p).fill('0');await p.locator('[data-nudge="-1"][data-type="work"]').first().click();await expect(reps(p)).toHaveValue('0');
+ await p.locator('[data-nudge="1"][data-type="work"]').first().click();await expect(reps(p)).toHaveValue('1');
+ await done(p).click();await expect(done(p)).toHaveClass(/checked/);await done(p).click();await expect(done(p)).not.toHaveClass(/checked/);
+ await p.locator('#rir').selectOption('3+');const n=await p.locator('.done-button[data-type="work"]').count();await p.locator('#addset').click();await expect(p.locator('.done-button[data-type="work"]')).toHaveCount(n+1);
+ await p.reload();await expect(p.locator('#rir')).toHaveValue('3+');await expect(p.locator('.done-button[data-type="work"]')).toHaveCount(n+1);
+});
+
+test('sets: mark all skips empty rows and additional sets stop at fifteen',async({app:p})=>{
+ await date(p);await p.locator('#addset').click();await p.locator('#markall').click();
+ const rows=p.locator('.done-button[data-type="work"]');await expect(rows.last()).not.toHaveClass(/checked/);await expect(rows.first()).toHaveClass(/checked/);
+ for(let n=await rows.count();n<16;n++)await p.locator('#addset').click();await expect(rows).toHaveCount(15);await expect(p.locator('#toast')).toContainText('Maksymalnie 15');
+});
+
+test('exercise navigation: previous/next boundaries and direct selection',async({app:p})=>{
+ await date(p);await expect(p.locator('#prev')).toBeDisabled();await p.locator('#next').click();await expect(p.locator('[data-item="1"]')).toHaveClass(/active/);
+ await p.locator('#prev').click();await expect(p.locator('[data-item="0"]')).toHaveClass(/active/);
+ await p.locator('[data-item]').last().click();await expect(p.locator('#next')).toBeDisabled();
+});
+
+test('profiles: whitespace rejected, cancel clears form, HTML name rendered as text',async({app:p})=>{
+ await p.locator('#add-profile').click();await p.locator('#profile-name').fill('   ');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#profile-error')).toContainText('Wpisz nazwę');
+ await p.locator('#cancel-profile').click();await expect(p.locator('#profile-form')).toHaveCount(0);await p.locator('#add-profile').click();await expect(p.locator('#profile-name')).toHaveValue('');
+ await p.locator('#profile-name').fill('<b>Anna</b>');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('<b>Anna</b>');await expect(p.locator('#profiles b')).toHaveCount(0);
+});
+
+for(const [name,payload] of [
+ ['malformed JSON','{oops'],['unsupported format',{}],['empty export',{format:'gym-tracker-db-export-v1',workouts:[]}],
+ ['impossible date',{format:'gym-tracker-db-export-v1',workouts:[{id:'history:x',kind:'history',record:record('2026-02-30')}]}],
+ ['duplicate ID',{format:'gym-tracker-db-export-v1',workouts:[1,2].map(()=>({id:'history:x',kind:'history',record:record()}))}],
+ ['mismatched record kind',{format:'gym-tracker-db-export-v1',workouts:[{id:'draft:x',kind:'history',record:record()}]}]
+])test('import rejects '+name+' without writes',async({app:p,db})=>{
+ await p.locator('[data-view="settings"]').click();const dialog=p.waitForEvent('dialog');await upload(p,payload);const d=await dialog;expect(d.type()).toBe('alert');await d.accept();expect(db.operations).toEqual([]);await expect(p.locator('#import-database')).toHaveValue('');
+});
+
+test('import cancellation keeps cloud and local training unchanged',async({app:p,db})=>{
+ await p.locator('[data-view="settings"]').click();const dialog=p.waitForEvent('dialog');await upload(p,{format:'gym-tracker-db-export-v1',workouts:[{id:'history:x',kind:'history',record:record()}]});const d=await dialog;expect(d.type()).toBe('confirm');await d.dismiss();await expect(p.locator('#import-database')).toHaveValue('');expect(db.store.size).toBe(0);expect(db.operations).toEqual([]);
+});
+
+test('historical edit: reject leaving, discard leaving, source never changes',async({app:p,db})=>{
+ const id=seed(db);await p.reload();await date(p);await weight(p).fill('77');
+ p.once('dialog',d=>d.dismiss());await p.locator('[data-view="history"]').click();await expect(weight(p)).toHaveValue('77');
+ p.once('dialog',d=>d.accept());await p.locator('[data-view="history"]').click();await expect(p.locator('#trend-exercise')).toBeVisible();await p.locator('[data-view="train"]').click();await expect(weight(p)).toHaveValue('60');expect(db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('60');expect(db.operations).toEqual([]);
+});
+
+test('failed cloud save retains edits through reload and succeeds on retry',async({app:p,db})=>{
+ await date(p);await weight(p).fill('71');await reps(p).fill('12');await done(p).click();
+ await p.route('**/api/workouts**',route=>route.fulfill({status:503,body:'unavailable'}));p.once('dialog',d=>d.accept());await p.locator('#save-training').click();await expect(p.locator('#save-training')).toBeEnabled();await p.reload();await expect(weight(p)).toHaveValue('71');await expect(done(p)).toHaveClass(/checked/);expect(db.store.size).toBe(0);
+ await p.unroute('**/api/workouts**');await p.locator('#save-training').click();await expect.poll(()=>db.store.size).toBe(1);await expect(p.locator('#toast')).toContainText('Zapisano');
+});
+
+test('ETag conflict cannot overwrite another device and retains edited form',async({app:p,db})=>{
+ const id=seed(db);await p.reload();await date(p);await weight(p).fill('72');
+ await p.route('**/api/workouts/**',route=>route.request().method()==='PUT'?route.fulfill({status:409,json:{error:'workout_changed'}}):route.continue());
+ p.once('dialog',d=>d.accept());await p.locator('#save-training').click();await expect(p.locator('#save-training')).toBeEnabled();await expect(weight(p)).toHaveValue('72');expect(db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('60');
+});
+
+test('progress: checked work only, metrics, range, chart, read-only source',async({app:p,db})=>{
+ for(let i=1;i<=8;i++)seed(db,'2026-11-'+String(i).padStart(2,'0'),String(50+i));
+ await p.reload();await p.locator('[data-view="history"]').click();await p.locator('#trend-exercise').selectOption('legpress');await p.locator('#trend-machine').selectOption('MG-PL70');
+ const stats=p.locator('.trend-stats');await expect(stats).toContainText('58 kg');await expect(p.locator('.trend-point')).toHaveCount(8);
+ await p.locator('[data-trend-metric="reps"]').click();await expect(stats).toContainText('12 powt.');await p.locator('[data-trend-metric="volume"]').click();await expect(stats).toContainText('696');
+ await p.locator('#trend-range').selectOption('6');await expect(p.locator('.trend-point')).toHaveCount(6);await p.locator('#trend-range').selectOption('all');await expect(p.locator('.trend-point')).toHaveCount(8);
+ await p.locator('#trend-machine').selectOption('G7-S70');await expect(p.locator('.empty')).toContainText('Brak wykonanych');expect(db.operations).toEqual([]);
+});
+
+test('mobile layout: safe area, horizontal overflow and bottom navigation',async({app:p})=>{
+ await p.evaluate(()=>document.documentElement.style.setProperty('--safe-top','59px'));expect((await p.locator('#profiles').boundingBox()).y).toBeGreaterThanOrEqual(59);
+ for(const view of ['train','history','settings']){await p.locator('[data-view="'+view+'"]').click();expect(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(p.locator('.bottomnav')).toBeVisible();}
+});
+
+test('warmups and core: independent completion, seconds nudge and enabled state survive reload',async({app:p})=>{
+ await date(p);const warm=p.locator('.done-button[data-type="warm"]').first();await warm.click();await expect(warm).toHaveClass(/checked/);await expect(done(p)).not.toHaveClass(/checked/);
+ await p.locator('[data-area="core"]').click();await p.locator('[data-core="4"]').click();await p.locator('#enable-core').check();await reps(p).fill('30');await p.locator('[data-nudge="1"][data-type="work"]').first().click();await expect(reps(p)).toHaveValue('35');
+ await done(p).click();await p.reload();await expect(reps(p)).toHaveValue('35');await expect(p.locator('#enable-core')).toBeChecked();await expect(done(p)).toHaveClass(/checked/);await done(p).click();await p.locator('#enable-core').uncheck();await p.reload();await expect(p.locator('#enable-core')).not.toBeChecked();
+});
+
+test('images: failed download offers instruction and keeps workout usable',async({app:p})=>{
+ await p.route('**/assets/guides/**',route=>route.abort());await date(p,'2026-11-09');await p.locator('[data-machine="DUMBBELL"]').click();await p.locator('.movement-photos').scrollIntoViewIfNeeded();await expect(p.locator('.movement-photos figcaption').first()).toContainText('Zdjęcie niedostępne');await expect(p.locator('.detail')).toContainText('Jak wykonać');await weight(p).fill('64');await expect(weight(p)).toHaveValue('64');
+});
+
+for(const type of ['0','1','2','5'])test('catalogue: every exercise and variant of workout '+type,async({app:p})=>{
+ test.setTimeout(90000);await date(p);await p.locator('#workout-type').selectOption(type);
+ const n=await p.locator('[data-item]').count();expect(n).toBeGreaterThan(0);
+ for(let i=0;i<n;i++){
+  await p.locator('[data-item="'+i+'"]').click();
+  const machines=await p.locator('[data-machine]').evaluateAll(xs=>xs.map(x=>x.dataset.machine));expect(machines.length).toBeGreaterThanOrEqual(2);
+  for(const m of machines){await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('[data-machine="'+m+'"]')).toHaveAttribute('aria-pressed','true');await expect(p.locator('.detail')).toContainText('Jak wykonać');
+   for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}
+  }
+ }
+});
+
+test('signed out: login link and failed save retain local results',async({app:p,db})=>{
+ await p.route('**/.auth/me',r=>r.fulfill({json:{clientPrincipal:null}}));await p.reload();await date(p);await weight(p).fill('66');await done(p).click();p.once('dialog',d=>d.accept());await p.locator('#save-training').click();await expect(weight(p)).toHaveValue('66');await p.locator('[data-view="settings"]').click();await expect(p.locator('a[href*="/.auth/login/github"]')).toBeVisible();expect(db.operations).toEqual([]);
+});
+
+test('offline PWA: cached app reloads with edits and never caches private API responses',async({app:p,context,db,browserName})=>{
+ // localhost is a secure context; production registers automatically on HTTPS.
+ await p.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready});
+ await expect.poll(()=>p.evaluate(()=>!!navigator.serviceWorker.controller)).toBe(true);
+ await date(p);await weight(p).fill('67');await done(p).click();await p.evaluate(()=>GymStorage.flush());
+ const privateUrls=await p.evaluate(async()=>{const urls=[];for(const key of await caches.keys())for(const r of await (await caches.open(key)).keys())if(/\/api\/|\/\.auth\//.test(r.url))urls.push(r.url);return urls});expect(privateUrls).toEqual([]);
+ // WebKit on Windows rejects offline navigations before the worker can handle them.
+ // Drop server connections instead to exercise the real worker network-failure fallback.
+ if(browserName==='webkit')db.network.disconnected=true;else await context.setOffline(true);
+ try{await p.reload();await expect(weight(p)).toHaveValue('67');await expect(done(p)).toHaveClass(/checked/)}finally{db.network.disconnected=false;await context.setOffline(false)}
+});
+
+test('catalogue core: every optional exercise, variants and units',async({app:p})=>{
+ test.setTimeout(90000);await date(p);await p.locator('[data-area="core"]').click();
+ const n=await p.locator('[data-core]').count();expect(n).toBeGreaterThan(0);
+ for(let i=0;i<n;i++){
+  await p.locator('[data-core="'+i+'"]').click();await expect(p.locator('#enable-core')).toBeVisible();
+  const machines=await p.locator('[data-machine]').evaluateAll(xs=>xs.map(x=>x.dataset.machine));expect(machines.length).toBeGreaterThanOrEqual(2);
+  for(const m of machines){await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('.detail')).toContainText('Jak wykonać');for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}}
+ }
+});
+
+
+test('import file picker survives background cloud refresh',async({app:p})=>{
+ await p.locator('[data-view="settings"]').click();
+ const picker=await p.locator('#import-database').elementHandle();
+ await p.evaluate(()=>GymCloud.refreshAutomatically());
+ await expect.poll(()=>p.evaluate(()=>GymCloud.isBusy())).toBe(false);
+ expect(await picker.evaluate(el=>el.isConnected&&el===document.getElementById('import-database'))).toBe(true);
+ const dialog=p.waitForEvent('dialog');await upload(p,{});const d=await dialog;expect(d.type()).toBe('alert');await d.accept();
+});

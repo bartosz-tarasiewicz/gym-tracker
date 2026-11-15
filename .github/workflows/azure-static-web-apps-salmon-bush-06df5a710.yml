@@ -30,7 +30,8 @@ jobs:
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           app_location: "/" # App source code path
           api_location: "api" # Azure Functions (managed SWA)
-          output_location: "." # Built app content directory - optional
+          skip_app_build: true # Root package.json contains test tooling; app is plain static files.
+          output_location: ""
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:

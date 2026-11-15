@@ -141,3 +141,5 @@ Jeśli Azure zgłosi, że brak procesu budowania lub niewłaściwy folder, spraw
 - `sw.js` — offline PWA shell
 - `manifest.webmanifest`, ikony — instalacja PWA
 - `staticwebapp.config.json` — konfiguracja hostingu Azure
+
+Testy funkcjonalności, uruchamianie i mapa pokrycia: [tests/README.md](tests/README.md).
