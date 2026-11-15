@@ -49,4 +49,4 @@ To pokrycie funkcji, nie deklaracja 100% wszystkich kombinacji danych lub linii 
 
 Przy dodawaniu funkcji należy dopisać scenariusz UI i pozycję do tej mapy, a przy poprawce błędu — scenariusz odtwarzający błąd. Oczekiwania należy opierać na zachowaniu użytkownika i zapisanych danych, a nie wyłącznie obecności przycisku.
 
-W scenariuszu offline Chromium przełączamy w tryb bez sieci. Tylko dla WebKit na Windows zrywamy połączenia z serwerem testowym, ponieważ ta wersja odrzuca nawigację offline przed obsługą przez service worker. Oba warianty sprawdzają odczyt aplikacji z rzeczywistego cache i zachowanie wpisanych wyników.
+W scenariuszu offline Chromium przełączamy w tryb bez sieci i przeładowujemy stronę z rzeczywistego cache. Automatyzowany WebKit potrafi odrzucić taką nawigację błędem wewnętrznym silnika, zanim obsłuży ją service worker (potwierdzone na Windows i Linux). W WebKit sprawdzamy komplet cache, edycję bez sieci i zachowanie wyników po powrocie połączenia oraz przeładowaniu. Raport testu zawiera adnotację o tej granicy pokrycia. Pełne uruchomienie offline na fizycznym Safari pozostaje sprawdzeniem ręcznym.

@@ -2,7 +2,7 @@ import {test as base,expect} from '@playwright/test';
 import {startServer} from '../helpers/server.mjs';
 export {expect};
 export const test=base.extend({
- db:async({},use)=>{const db=await startServer();try{await use(db)}finally{await new Promise(r=>db.server.close(r))}},
+ db:async({},use)=>{const db=await startServer();try{await use(db)}finally{await new Promise(r=>{db.server.close(r);db.server.closeAllConnections()})}},
  app:async({page,db},use)=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(db.base);await expect(page.locator('#active-profile')).toBeEnabled();
