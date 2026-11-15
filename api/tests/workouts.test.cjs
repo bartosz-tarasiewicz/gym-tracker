@@ -157,3 +157,18 @@ test('Legacy snapshot endpoint also respects profile scope and retains default b
  assert.equal((await snapshots(scoped(req('snapshot-profiles','PUT',null,{snapshot:{history:[],sessions:{}},expectedEtag:null}),profileA),context)).status,200);
  assert.deepEqual((await snapshots(req('snapshot-profiles'),context)).jsonBody.snapshot.history,data.history);
 });
+
+test('Explicit archive restore preserves multiple same-date records; ordinary saves still reject duplicates',async()=>{
+ const user='restore-multiple',a='history:restore-a',b='history:restore-b';
+ const record={date:'2026-11-09',day:0,exercises:{},notes:'first'};
+ assert.equal((await handle(req(user,'PUT',a,{record,expectedEtag:null}),context)).status,200);
+ assert.equal((await handle(req(user,'PUT',b,{record:{...record,notes:'second'},expectedEtag:null}),context)).status,409);
+ const restored=await handle(req(user,'PUT',b,{record:{...record,notes:'second'},expectedEtag:null,preserveRecords:true}),context);
+ assert.equal(restored.status,200);
+ const stored=(await handle(req(user),context)).jsonBody.workouts;
+ assert.equal(stored.length,2);assert.deepEqual(stored.map(x=>x.record.notes),['first','second']);
+ assert.equal((await handle(req(user,'PUT',b,{record,expectedEtag:null,preserveRecords:true}),context)).status,409);
+ assert.equal((await handle(req(user,'PUT',b,{record,expectedEtag:'stale',preserveRecords:true}),context)).status,409);
+ assert.equal((await handle(req(null,'PUT',b,{record,expectedEtag:null,preserveRecords:true}),context)).status,401);
+ assert.equal((await handle(scoped(req(user),profileA),context)).jsonBody.workouts.length,0);
+});

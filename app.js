@@ -562,12 +562,12 @@ function settingsHTML(){
 }
 
 function parseDatabaseImport(payload){
- const copy=x=>JSON.parse(JSON.stringify(x));
+ const copy=x=>x===undefined?null:JSON.parse(JSON.stringify(x));
  let rows=[];
  if(payload?.format==='gym-tracker-db-export-v1'&&Array.isArray(payload.workouts)){
   rows=payload.workouts.map(x=>({id:x.id,kind:x.kind,record:copy(x.record)}));
  }else if(payload?.format==='gym-tracker-history-additive-v1'&&Array.isArray(payload.history)){
-  rows=payload.history.map(x=>({id:x.syncId||'history:import-'+x.date+'-'+x.day,
+  rows=payload.history.map((x,i)=>({id:x.syncId||'history:import-'+x.date+'-'+x.day+'-'+i+'-'+stableHash(JSON.stringify(x)),
    kind:'history',record:copy(x)}));
  }else if(payload&&Array.isArray(payload.history)&&payload.sessions&&
     typeof payload.sessions==='object'&&!Array.isArray(payload.sessions)){
@@ -575,27 +575,28 @@ function parseDatabaseImport(payload){
   rows=[
    ...Object.entries(payload.sessions).map(([key,x])=>({
     id:'draft:'+key,kind:'draft',record:copy(x)})),
-   ...payload.history.map(x=>({id:x.syncId||'history:import-'+x.date+'-'+x.day,
+   ...payload.history.map((x,i)=>({id:x.syncId||'history:import-'+x.date+'-'+x.day+'-'+i+'-'+stableHash(JSON.stringify(x)),
     kind:'history',record:copy(x)}))
   ];
  }else throw Error('Nieobsługiwany format JSON. Wybierz eksport Gym Tracker.');
  if(!rows.length)throw Error('Plik nie zawiera treningów.');
  if(rows.length>2000)throw Error('Zbyt wiele rekordów w imporcie.');
- const seenDates=new Set(),seenIds=new Set();
+ const seenIds=new Set();
  for(const row of rows){
   const rec=row?.record;
+  if(rec&&typeof rec==='object'&&!Array.isArray(rec)&&rec.exercises===undefined)rec.exercises={};
   if(!rec||typeof rec!=='object'||Array.isArray(rec)||
     !/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')||
     Number.isNaN(new Date(rec.date+'T12:00:00Z').getTime())||
     new Date(rec.date+'T12:00:00Z').toISOString().slice(0,10)!==rec.date||
-    !Number.isInteger(Number(rec.day))||
+    !Number.isInteger(Number(rec.day))||![-2,-1,0,1,2,3,4,5].includes(Number(rec.day))||
     !rec.exercises||typeof rec.exercises!=='object'||Array.isArray(rec.exercises)||
     !['draft','history'].includes(row.kind)||
-    !/^(draft|history):[a-zA-Z0-9:_-]{3,195}$/.test(row.id||'')||
+    !/^(draft|history):[a-zA-Z0-9:_-]+$/.test(row.id||'')||row.id.length>200||
     row.id.split(':')[0]!==row.kind||
-    seenDates.has(rec.date)||seenIds.has(row.id))
-   throw Error('Plik zawiera niepoprawne lub zduplikowane daty treningów.');
-  seenDates.add(rec.date);seenIds.add(row.id);
+    seenIds.has(row.id))
+   throw Error('Niepoprawny rekord '+String(row.id||'(bez ID)')+' dla daty '+String(rec?.date||'(brak daty)')+'. Sprawdź format danych i unikalność identyfikatorów.');
+  seenIds.add(row.id);
   delete rec.syncId; // The cloud ID is stored in the row wrapper, not the record.
  }
  return rows;
@@ -606,11 +607,12 @@ async function importDatabaseFile(file){
  const rows=parseDatabaseImport(JSON.parse(await file.text()));
  const preview=await GymCloud.importDatabase(rows,false);
  if(!preview.ok)throw Error(preview.reason);
- const {added,updated,unchanged,total}=preview.preview;
+ const {added,updated,unchanged,total,repeatedDates}=preview.preview;
  if(!confirm('Zaimportować '+total+' treningów do Azure w aktywnym profilu?\n'+
    'Nadpisane istniejące: '+updated+'\n'+
    'Dodane nowe: '+added+'\n'+
-   'Bez zmian: '+unchanged+'\n\n'+
+   'Bez zmian: '+unchanged+'\n'+
+   (repeatedDates?'Daty z kilkoma wpisami: '+repeatedDates+'. Zachowamy każdy wpis oddzielnie.\n':'')+'\n'+
    'Treningi z dat, których nie ma w pliku, pozostaną w bazie.'))return;
  const result=await GymCloud.importDatabase(rows,true);
  if(!result.ok)throw Error(result.reason);

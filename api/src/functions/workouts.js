@@ -122,15 +122,17 @@ async function handle(request,context){
     return reply(400,{error:'expected_etag_required'});
   if(request.method==='PUT'){
    if(!body.record||typeof body.record!=='object'||Array.isArray(body.record))return reply(400,{error:'invalid_record'});
+   if(body.preserveRecords===true&&!/^\d{4}-\d{2}-\d{2}$/.test(body.record.date||''))return reply(400,{error:'invalid_date'});
    let packed;try{packed=compressed(body.record)}
    catch(e){return reply(e.statusCode===413?413:400,{error:e.statusCode===413?'record_too_large':'invalid_record'});}
    const entity={partitionKey:part,rowKey:key,entryId:id,kind,packed,updatedAt:new Date().toISOString()};
    try{
     if(body.expectedEtag===null){
-     // Prevent a second ID being created for a date already present in Azure.
+     // Ordinary saves reject duplicate dates. Explicit archive restores may
+     // preserve multiple historical IDs exported for the same date.
      // Normal updates target the pre-existing record's ID and ETag.
      const workouts=await list(t,part);
-     if(workouts.some(x=>x.id!==id&&x.record?.date===body.record.date))
+     if(body.preserveRecords!==true&&workouts.some(x=>x.id!==id&&x.record?.date===body.record.date))
       return reply(409,{error:'workout_date_exists'});
      await t.createEntity(entity);
     }else await t.updateEntity(entity,'Replace',{etag:body.expectedEtag,matchConditions:'IfNotModified'});

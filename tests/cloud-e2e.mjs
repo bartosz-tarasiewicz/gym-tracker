@@ -35,7 +35,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='DELETE'){
    activeStore.delete(id);operations.push({id,method:'DELETE'});return json(res,200,{ok:true,deleted:true});
   }
-  if(!old&&[...activeStore].some(([key,value])=>key!==id&&value.record?.date===body.record?.date))
+  if(!old&&body.preserveRecords!==true&&[...activeStore].some(([key,value])=>key!==id&&value.record?.date===body.record?.date))
    return json(res,409,{error:'workout_date_exists'});
   const etag='"'+(++etagCounter)+'"';
   activeStore.set(id,{kind:id.split(':')[0],record:structuredClone(body.record),etag});
@@ -388,6 +388,39 @@ try{
  assert.ok(await pc.evaluate(()=>Object.values(state.sessions).some(x=>x.notes==='Anna import')||state.history.some(x=>x.notes==='Anna import')),'profile discovered and hydrated on second device');
  await phone.screenshot({path:'profile-preview.png',fullPage:true});
  log('Profiles isolate same-date workouts, plans, filters, export/import, cache and parallel tabs');
+
+ // Full real export -> another profile, including legitimate legacy entries
+ // sharing a date and an old note-only record without exercises.
+ store.set('history:legacy-first',{kind:'history',record:session('2026-11-09',0,41,'Morning session'),etag:'"legacy-first"'});
+ store.set('history:legacy-second',{kind:'history',record:session('2026-11-09',1,42,'Evening session'),etag:'"legacy-second"'});
+ store.set('history:n',{kind:'history',record:{date:'2026-11-10',day:4,notes:'Legacy note only'},etag:'"legacy-note"'});
+ const sourceBefore=JSON.stringify([...store]);
+ const archiveContext=await context(),archivePage=await archiveContext.newPage();
+ await archivePage.goto(base,{waitUntil:'domcontentloaded'});
+ await archivePage.locator('[data-view="settings"]').click();
+ const archiveDownload=archivePage.waitForEvent('download');await archivePage.locator('#export').click();
+ const multiArchive=JSON.parse(fs.readFileSync(await (await archiveDownload).path(),'utf8'));
+ assert.equal(multiArchive.workouts.filter(x=>x.record.date==='2026-11-09').length,2);
+ await phone.locator('[data-view="settings"]').click();
+ await uploadFile(phone,multiArchive);
+ await waitFor(()=>profileStores.get(anna).has('history:legacy-second'),'same-date archive imported');
+ await phone.waitForFunction(()=>!GymCloud.isBusy());
+ assert.equal(profileStores.get(anna).get('history:legacy-first').record.notes,'Morning session');
+ assert.equal(profileStores.get(anna).get('history:legacy-second').record.notes,'Evening session');
+ assert.equal(profileStores.get(anna).get('history:n').record.notes,'Legacy note only');
+ const repeatedSize=profileStores.get(anna).size,repeatedWrites=operations.length;
+ await uploadFile(phone,multiArchive);
+ await phone.waitForFunction(()=>!GymCloud.isBusy());await phone.waitForTimeout(150);
+ assert.equal(profileStores.get(anna).size,repeatedSize);
+ assert.equal(operations.length,repeatedWrites,'Reimporting multi-entry dates performs no writes');
+ assert.equal(JSON.stringify([...store]),sourceBefore,'Source profile remains unchanged');
+ const conflictArchive={format:'gym-tracker-db-export-v1',workouts:[row('2026-11-09',1,'foreign A','history:foreign-a'),row('2026-11-09',2,'foreign B','history:foreign-b')]};
+ let conflictMessage='';phone.once('dialog',d=>{conflictMessage=d.message();void d.dismiss();});
+ await uploadFile(phone,conflictArchive,false);
+ await phone.waitForFunction(()=>!GymCloud.isBusy());await phone.waitForTimeout(150);
+ assert.match(conflictMessage,/jednoznacznie/);assert.equal(operations.length,repeatedWrites);
+ await archiveContext.close();
+ log('Full export with multiple same-date records and legacy notes imports losslessly, idempotently and without modifying source');
  assert.deepEqual(errors,[],'Uncaught browser JavaScript errors: '+errors.join('; '));
  log('No JavaScript errors');
  console.log('SUCCESS: per-date workout overrides, rest/GRIT and cross-device persistence alongside full Azure import/export');

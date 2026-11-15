@@ -714,7 +714,7 @@ window.GymCloud=(()=>{
   }catch(e){return {ok:false,reason:'Nie udało się odczytać całej bazy z Azure. Nie pobrano niepełnej kopii.'};}
  }
  const importDate=x=>x?.record?.date;
- function importSummary(rows,cloud){
+ function importSummary(rows,cloud,preserveDates=new Set(),sourceIds=new Set(rows.map(x=>x.id))){
   const byDate=new Map();
   for(const row of cloud.values()){
    const date=importDate(row);
@@ -725,14 +725,17 @@ window.GymCloud=(()=>{
   const changes=[],conflicts=[];
   for(const item of rows){
    const found=byDate.get(item.record.date)||[];
-   if(found.length>1){
+   const preserveRecords=preserveDates.has(item.record.date);
+   const collision=cloud.get(item.id);
+   if((collision&&collision.record.date!==item.record.date)||
+     (preserveRecords?found.some(x=>!sourceIds.has(x.id)):found.length>1)){
     conflicts.push(item.record.date);continue;
    }
-   const current=found[0];
+   const current=preserveRecords?found.find(x=>x.id===item.id):found[0];
    const targetId=current?.id||item.id;
    const targetKind=current?.kind||item.kind;
    const sig=recordSignature(targetId,targetKind,item.record);
-   changes.push({date:item.record.date,item,
+   changes.push({date:item.record.date,item,preserveRecords,
     action:!current?'added':current.sig===sig?'unchanged':'updated',
     id:targetId,kind:targetKind,etag:current?.etag||null});
   }
@@ -748,40 +751,41 @@ window.GymCloud=(()=>{
   if(!(await waitUntilAvailable()))return {ok:false,reason:'Trwa synchronizacja. Ponów operację.'};
   if(!Array.isArray(rows)||rows.length<1||rows.length>2000)
    return {ok:false,reason:'Nieprawidłowa liczba treningów w pliku.'};
-  const dates=new Set(),ids=new Set();
+  const dates=new Map(),ids=new Set();
   for(const item of rows){
    const rec=item?.record;
    if(!rec||typeof rec!=='object'||Array.isArray(rec)||!/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')||
      !Number.isInteger(Number(rec.day))||![-2,-1,0,1,2,3,4,5].includes(Number(rec.day))||
      !rec.exercises||typeof rec.exercises!=='object'||Array.isArray(rec.exercises)||
-     !['draft','history'].includes(item.kind)||! /^(draft|history):[a-zA-Z0-9:_-]{3,195}$/.test(item.id||'')||
-     dates.has(rec.date)||ids.has(item.id))
+     !['draft','history'].includes(item.kind)||! /^(draft|history):[a-zA-Z0-9:_-]+$/.test(item.id||'')||item.id.length>200||
+     item.id.split(':')[0]!==item.kind||ids.has(item.id))
     return {ok:false,reason:'Niepoprawny lub powtórzony trening w JSON. Sprawdź daty i strukturę pliku.'};
-   dates.add(rec.date);ids.add(item.id);
+   dates.set(rec.date,(dates.get(rec.date)||0)+1);ids.add(item.id);
   }
+  const preserveDates=new Set([...dates].filter(([,count])=>count>1).map(([date])=>date));
   importBusy=true;
   let imported=[],failed=null,preview=null;
   try{
    let cloud=serverRows(await request());
-   preview=importSummary(rows,cloud);
+   preview=importSummary(rows,cloud,preserveDates,ids);
    if(preview.conflicts.length)
-    return {ok:false,reason:'Azure ma już wiele rekordów dla dat: '+preview.conflicts.join(', ')+'. Nie nadpisano niczego.'};
+    return {ok:false,reason:'Nie można jednoznacznie dopasować rekordów dla dat: '+[...new Set(preview.conflicts)].join(', ')+'. Zachowano wszystkie dane bez zmian.'};
    if(!commit)return {ok:true,preview:{added:preview.added,updated:preview.updated,
-    unchanged:preview.unchanged,total:rows.length}};
+    unchanged:preview.unchanged,total:rows.length,repeatedDates:preserveDates.size}};
    for(const change of preview.changes){
     if(change.action==='unchanged'){imported.push(change);continue;}
     try{
      // Re-read current ETags for each date. Reject concurrent changes rather
      // than blindly replacing an entry another device is editing.
      cloud=serverRows(await request());
-     const live=importSummary([change.item],cloud);
+     const live=importSummary([change.item],cloud,preserveDates,ids);
      if(live.conflicts.length)throw Error('MULTIPLE_ENTRIES');
      const current=live.changes[0];
      const id=current.id,kind=current.kind;
      const body=clone(change.item.record);
      delete body.syncId;
      if(current.action!=='unchanged'){
-      await request('PUT',id,{record:body,expectedEtag:current.etag});
+      await request('PUT',id,{record:body,expectedEtag:current.etag,...(current.preserveRecords?{preserveRecords:true}:{})});
      }
      imported.push({...current,action:current.action});
      // Only clear background writes for the dates actually imported.
@@ -798,7 +802,8 @@ window.GymCloud=(()=>{
    }
    const final=serverRows(await request());
    remote=final;
-   const saved=imported.map(x=>final.get(x.id)).filter(Boolean);
+   const touchedDates=new Set(imported.map(x=>x.date));
+   const saved=[...final.values()].filter(x=>touchedDates.has(x.record.date));
    for(const row of saved)base.set(row.id,{etag:row.etag,sig:row.sig,kind:row.kind});
    persist();
    const totals={added:imported.filter(x=>x.action==='added').length,
