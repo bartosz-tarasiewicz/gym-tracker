@@ -86,7 +86,7 @@ test('warmups and core: independent completion, seconds nudge and enabled state 
 });
 
 test('images: failed download offers instruction and keeps workout usable',async({app:p})=>{
- await p.route('**/assets/guides/**',route=>route.abort());await date(p,'2026-11-09');await p.locator('[data-machine="DUMBBELL"]').click();await p.locator('.movement-photos').scrollIntoViewIfNeeded();await expect(p.locator('.movement-photos figcaption').first()).toContainText('Zdjęcie niedostępne');await expect(p.locator('.detail')).toContainText('Jak wykonać');await weight(p).fill('64');await expect(weight(p)).toHaveValue('64');
+ await p.route('**/assets/guides/**',route=>route.abort());await date(p,'2026-11-09');await p.locator('[data-machine="DUMBBELL"]').click();await p.locator('.exercise-media > summary').click();await p.locator('.movement-photos').scrollIntoViewIfNeeded();await expect(p.locator('.movement-photos figcaption').first()).toContainText('Zdjęcie niedostępne');await expect(p.locator('.detail')).toContainText('Jak wykonać');await weight(p).fill('64');await expect(weight(p)).toHaveValue('64');
 });
 
 for(const type of ['0','1','2','5'])test('catalogue: every exercise and variant of workout '+type,async({app:p})=>{
@@ -96,7 +96,7 @@ for(const type of ['0','1','2','5'])test('catalogue: every exercise and variant 
   await p.locator('[data-item="'+i+'"]').click();
   const machines=await p.locator('[data-machine]').evaluateAll(xs=>xs.map(x=>x.dataset.machine));expect(machines.length).toBeGreaterThanOrEqual(2);
   for(const m of machines){await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('[data-machine="'+m+'"]')).toHaveAttribute('aria-pressed','true');await expect(p.locator('.detail')).toContainText('Jak wykonać');
-   for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}
+   await p.locator('.exercise-media > summary').click();for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}
   }
  }
 });
@@ -123,7 +123,7 @@ test('catalogue core: every optional exercise, variants and units',async({app:p}
  for(let i=0;i<n;i++){
   await p.locator('[data-core="'+i+'"]').click();await expect(p.locator('#enable-core')).toBeVisible();
   const machines=await p.locator('[data-machine]').evaluateAll(xs=>xs.map(x=>x.dataset.machine));expect(machines.length).toBeGreaterThanOrEqual(2);
-  for(const m of machines){await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('.detail')).toContainText('Jak wykonać');for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}}
+  for(const m of machines){await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('.detail')).toContainText('Jak wykonać');await p.locator('.exercise-media > summary').click();for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}}
  }
 });
 
@@ -135,4 +135,25 @@ test('import file picker survives background cloud refresh',async({app:p})=>{
  await expect.poll(()=>p.evaluate(()=>GymCloud.isBusy())).toBe(false);
  expect(await picker.evaluate(el=>el.isConnected&&el===document.getElementById('import-database'))).toBe(true);
  const dialog=p.waitForEvent('dialog');await upload(p,{});const d=await dialog;expect(d.type()).toBe('alert');await d.accept();
+});
+
+
+test('uniform exercise layout: instructions and sets stay visible, media opens on demand',async({app:p})=>{
+ await date(p,'2026-11-09');
+ for(const machine of ['MG-PL13','DUMBBELL']){
+  await p.locator('[data-machine="'+machine+'"]').click();
+  await expect(p.locator('.movement-instruction')).toContainText('Oprzyj plecy');
+  await expect(p.locator('.exercise-media')).not.toHaveAttribute('open','');
+  await expect(p.locator('.movement-img:visible')).toHaveCount(0);
+  await expect(p.locator('input[data-type="warm"][data-field="kg"]').first()).toBeVisible();
+  await weight(p).fill(machine==='MG-PL13'?'70':'20');
+  await p.locator('.exercise-media > summary').click();
+  await expect(p.locator('.exercise-media')).toHaveAttribute('open','');
+  if(machine==='MG-PL13')await expect(p.locator('.machine-reference')).toBeVisible();
+  else await expect(p.locator('.movement-img')).toHaveCount(2);
+  await p.locator('.exercise-media > summary').click();
+  await expect(p.locator('.exercise-media')).not.toHaveAttribute('open','');
+ }
+ await p.locator('[data-machine="MG-PL13"]').click();await expect(weight(p)).toHaveValue('70');
+ await p.locator('[data-machine="DUMBBELL"]').click();await expect(weight(p)).toHaveValue('20');
 });

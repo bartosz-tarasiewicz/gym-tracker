@@ -82,6 +82,7 @@ try{
  await phone.locator('#week-date').fill('2026-11-23');
  await phone.locator('[data-item="2"]').click();
  assert.match(await phone.locator('.movement-img').first().getAttribute('src'),/Dumbbell_Flyes/);
+ await phone.locator('.exercise-media > summary').click();
  await phone.locator('.movement-img').first().scrollIntoViewIfNeeded();
  await phone.locator('.panel').filter({has:phone.locator('.movement-photos')}).screenshot({path:'exercise-preview.png'});
  await phone.locator('[data-item="0"]').click();

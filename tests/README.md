@@ -27,7 +27,7 @@ Raport HTML: `playwright-report/index.html`. Przy błędzie zachowujemy screensh
 | Istniejące dane domyślnego profilu, import starszych formatów | `cloud-e2e.mjs`: legacy additive JSON, full export with multiple same-date records, 13 November |
 | Kalendarz: tygodnie, przełom roku, konkretna data, dziś, oznaczenia | `features.spec.mjs`: calendar; `cloud-e2e.mjs`: Calendar, workout overrides |
 | Rodzaj treningu, wolne, GRIT, inna aktywność i notatki | `cloud-e2e.mjs`: Date-level rest, GRIT and weekends, cross-device persistence |
-| Ćwiczenia: nawigacja, warianty, fotografie, opis, brak zdjęcia | `features.spec.mjs`: exercise navigation, catalogue, images; `cloud-e2e.mjs`: Dumbbell photos; `azure-e2e.mjs`: independent variants |
+| Ćwiczenia: nawigacja, warianty, fotografie, opis, brak zdjęcia | `features.spec.mjs`: uniform exercise layout, exercise navigation, catalogue, images; `cloud-e2e.mjs`: Dumbbell photos; `azure-e2e.mjs`: independent variants |
 | Serie robocze/rozgrzewki: edycja, potwierdzanie, RIR, +/- | `features.spec.mjs`: sets, warmups and core; `cloud-e2e.mjs`: restored leg workout |
 | Dodanie serii, limit 15, potwierdź wszystkie, puste powtórzenia | `features.spec.mjs`: sets |
 | Opcjonalny CORE, sekundy, włączenie/wyłączenie, przetrwanie odświeżenia | `features.spec.mjs`: warmups and core, catalogue core; `azure-e2e.mjs`: CORE BONUS |

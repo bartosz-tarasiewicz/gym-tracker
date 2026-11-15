@@ -483,10 +483,42 @@ function exerciseMediaHTML(item,machine){
   'TUCK-HOLD':'Leżąc podwiń miednicę i dociśnij lędźwie do podłoża. Unieś łopatki oraz ugięte nogi; utrzymuj pozycję bez odrywania lędźwi.'
  };
  const product=window.GymPhotos?.[machine];
- const instruction='<div class="detail"><strong>Jak wykonać · '+esc(guide?.title||item.title)+'</strong><p>'+esc(guide?.tip||tips[machine]||item.tip)+'</p></div>';
- const movement=guide?'<div class="movement-photos">'+guide.images.map((src,i)=>'<figure><img class="movement-img" loading="lazy" src="'+esc(src)+'" alt="'+esc(guide.title)+' — pozycja '+(i+1)+'" onerror="this.hidden=true;this.nextElementSibling.textContent=\'Zdjęcie niedostępne — skorzystaj z opisu poniżej\'"><figcaption>Pozycja '+(i+1)+'</figcaption></figure>').join('')+'</div><a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(guide.source)+'">Demonstracja: '+esc(guide.credit)+'</a>':'<p class="hint">Dla tego wariantu nie ma jeszcze zweryfikowanej fotografii wykonania. Poniżej opis ruchu.</p>';
- const reference=product?.local?'<details class="machine-reference"><summary>Rozpoznaj maszynę · '+esc(machineName(machine))+'</summary><p class="hint">Zdjęcie sprzętu, nie demonstracja ćwiczenia.</p><img class="machine-img" loading="lazy" src="'+esc(product.local)+'" alt="'+esc(machineName(machine))+'"><p class="hint">'+esc(product.note||'Porównaj oznaczenie modelu na maszynie.')+'</p><a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(product.source)+'">Źródło: '+esc(product.credit)+'</a></details>':'';
- return movement+(guide?.note?'<p class="hint">'+esc(guide.note)+'</p>':'')+instruction+reference;
+ const movementTips={
+  flat:'Oprzyj plecy i ustabilizuj łopatki. Wypchnij ciężar przed klatkę, następnie powoli wróć do pozycji początkowej.',
+  incline:'Oprzyj plecy o skośne oparcie. Wyciskaj ciężar w górę i powoli opuszczaj, utrzymując stabilne łopatki.',
+  fly:'Lekko ugnij łokcie. Zbliż ramiona przed klatką, a następnie powoli je rozsuń bez wymuszania zakresu.',
+  pullover:'Utrzymuj lekko ugięte łokcie. Prowadź ramiona kontrolowanym łukiem, bez wyginania dolnej części pleców.',
+  lat:'Ustabilizuj tułów. Ściągnij łokcie w dół, następnie powoli pozwól ramionom wrócić w górę.',
+  row:'Utrzymuj stabilny tułów. Przyciągnij uchwyty w stronę żeber i powoli wyprostuj ramiona.',
+  straight:'Utrzymuj lekko ugięte, nieruchome łokcie. Ściągnij uchwyt w stronę ud i powoli wróć.',
+  rear:'Ustabilizuj tułów i lekko ugnij łokcie. Rozsuń ramiona na boki, następnie powoli wróć.',
+  'back-extension':'Zginaj i prostuj tułów w kontrolowanym zakresie. Zakończ ruch w neutralnym ustawieniu, bez przeprostu lędźwi.',
+  laterals:'Lekko ugnij łokcie. Unieś ramiona na boki do wysokości barków i powoli opuść, bez kołysania tułowiem.',
+  shoulder:'Ustabilizuj plecy. Wyciskaj ciężar nad barki, następnie powoli opuszczaj bez wyginania lędźwi.',
+  preacher:'Oprzyj ramiona o podpórkę. Zegnij łokcie i powoli opuszczaj ciężar, nie odrywając ramion.',
+  'triceps-rope':'Trzymaj łokcie przy tułowiu. Wyprostuj przedramiona w dół i powoli wróć bez poruszania barkami.',
+  hammer:'Trzymaj dłonie skierowane do siebie. Zginaj łokcie bez kołysania tułowiem i powoli opuszczaj ciężar.',
+  'triceps-preacher':'Ustabilizuj ramiona na podpórce lub przy tułowiu. Prostuj łokcie i powoli wracaj, bez gwałtownego blokowania.',
+  legpress:'Oprzyj plecy i ustaw całe stopy na platformie. Prostuj nogi bez blokowania kolan i wracaj bez odrywania miednicy.',
+  legcurl:'Ustabilizuj uda i biodra. Zginaj kolana, następnie powoli prostuj nogi bez szarpania.',
+  glute:'Ustabilizuj plecy i stopy. Unieś biodra, napinając pośladki, następnie powoli opuść bez przeprostu lędźwi.',
+  extension:'Oprzyj plecy i ustabilizuj uda. Prostuj kolana w kontrolowanym zakresie i powoli opuszczaj ciężar.',
+  calf:'Oprzyj przodostopie i ustabilizuj kolana. Unieś pięty, następnie powoli opuść je bez odbijania.',
+  'core-crunch':'Zbliżaj żebra do miednicy, napinając brzuch. Powoli wracaj bez ciągnięcia ciężaru samymi ramionami.',
+  'core-knees':'Podwijaj miednicę i przyciągaj kolana do tułowia. Opuszczaj nogi powoli, bez kołysania.',
+  'core-woodchop':'Prowadź uchwyt po skosie przez tułów. Kontroluj obrót i wracaj powoli, bez szarpania.',
+  'core-side-plank':'Oprzyj się bokiem na przedramieniu. Kontrolowanie unoś i opuszczaj biodra, utrzymując bark nad łokciem.',
+  'core-rack':'Trzymaj ciężar przy barku i napnij brzuch. Idź małymi krokami bez przechylania tułowia.',
+  'core-drag':'W podporze przeciągaj ciężar pod tułowiem drugą ręką. Utrzymuj biodra stabilnie, bez obracania.',
+  'core-hollow':'Dociśnij lędźwie do podłoża i unieś łopatki oraz nogi. Utrzymuj pozycję bez odrywania dolnej części pleców.',
+  'core-wheel':'Z klęku przesuwaj kółko lub dłonie do przodu, napinając brzuch. Wróć bez zapadania lędźwi.',
+  'core-pallof':'Trzymaj uchwyt przed tułowiem i napnij brzuch. Odchodź małymi krokami w bok, nie pozwalając na obrót.',
+  'core-bend':'Wykonuj kontrolowany skłon boczny i wracaj do pionu. Nie skręcaj tułowia ani nie szarp ciężarem.'
+ };
+ const instruction='<div class="detail movement-instruction"><strong>Jak wykonać</strong><p>'+esc(tips[machine]||movementTips[item.id]||guide?.tip||item.tip)+'</p></div>';
+ const movement=guide?'<div class="movement-photos">'+guide.images.map((src,i)=>'<figure><img class="movement-img" loading="lazy" src="'+esc(src)+'" alt="'+esc(guide.title)+' — pozycja '+(i+1)+'" onerror="this.hidden=true;this.nextElementSibling.textContent=\'Zdjęcie niedostępne — skorzystaj z instrukcji powyżej\'"><figcaption>Pozycja '+(i+1)+'</figcaption></figure>').join('')+'</div><a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(guide.source)+'">Demonstracja: '+esc(guide.credit)+'</a>':'<p class="hint">Dla tego wariantu nie ma jeszcze zweryfikowanej fotografii wykonania. Skorzystaj z instrukcji powyżej.</p>';
+ const reference=product?.local?'<section class="machine-reference"><strong>Rozpoznaj maszynę · '+esc(machineName(machine))+'</strong><p class="hint">Zdjęcie sprzętu, nie demonstracja ćwiczenia.</p><img class="machine-img" loading="lazy" src="'+esc(product.local)+'" alt="'+esc(machineName(machine))+'"><p class="hint">'+esc(product.note||'Porównaj oznaczenie modelu na maszynie.')+'</p><a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(product.source)+'">Źródło: '+esc(product.credit)+'</a></section>':'';
+ return instruction+'<details class="exercise-media"><summary>Pokaż wykonanie i sprzęt</summary>'+movement+(guide?.note?'<p class="hint">'+esc(guide.note)+'</p>':'')+reference+'</details>';
 }
 function selectedDayReports(){return state.history.filter(h=>h.date===state.selectedDate&&h.day===state.activeDay)}
 function trainHTML(){
@@ -539,7 +571,7 @@ function trainHTML(){
   '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div><div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
   '<div class="inline-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><button type="button" class="btn secondary small" id="markall">✓ Potwierdź wszystkie wpisane</button></div>'+
   '<div class="label">RIR ostatniej serii / ocena</div><select id="rir" class="rir-select"><option value="">— nie podano —</option>'+['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>'<option value="'+x+'" '+(v.rir===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select>';
- const exercise='<div class="panel"><div class="exercise-head"><div><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><div class="title">'+esc(item.title)+'</div><p class="hint">'+esc(item.tip)+'</p></div></div>'+
+ const exercise='<div class="panel"><div class="exercise-head"><div><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><div class="title">'+esc(item.title)+'</div></div></div>'+
   (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
   selectedVariants+photoSection+(coreActive&&!enabled?'<p class="hint">Zaznacz „Dodaj do treningu”, by wpisywać serie. Zdjęcie i warianty są widoczne bez włączania ćwiczenia.</p>':sets)+
   '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Wstecz</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
