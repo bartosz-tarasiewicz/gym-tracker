@@ -113,7 +113,7 @@ test('offline PWA: cached app reloads with edits and never caches private API re
  const privateUrls=await p.evaluate(async()=>{const urls=[];for(const key of await caches.keys())for(const r of await (await caches.open(key)).keys())if(/\/api\/|\/\.auth\//.test(r.url))urls.push(r.url);return urls});expect(privateUrls).toEqual([]);
  // WebKit on Windows rejects offline navigations before the worker can handle them.
  // Drop server connections instead to exercise the real worker network-failure fallback.
- if(browserName==='webkit')db.network.disconnected=true;else await context.setOffline(true);
+ if(browserName==='webkit'&&process.platform==='win32')db.network.disconnected=true;else await context.setOffline(true);
  try{await p.reload();await expect(weight(p)).toHaveValue('67');await expect(done(p)).toHaveClass(/checked/)}finally{db.network.disconnected=false;await context.setOffline(false)}
 });
 
