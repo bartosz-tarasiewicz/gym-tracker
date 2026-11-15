@@ -125,6 +125,8 @@ try{
  assert.equal(await phone.locator('img[src*="photos/DUMBBELL"]').count(),0);
  await phone.locator('#undo-training').click();
  await phone.locator('#week-date').fill('2026-11-13');
+ assert.equal(await phone.locator('#machine').count(),0,'Variant selection uses buttons only');
+ assert.equal(await phone.locator('[data-machine][aria-pressed="true"]').count(),1);
  log('Dumbbell photos demonstrate the selected movement and change per exercise');
 
 

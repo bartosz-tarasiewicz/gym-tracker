@@ -52,13 +52,13 @@ try {
  assert.equal(await input('reps').inputValue(),'13');
  assert.match(await done().getAttribute('class'),/checked/);
  pass('Weight, reps and completion survive browser reload');
- await page.locator('#machine').selectOption('DUMBBELL');
+ await page.locator('[data-machine="DUMBBELL"]').click();
  await input('kg').fill('15');
  await input('reps').fill('11');
  await done().click();
- await page.locator('#machine').selectOption('MG-PL23');
+ await page.locator('[data-machine="MG-PL23"]').click();
  assert.equal(await input('kg').inputValue(),'42.5');
- await page.locator('#machine').selectOption('DUMBBELL');
+ await page.locator('[data-machine="DUMBBELL"]').click();
  assert.equal(await input('kg').inputValue(),'15');
  pass('Changing machine preserves each variant separately');
  await page.locator('[data-area="core"]').click();

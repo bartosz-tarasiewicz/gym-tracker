@@ -508,8 +508,7 @@ function trainHTML(){
   return '<button type="button" class="exercise-tab '+(!coreActive&&i===index?'active':'')+'" data-item="'+i+'"><span>'+(done?'✓ ':'' )+(i+1)+'. '+esc(e.title)+'</span>'+(done?'<small>'+done+' serii</small>':'')+'</button>';
  }).join('');
  const coreTabs=CORE.map((e,i)=>'<button type="button" class="core-choice '+(coreActive&&index===i?'active':'')+'" data-core="'+i+'">'+(isCoreEnabled(e)?'✓ ':'＋ ')+esc(e.title)+'</button>').join('');
- const selected=item.options.map(k=>'<option value="'+esc(k)+'" '+(log.machine===k?'selected':'')+'>'+esc(machineName(k))+'</option>').join('');
- const choices=item.options.map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k).split(' · ')[0])+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
+ const choices=item.options.map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" aria-pressed="'+(log.machine===k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k))+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
  const previous=[...state.history,...Object.values(state.sessions)].filter(h=>h.date<state.selectedDate&&h.exercises?.[item.id]).sort((a,b)=>a.date.localeCompare(b.date)).reverse().find(h=>{
   const l=h.exercises[item.id];return l?.variants?.[log.machine]||l?.machine===log.machine;
  });
@@ -523,7 +522,7 @@ function trainHTML(){
  const chooseArea='<div class="inline-actions"><button class="btn '+(coreActive?'secondary':'')+'" data-area="main">🏋️ Trening</button><button class="btn '+(!coreActive?'secondary':'')+'" data-area="core">🧱 CORE BONUS</button></div>';
  const chooser=coreActive?'<div class="panel"><div class="eyebrow">Wybierz ćwiczenie CORE</div><p class="hint">Ćwiczenia opcjonalne. Nieaktywne nie są liczone do planu.</p><div class="core-chooser">'+coreTabs+'</div></div>':'<div class="exercise-strip">'+tabs+'</div>';
  const photoSection=exerciseMediaHTML(item,log.machine);
- const selectedVariants='<div class="label">Maszyna / hantle / zamiennik</div><div class="machine-options">'+choices+'</div><select id="machine" class="equipment" aria-label="Wybierz wariant sprzętu">'+selected+'</select>';
+ const selectedVariants='<div class="label" id="machine-label">Maszyna / hantle / zamiennik</div><div class="machine-options" role="group" aria-labelledby="machine-label">'+choices+'</div>';
  const sets='<p class="ex-note">Jednostka: <strong>'+esc(unit(log.machine))+'</strong> · '+esc(measure(item))+'. Każdy wariant sprzętu ma osobne wyniki.</p>'+preview+
   (v.warmups?.length?'<div class="section-header"><strong>Rozgrzewka</strong><span class="smallcaps">Poza licznikiem serii</span></div><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.warmups,'warm',item):'')+
   '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div><div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
@@ -717,8 +716,7 @@ document.addEventListener('change',async event=>{const el=event.target;
  if(el.id==='week-date'){selectDate(el.value);return}
  if(el.id==='workout-type'){changeTrainingType(el.value);return}
  if(el.id==='session-picker'){if(!abandonHistoryEdit()){render();return}state.selectedRecordId=el.value;save(false);render();return}
- if(el.id==='machine'){switchVariant(currentItem().item,el.value);save();render()}
- else if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;save()}
+ if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;save()}
  else if(el.id==='enable-core'){activeSession(true).coreEnabled[currentItem().item.id]=el.checked;save();render()}
  else if(el.id==='import-database'){
   const file=el.files?.[0];if(!file)return;
