@@ -1,0 +1,78 @@
+'use strict';
+window.GymProfiles=(()=>{
+ const KEY='gym-profiles-v1',ACTIVE='gym-active-profile-v1';
+ const valid=id=>/^(default|p-[a-f0-9-]{36})$/.test(id||'');
+ let active=sessionStorage.getItem(ACTIVE)||'default',profiles=[{id:'default',name:'Profil domyślny'}],ready=false,changing=false;
+ if(!valid(active))active='default';
+ try{const saved=JSON.parse(localStorage.getItem(KEY)||'[]');for(const p of saved)if(valid(p.id)&&p.id!=='default'&&typeof p.name==='string')profiles.push(p);}catch{}
+ if(!profiles.some(p=>p.id===active))active='default';
+ const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const suffix=()=>active==='default'?'':':profile:'+active;
+ function persist(){localStorage.setItem(KEY,JSON.stringify(profiles));}
+ const settingsKey='gym-profile-settings-v1'+suffix();
+ let settings={preferences:{},plans:{}},settingsEtag=null,settingsDirty=false,settingsBusy=false,settingsTimer,notice='';
+ try{const cached=JSON.parse(localStorage.getItem(settingsKey)||'null');if(cached){settings=cached.settings;settingsEtag=cached.etag;settingsDirty=cached.dirty;}}catch{}
+ function cacheSettings(){localStorage.setItem(settingsKey,JSON.stringify({settings,etag:settingsEtag,dirty:settingsDirty}));}
+ async function syncSettings(){
+  if(settingsBusy)return;settingsBusy=true;
+  try{
+   const url='/api/profile-settings?profile='+encodeURIComponent(active);
+   if(settingsDirty){
+    const sent=JSON.stringify(settings);
+    const response=await fetch(url,{method:'PUT',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({settings,expectedEtag:settingsEtag}),signal:AbortSignal.timeout(10000)});
+    if(!response.ok)throw Error('Settings retained locally');
+    settingsEtag=(await response.json()).etag;settingsDirty=JSON.stringify(settings)!==sent;cacheSettings();
+   }else{
+    const response=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)});
+    if(!response.ok)throw Error('Settings offline');const remote=await response.json();
+    if(!settingsDirty){if(remote.settings)settings=remote.settings;settingsEtag=remote.etag;cacheSettings();window.dispatchEvent(new Event('gym-preferences-loaded'));}
+   }
+  }catch{if(settingsDirty)notice='Ustawienia zachowano lokalnie. Synchronizacja wymaga ponownego połączenia lub odświeżenia.';}finally{settingsBusy=false;render();}
+ }
+ function preference(key,value){
+  if(value===undefined)return settings.preferences?.[key];
+  settings.preferences={...settings.preferences,[key]:value};settingsDirty=true;cacheSettings();
+  clearTimeout(settingsTimer);settingsTimer=setTimeout(()=>void syncSettings(),500);
+ }
+ function render(){
+  const root=document.getElementById('profiles');if(!root)return;
+  root.innerHTML='<label class="label" for="active-profile">Profil użytkownika</label><div class="inline-actions"><select class="equipment" id="active-profile" '+(!ready||changing?'disabled':'')+'>'+profiles.map(p=>'<option value="'+p.id+'" '+(p.id===active?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select><button class="btn secondary" id="add-profile" '+(!ready||changing?'disabled':'')+'>+ Dodaj profil</button></div><p class="hint">Treningi, historia i ustawienia dotyczą wybranego profilu.</p><p class="hint" role="status">'+esc(notice)+'</p>';
+ }
+ async function request(method='GET',body){
+  const response=await fetch('/api/profiles',{method,credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(10000)});
+  if(!response.ok)throw Error('profiles unavailable');return response.json();
+ }
+ async function sync(){
+  void syncSettings();
+  try{
+   const remote=await request();
+   if(!Array.isArray(remote.profiles))return;
+   // Upload offline-created profiles independently; names never identify data.
+   for(const p of profiles.filter(p=>p.id!=='default'&&!remote.profiles.some(r=>r.id===p.id)))await request('POST',p);
+   for(const p of remote.profiles)if(valid(p.id)&&typeof p.name==='string'&&!profiles.some(r=>r.id===p.id))profiles.push(p);
+   persist();render();
+  }catch(e){console.info('Profile list kept offline');}
+ }
+ async function switchTo(id){
+  if(!valid(id)||!profiles.some(p=>p.id===id)||id===active)return;
+  if(!ready||changing)return;
+  if(window.GymCloud?.isBusy()||settingsBusy){notice='Trwa synchronizacja. Spróbuj przełączyć profil za chwilę.';render();return;}
+  if(window.gymProfileCanLeave?.()===false){render();return;}
+  changing=true;render();
+  // Every tab keeps an immutable profile scope for its entire lifetime. Reload
+  // destroys old cloud callbacks before another profile can enter the UI.
+  try{await window.GymStorage.flush();sessionStorage.setItem(ACTIVE,id);location.reload();}
+  catch(e){changing=false;render();alert('Nie udało się przełączyć profilu. Dane zachowano.');}
+ }
+ document.addEventListener('change',e=>{if(e.target.id==='active-profile')void switchTo(e.target.value);});
+ document.addEventListener('click',async e=>{
+  if(!e.target.closest('#add-profile')||!ready||changing)return;
+  const name=prompt('Nazwa nowego profilu (do 60 znaków):');if(name===null)return;
+  if(!name.trim()||name.trim().length>60){alert('Wpisz nazwę od 1 do 60 znaków.');return;}
+  const profile={id:'p-'+crypto.randomUUID(),name:name.trim()};
+  try{profiles.push(profile);persist();}catch{profiles=profiles.filter(p=>p.id!==profile.id);alert('Brak miejsca na zapis profilu.');return;}
+  await switchTo(profile.id);
+ });
+ window.addEventListener('online',()=>void sync());
+ return {preference,id:()=>active,suffix,render,sync,ready:()=>{ready=true;render();void sync();}};
+})();

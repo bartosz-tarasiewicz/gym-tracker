@@ -1,3 +1,30 @@
+# Gym Tracker — v0.9 · Profile użytkowników
+
+Na samej górze ekranu wybierz profil lub użyj **+ Dodaj profil**. Nowy profil zaczyna z pustym dziennikiem i tym samym szablonem ćwiczeń. Nazwy mogą się powtarzać: dane identyfikuje niezależny identyfikator. Profile są dodatkowymi dziennikami w obrębie zalogowanego konta, nie oddzielnymi loginami.
+
+- Treningi, historia, zmiany planu dla konkretnej daty i `planSnapshots` mają osobny zakres Azure dla każdego profilu. Ustawienia Progresu mają osobny rekord `profile-settings-v1` z ochroną ETag. Lista profili synchronizuje się przez `/api/profiles`.
+- Offline: oddzielne IndexedDB, klucze localStorage i dzienniki niewysłanych zmian. Aktywny profil jest przypisany do karty, więc dwie karty mogą pracować na różnych profilach. Przełączenie przeładowuje aplikację po zapisie lokalnym; jest wstrzymane podczas operacji chmurowej. Niezatwierdzone edycje historii zachowują dotychczasowe ostrzeżenie.
+- Migracja bez przepisywania: dotychczasowy zakres Azure oraz nazwy lokalnej bazy i kluczy należą do **Profilu domyślnego**. Zachowane są ID rekordów, ETag, kolejki offline i stare kopie `snapshot`. Stare aplikacje bez parametru `profile` nadal widzą wyłącznie profil domyślny. Migracja starego snapshotu wykonuje się tylko w tym profilu i pozostaje idempotentna.
+- Ręczny zapis i edycja istniejącego rekordu po dacie działają jak wcześniej. Import nadpisuje tylko daty z pliku, wyłącznie w aktywnym profilu, po pokazaniu podsumowania. Eksport JSON/CSV obejmuje bieżące rekordy Azure aktywnego profilu; JSON dodaje `profileId` i zachowuje kompatybilny format v1. Nie przełącza profilu przy imporcie pliku z innego dziennika. Filtry Progresu synchronizują się niezależnie; eksport treningów nie obejmuje filtrów.
+
+Wszystkie 30 ćwiczeń ma co najmniej dwa warianty. Dodano siedem wariantów nóg i CORE z osobnymi seriami i jednostkami. Warianty nie przeliczają automatycznie ciężarów między sprzętami.
+
+Zdjęcia: 26 lokalnych plików (około 5,5 MB), źródła i oznaczenia modeli w `assets/photo-sources.json` oraz podpisach w aplikacji. Preferowane są rzeczywiste zdjęcia/obrazy produktowe Matrix. Zdjęcia sprzętu i modeli poglądowych są opisane; niepotwierdzony model nie jest przedstawiany jako dokładne wyposażenie siłowni. Przy braku lub błędzie obrazu pojawia się lokalny, opisany schemat sprzętu. Usunięto niedopasowane zdjęcie hollow hold. Nowy service worker przechowuje zdjęcia i schematy do pracy offline. Źródła zachowują prawa do zdjęć.
+
+Weryfikacja lokalna:
+
+```text
+npm ci --prefix api
+node --test api/tests/*.test.cjs tests/catalog.test.cjs
+npm install --no-save playwright@1.56.1
+npx playwright install chromium
+node tests/cloud-e2e.mjs
+```
+
+Na Windows z zainstalowanym Edge można ustawić `GYM_BROWSER_CHANNEL=msedge`. Testy przeglądarkowe używają lokalnego serwera i symulowanego Azure, obejmując dwa urządzenia, profile, import/eksport i zachowanie planów. Testy API używają symulowanego Table Storage. Nie modyfikują prywatnych treningów w produkcji.
+
+---
+
 # Gym Tracker — v0.7 · Azure Primary · trening wybierany datą
 
 PWA na iPhone i Windows (HTML/CSS/JS, bez etapu kompilacji). Hosting: Azure Static Web Apps. Historia treningów i sesje w Azure Table Storage, z lokalnym buforem do pracy offline. Zakres testów i infrastruktury jest opisany w `docs/AZURE_AUTHORITY_V04.md`.

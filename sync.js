@@ -2,7 +2,7 @@
    Local storage is a cache + journal of unsent edits, not another master. */
 'use strict';
 window.GymCloud=(()=>{
- const META='zenek-gym-cloud-v04-',LAST_OWNER='zenek-gym-cloud-last-owner-v04';
+ const META='zenek-gym-cloud-v04-',LAST_OWNER='zenek-gym-cloud-last-owner-v04'+(window.GymProfiles?.suffix()||'');
  let getState=()=>({sessions:{},history:[]}),applySnapshot=async()=>{},backup=()=>{},onStatusChange=()=>{};
  let workoutRecords=()=>new Map(),cloudState=()=>({sessions:{},history:[]}),meaningfulSignature=()=>'',hasWorkoutData=()=>false,workoutDetails=()=>({});
  let principal=null,owner=null,base=new Map(),pending=new Map(),remote=new Map(),tombstones=new Set();
@@ -10,7 +10,7 @@ window.GymCloud=(()=>{
  let lastMergePreview=null;
  const clone=o=>JSON.parse(JSON.stringify(o));
  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const key=()=>META+encodeURIComponent(owner||'');
+ const key=()=>META+encodeURIComponent(owner||'')+(window.GymProfiles?.suffix()||'');
  function status(next,label){
   flag=next;message=label;
   const el=document.getElementById('cloud-info');if(el)el.textContent=label;
@@ -38,7 +38,7 @@ window.GymCloud=(()=>{
  async function request(method='GET',id=null,data=null){
   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),15000);
   try{
-   const url=id===null?'/api/workouts':'/api/workouts/'+encodeURIComponent(id);
+   const url=(id===null?'/api/workouts':'/api/workouts/'+encodeURIComponent(id))+'?profile='+encodeURIComponent(window.GymProfiles?.id()||'default');
    const resp=await fetch(url,{method,credentials:'same-origin',cache:'no-store',signal:ctrl.signal,
     headers:{accept:'application/json',...(data?{'content-type':'application/json'}:{})},
     body:data?JSON.stringify(data):undefined});
@@ -709,7 +709,7 @@ window.GymCloud=(()=>{
    remote=rows;
    const workouts=[...rows.values()].map(x=>({id:x.id,kind:x.kind,record:clone(x.record)}));
    workouts.sort((a,b)=>String(a.record.date||'').localeCompare(String(b.record.date||''))||a.id.localeCompare(b.id));
-   return {ok:true,data:{format:'gym-tracker-db-export-v1',version:1,
+   return {ok:true,data:{format:'gym-tracker-db-export-v1',version:1,profileId:window.GymProfiles?.id()||'default',
     exportedAt:new Date().toISOString(),workouts}};
   }catch(e){return {ok:false,reason:'Nie udało się odczytać całej bazy z Azure. Nie pobrano niepełnej kopii.'};}
  }
@@ -827,5 +827,5 @@ window.GymCloud=(()=>{
    return {ready:false,reason:'Azure nie jest aktualnie zsynchronizowane. Nie importowano niczego.'};
   return {ready:true};
  }
- return {init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,saveWorkoutForDate,exportDatabase,importDatabase,refreshAutomatically,getStatus:()=>flag};
+ return {isBusy:()=>busy||flushBusy||importBusy,init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,saveWorkoutForDate,exportDatabase,importDatabase,refreshAutomatically,getStatus:()=>flag};
 })();

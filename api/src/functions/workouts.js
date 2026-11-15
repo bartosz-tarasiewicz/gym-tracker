@@ -3,6 +3,7 @@
  * Legacy snapshot is migrated once and retained as a rollback copy.
  */
 const {app}=require('@azure/functions');
+const {profileFrom,profilePartition}=require('../profile-scope');
 const {TableClient}=require('@azure/data-tables');
 const {createHash}=require('node:crypto');
 const {gzipSync,gunzipSync}=require('node:zlib');
@@ -103,10 +104,12 @@ async function handle(request,context){
  let t;
  try{t=await storage();if(!t)return reply(503,{error:'storage_not_configured'});}
  catch(e){context.error('Workouts storage unavailable',e?.code||e?.statusCode);return reply(503,{error:'storage_unavailable'});}
- const part=partition(p);
+ const profile=profileFrom(request);
+ if(!profile)return reply(400,{error:'invalid_profile'});
+ const part=profilePartition(p,profile);
  try{
   if(request.method==='GET'){
-   await migrateLegacy(t,part);
+   if(profile==='default')await migrateLegacy(t,part);
    return reply(200,{version:1,workouts:await list(t,part)});
   }
   const id=request.params?.id;

@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     paths:
+      - 'profiles.js'
+      - 'photos.js'
+      - 'assets/**'
+      - 'progress-ui.js'
       - 'app.js'
       - 'storage.js'
       - 'index.html'

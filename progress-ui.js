@@ -1,7 +1,9 @@
 'use strict';
 /* Read-only exercise trends. Never mutate a workout; compare like-with-like machine variants. */
 window.GymProgress=(()=>{
- let exercise='',machine='',metric='weight',range='12';
+ let {exercise='',machine='',metric='weight',range='12'}=window.GymProfiles?.preference('progress')||{};
+ const persist=()=>window.GymProfiles?.preference('progress',{exercise,machine,metric,range});
+ window.addEventListener('gym-preferences-loaded',()=>{({exercise='',machine='',metric='weight',range='12'}=window.GymProfiles?.preference('progress')||{});});
  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const fmt=x=>new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(x);
  const allRecords=state=>[...(state.history||[]),...Object.values(state.sessions||{})].filter(r=>r&&r.date);
@@ -74,11 +76,11 @@ window.GymProgress=(()=>{
    '<p class="hint">Ciężar: najcięższa wykonana seria. Powtórzenia/czas: najlepsza seria. Objętość: suma ciężar × powtórzenia (MG-PL33 ×2); ćwiczenia na czas nie są porównywane objętością.</p></div>'+
    (filtered.length?'<div class="panel"><h2>Ostatnie sesje</h2><div class="trend-history">'+[...filtered].reverse().slice(0,8).map(p=>'<div><span>'+esc(p.date)+'</span><strong>'+fmt(p[metric])+' '+desc.unit+'</strong><small>'+p.sets+' serii'+(p.rir?' · RIR '+esc(p.rir):'')+'</small></div>').join('')+'</div></div>':'');
  }
- function handleClick(button,render){if(button.dataset.trendMetric!==undefined){metric=button.dataset.trendMetric;render();return true;}return false;}
+ function handleClick(button,render){if(button.dataset.trendMetric!==undefined){metric=button.dataset.trendMetric;persist();render();return true;}return false;}
  function handleChange(target,render){
-  if(target.id==='trend-exercise'){exercise=target.value;machine='';metric='weight';render();return true;}
-  if(target.id==='trend-machine'){machine=target.value;render();return true;}
-  if(target.id==='trend-range'){range=target.value;render();return true;}
+  if(target.id==='trend-exercise'){exercise=target.value;machine='';metric='weight';persist();render();return true;}
+  if(target.id==='trend-machine'){machine=target.value;persist();render();return true;}
+  if(target.id==='trend-range'){range=target.value;persist();render();return true;}
   return false;
  }
  return {html,handleClick,handleChange};

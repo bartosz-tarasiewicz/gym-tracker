@@ -1,5 +1,6 @@
 'use strict';
 const { app } = require('@azure/functions');
+const {profileFrom,profilePartition}=require('../profile-scope');
 const { TableClient } = require('@azure/data-tables');
 const { createHash } = require('node:crypto');
 const { gzipSync, gunzipSync } = require('node:zlib');
@@ -59,7 +60,9 @@ async function handler(request,context){
   let t;
   try{t=await table();}catch(e){context.error('Storage initialization failed',e);return result(503,{error:'storage_unavailable'});}
   if(!t)return result(503,{error:'storage_not_configured'});
-  const partitionKey=partitionFor(p);
+  const profile=profileFrom(request);
+  if(!profile)return result(400,{error:'invalid_profile'});
+  const partitionKey=profilePartition(p,profile);
   if(request.method==='GET'){
     try{
       const row=await t.getEntity(partitionKey,ROW);

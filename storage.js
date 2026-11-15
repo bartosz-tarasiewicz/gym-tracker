@@ -1,7 +1,7 @@
 /* Durable offline storage. Immediate localStorage mirror + queued IndexedDB primary. */
 'use strict';
 window.GymStorage=(()=>{
-  const KEY='zenek-gym-v1',DB='zenek-gym-database',STORE='snapshots';
+  const KEY='zenek-gym-v1'+(window.GymProfiles?.suffix()||''),DB='zenek-gym-database'+(window.GymProfiles?.suffix()||''),STORE='snapshots';
   let db=null,pending=null,working=false,timer=null,onStatus=()=>{},mode='localStorage';
   function status(message,level='ok'){onStatus(message,level)}
   function localRead(){try{const raw=localStorage.getItem(KEY);return raw?JSON.parse(raw):null}catch{return null}}

@@ -1,0 +1,5 @@
+node_modules/
+api/node_modules/
+*.log
+e2e-failure.png
+profile-preview.png

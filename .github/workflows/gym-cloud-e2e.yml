@@ -6,6 +6,10 @@ on:
     branches: [main]
     paths:
       - 'sync.js'
+      - 'profiles.js'
+      - 'photos.js'
+      - 'assets/**'
+      - 'progress-ui.js'
       - 'app.js'
       - 'storage.js'
       - 'tests/cloud-e2e.mjs'

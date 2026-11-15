@@ -1,10 +1,10 @@
 'use strict';
 /* Zenek Gym Tracker v0.5 — date-first, Azure-authoritative training. */
 const MACHINE={
- 'MG-PL13':{label:'MG-PL13 · Supine Bench Press',type:'plates',image:'https://johnsonfitness.co.nz/cdn/shop/files/MX19_MAGNUMMG-PL13supinebenchpress_BlkMatte_hero_b1afdd1b-a22e-4889-830c-eb9735e93c32.jpg?v=1711426098&width=1000'},
- 'MG-PL14':{label:'MG-PL14 · Incline Bench Press',type:'plates',image:'https://www.renewfit.com/photos_grd/ph1671796767836.jpg'},
+ 'MG-PL13':{label:'MG-PL13 · Supine Bench Press',type:'plates'},
+ 'MG-PL14':{label:'MG-PL14 · Incline Bench Press',type:'plates'},
  'MULTI-INCLINE':{label:'Multi Incline · stos',type:'stack'},'G3-S12':{label:'G3-S12 · Pectoral Fly',type:'stack'},
- 'G7-S22':{label:'G7-S22 · Pec Fly / Rear Delt',type:'stack',image:'https://assets.jhtbrand.co/files/product/2c4c802b5b8cefffa9fc0844431bc47f22fafb03/'},
+ 'G7-S22':{label:'G7-S22 · Pec Fly / Rear Delt',type:'stack'},
  'G3-S22':{label:'G3-S22 · Rear Delt',type:'stack'},'DUMBBELL':{label:'Hantle (jeden hantel)',type:'dumbbell'},
  'PULLOVER':{label:'Przenoszenie · jeden hantel',type:'single'},'MG-PL33':{label:'MG-PL33 · Lat Pulldown',type:'perSide'},
  'MG-PL34':{label:'MG-PL34 · Seated Row (jednostka do potwierdzenia)',type:'unknown'},
@@ -19,38 +19,6 @@ const MACHINE={
  'G7-S71':{label:'G7-S71 · Leg Extension',type:'stack'},'LEG-CURL':{label:'Seated Leg Curl · stos',type:'stack'},
  'KB':{label:'Kettlebell · jeden odważnik',type:'kb'},'BODY':{label:'Masa ciała',type:'body'},'AB-WHEEL':{label:'Ab Wheel',type:'body'},
  'PLATE':{label:'Talerz (jeden)',type:'plate'},'BAND':{label:'Guma oporowa',type:'band'}
-};
-// Product photos are matched to specific Matrix models. Generic equipment is not
-// represented as a different machine. These URLs are presentation-only data.
-const MACHINE_PHOTOS={
- 'MG-PL70':{image:'https://fitnesswarehousecommercial.com.au/cdn/shop/files/Matrix_Magnum_Leg_Press_419ed4c9-8ed7-4116-8a0d-c09c564045fc.png?v=1711060353'},
- 'G7-S70':{image:'https://img.archiexpo.de/images_ae/photo-g/141371-20457171.webp'},
- 'MG-PL78':{image:'https://images.jhtassets.com/85183176a238980371eff92b0ef5308d1b94be66/'},
- 'MG-PL77':{image:'https://images.jhtassets.com/4c3ad01082f528c7c7e1db5c8211f27c2eb09cdf/'},
- 'G7-S71':{image:'https://www.prfitnessequipment.com/sites/default/files/commerce/product/cool%20sh.jpg'},
- 'LEG-CURL':{image:'https://cdn-next.cybassets.com/media/W1siZiIsIjMwNjI2L3Byb2R1Y3RzLzUyNDAxOTEzLzE3MzQ1OTQzMjNfNTlmMWVhOTVlYzEwNGNiMzU2NGMucG5nIl0sWyJwIiwidGh1bWIiLCIyMDQ4eDIwNDgiXV0.png?sha=65794504bb4234fd',imageNote:'Zdjęcie poglądowe Matrix G7-S72. Dokładny model maszyny na siłowni nie jest potwierdzony.'},
- 'MG-PL33':{image:'https://images.jhtassets.com/48132d53452a8ff93195f2c486da00a579294af3/'},
- 'MG-PL34':{image:'https://assets.jhtbrand.co/files/product/617ea4b9339f1319abc366b4534d9caff9232b1c/'},
- 'MG-PL23':{image:'https://tshop.r10s.jp/ifitness-shop/cabinet/06830920/06908620/07010130/matrix-mg-pl23-1.jpg'},
- 'G7-S21':{image:'https://www.renewfit.com/photos_grd/ph1671718286621.jpg'},
- 'MG-PL41':{image:'https://gigaplus.makeshop.jp/ifitness/img/matrix-for-gym/strength/magnum/mg-pl41/mg-pl41-2.jpg'},
- 'G3-S45':{image:'https://centraledachats.lorangebleue.fr/media/cache/main_image/assets/fileuploads/5a/85/5a85a1ac429a1.PNG'},
- 'G3-S12':{image:'https://static-data2.manualslib.com/product-images/264/26383/2638217/raw.jpg'},
- 'G3-S22':{image:'https://static-data2.manualslib.com/product-images/892/2340529/matrix-g3-s22.jpg'}
-};
-for(const [id,photo] of Object.entries(MACHINE_PHOTOS))Object.assign(MACHINE[id],photo);
-// Exercise photos. Credit links are shown in the app; unverified models are never labeled as exact.
-const CORE_PHOTOS={
- 'core-crunch':{image:'https://images.ctfassets.net/3s5io6mnxfqz/7qb4qHUCjKe8j487NACvu3/f7fb4f5d7ce91ae86e57d707bcf875a9/AdobeStock_29077916_2.jpeg',credit:'MasterClass',source:'https://www.masterclass.com/articles/cable-crunches-guide'},
- 'core-knees':{image:'https://www.living.fit/cdn/shop/files/ca-16-vertical-knee-raise-2_535x.jpg?v=1755653302',credit:'Living.Fit',source:'https://www.living.fit/products/leg-raise-captains-chair-with-dip-and-push-up-station'},
- 'core-woodchop':{image:'https://app-media.fitbod.me/v2/79/images/angles/1.jpg',credit:'Fitbod',source:'https://fitbod.me/exercises/cable-wood-chop'},
- 'core-side-plank':{image:'https://pilatesc.jp/wp-content/uploads/2025/10/hj%E3%80%81%EF%BD%88%EF%BD%8A.1-1024x724.jpeg',credit:'Pilates C',source:'https://pilatesc.jp/onomichi-pilates-side-plank-hiplift/'},
- 'core-rack':{image:'https://images.squarespace-cdn.com/content/v1/5a5e65fe8dd0411461e901a2/1518203311717-MQRQMQ5LMKLVPCDCMVSV/KBFitBrit_222.jpg?format=2500w',credit:'KB Fit Britt',source:'https://www.kbfitbritt.com/shop/biathlon',imageNote:'Pozycja front rack — w carry poruszaj się spokojnie, bez przechylania tułowia.'},
- 'core-drag':{image:'https://www.mensjournal.com/.image/NDI6MDAwMDAwMDAxMTQ2ODQx/plank-drags-header.jpg',credit:"Men's Journal",source:'https://www.mensjournal.com/health-fitness/strength-coach-reveals-the-best-anti-movement-abs-exercises-for-a-bulletproof-core-and-heavier-compound-lifts'},
- 'core-hollow':{image:'https://static.nike.com/a/images/f_auto/dpr_1.0%2Ccs_srgb/w_1212%2Cc_limit/4d42fe90-cdff-41a5-acad-50acce27a12f/how-to-do-a-handstand-push-up-according-to-crossfit-coaches.jpg',credit:'Nike',source:'https://www.nike.com/au/a/how-to-do-handstand-pushups'},
- 'core-wheel':{image:'https://i0.wp.com/www.muscleandfitness.com/wp-content/uploads/2018/05/1109-ab-wheel-rollout.jpg?quality=86&strip=all',credit:'Muscle & Fitness',source:'https://www.muscleandfitness.com/workouts/abs-and-core-exercises/11-hardest-abs-exercises-all-time/'},
- 'core-pallof':{image:'https://i.vimeocdn.com/video/1025961123-863a0a9daf9b4b20223983416f965e68fb569473a35b2b54318afb22318febbf-d',credit:'Vimeo',source:'https://vimeo.com/495920365'},
- 'core-bend':{image:'https://static.movimente.me/media/imgs/exercises/IMG_0751.jpg',credit:'Movimente.me',source:'https://movimente.me/exercicio/flexao-lateral-de-tronco-em-pe-c-polia-baixa/'}
 };
 const DISPLAY_DAYS=[0,1,2,3,5]; // Preserve Friday's existing day=5 IDs in Azure and backups.
 const make=(id,title,work,options,tip='',warm=[])=>({id,title,work,options,tip,warm});
@@ -82,24 +50,33 @@ const PLAN=[
  {day:'Archiwum',name:'Archiwalny trening siłowy (czwartek)',items:ARMS},
  {day:'Pt',name:'Nogi, pośladki i core',items:[
   make('legpress','Leg Press',[[50,12],[50,12],[50,12]],['MG-PL70','G7-S70'],'Talerze łącznie w MG-PL70; stos w G7-S70.',[[10,12],[20,6],[30,4]]),
-  make('legcurl','Seated Leg Curl',[[70,12],[70,11],[70,11]],['LEG-CURL'],'Kontrolowana faza opuszczania.'),
-  make('glute','Glute Trainer',[[30,14],[30,13],[30,13]],['MG-PL78'],'Talerze łącznie.'),
-  make('extension','Leg Extension',[[50,13],[50,13],[50,12]],['G7-S71'],'Bez gwałtownego prostowania kolana.'),
-  make('calf','Seated Calf Raise',[[30,15],[40,12]],['MG-PL77'],'Pełna kontrola; wcześniej 6.11 bez potwierdzonych serii.')
+  make('legcurl','Seated Leg Curl',[[70,12],[70,11],[70,11]],['LEG-CURL','BAND-LEG-CURL'],'Kontrolowana faza opuszczania.'),
+  make('glute','Glute Trainer',[[30,14],[30,13],[30,13]],['MG-PL78','DB-HIP-THRUST'],'Talerze łącznie.'),
+  make('extension','Leg Extension',[[50,13],[50,13],[50,12]],['G7-S71','BAND-EXTENSION'],'Bez gwałtownego prostowania kolana.'),
+  make('calf','Seated Calf Raise',[[30,15],[40,12]],['MG-PL77','DB-CALF'],'Pełna kontrola; wcześniej 6.11 bez potwierdzonych serii.')
  ]}
 ];
 const CORE=[
  {...make('core-crunch','Cable Crunch',[[18,12],[18,12]],['CABLE','PLATE'],'Zbliżaj żebra do miednicy.'),mode:'reps'},
- {...make('core-knees','Hanging Knee Raise',[[0,10],[0,10]],['BODY'],'Bez kołysania, podwijaj miednicę.'),mode:'reps'},
+ {...make('core-knees','Hanging Knee Raise',[[0,10],[0,10]],['BODY','LYING-KNEES'],'Bez kołysania, podwijaj miednicę.'),mode:'reps'},
  {...make('core-woodchop','Cable Woodchop',[[9,10],[9,10]],['CABLE','BAND'],'Na każdą stronę, bez szarpania.'),mode:'side'},
- {...make('core-side-plank','Side Plank Hip Lift',[[0,10],[0,10]],['BODY'],'Kontrolowane unoszenie bioder.'),mode:'side'},
+ {...make('core-side-plank','Side Plank Hip Lift',[[0,10],[0,10]],['BODY','SIDE-PLANK-KNEES'],'Kontrolowane unoszenie bioder.'),mode:'side'},
  {...make('core-rack','KB Front Rack Carry',[[12,30],[12,30]],['KB','DUMBBELL'],'Sekundy na stronę; ciężar pojedynczego KB/hantla.'),mode:'secSide'},
  {...make('core-drag','KB Plank Drag',[[8,6],[8,6]],['KB','DUMBBELL'],'Powtórzenia na stronę. Nie obracaj tułowia.'),mode:'side'},
- {...make('core-hollow','Hollow Body Hold',[[0,25],[0,25]],['BODY'],'Sekundy; utrzymuj lędźwie stabilne.'),mode:'sec'},
+ {...make('core-hollow','Hollow Body Hold',[[0,25],[0,25]],['BODY','TUCK-HOLD'],'Sekundy; utrzymuj lędźwie stabilne.'),mode:'sec'},
  {...make('core-wheel','Ab Wheel Rollout',[[0,6],[0,6]],['AB-WHEEL','BODY'],'Rollout z kolan, nie zapadaj lędźwi.'),mode:'reps'},
  {...make('core-pallof','Pallof Walkout',[[9,6],[9,6]],['CABLE','BAND'],'Kroki na stronę; 9 kg próbne.'),mode:'stepsSide'},
  {...make('core-bend','Cable Side Bend',[[9,12],[9,12]],['CABLE','DUMBBELL'],'Powtórzenia na stronę, bez skrętu.'),mode:'side'}
 ];
+Object.assign(MACHINE,{
+ 'BAND-LEG-CURL':{label:'Uginanie nóg z gumą — leżąc',type:'band'},
+ 'DB-HIP-THRUST':{label:'Hip thrust z hantlem (jeden hantel)',type:'single'},
+ 'BAND-EXTENSION':{label:'Prostowanie kolan z gumą — siedząc',type:'band'},
+ 'DB-CALF':{label:'Wspięcia siedząc z hantlem (jeden hantel)',type:'single'},
+ 'LYING-KNEES':{label:'Unoszenie kolan leżąc',type:'body'},
+ 'SIDE-PLANK-KNEES':{label:'Side plank z kolan — unoszenie bioder',type:'body'},
+ 'TUCK-HOLD':{label:'Hollow hold z ugiętymi kolanami',type:'body'}
+});
 const dateKey=()=>{const d=new Date();const p=x=>String(x).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`};
 const todayDay=()=>{const d=new Date().getDay();return {1:0,2:1,3:2,4:3,5:5}[d]??0};
 const initial=()=>({version:2,selectedDate:dateKey(),selectedRecordId:'',activeDay:todayDay(),activeExercise:0,activeArea:'main',activeCore:0,view:'train',sessions:{},history:[],savedAt:0});
@@ -447,7 +424,7 @@ function toast(str){const t=document.getElementById('toast');t.textContent=str;t
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:PLAN[state.activeDay].items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
-function render(){document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():settingsHTML()}
+function render(){window.GymProfiles?.render();document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():settingsHTML()}
 function setsHTML(list,type,item){
  return (list||[]).map((s,j)=>{
   const head=type==='warm'?'R'+(j+1):String(j+1);
@@ -489,11 +466,15 @@ function trainHTML(){
  const coreTabs=CORE.map((e,i)=>'<button type="button" class="core-choice '+(coreActive&&index===i?'active':'')+'" data-core="'+i+'">'+(isCoreEnabled(e)?'✓ ':'＋ ')+esc(e.title)+'</button>').join('');
  const selected=item.options.map(k=>'<option value="'+esc(k)+'" '+(log.machine===k?'selected':'')+'>'+esc(machineName(k))+'</option>').join('');
  const choices=item.options.map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k).split(' · ')[0])+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
- const image=coreActive?CORE_PHOTOS[item.id]||m:m,src=image?.image;
- const photo=src?'<img class="machine-img" loading="lazy" decoding="async" alt="'+esc(item.title+' — '+(coreActive?'przykład ćwiczenia':machineName(log.machine)))+'" src="'+esc(src)+'" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><div class="image-error" hidden>Zdjęcie chwilowo niedostępne</div>':
-  '<div class="image-error">'+esc(machineName(log.machine))+'<p>Zdjęcie tego wariantu nie jest jeszcze dostępne.</p></div>';
- const credit=image?.source?'<a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(image.source)+'">Źródło zdjęcia: '+esc(image.credit||'materiał demonstracyjny')+'</a>':'';
- const photoNote=image?.imageNote?'<p class="photo-note">'+esc(image.imageNote)+'</p>':'';
+ const photoKey=({'PULLOVER':'DUMBBELL','HAMMER':'DUMBBELL','DB-HIP-THRUST':'DUMBBELL','DB-CALF':'DUMBBELL','STRAIGHT-ARM':'CABLE','TRICEPS-ROPE':'CABLE'})[log.machine]||log.machine;
+ const primaryCore=coreActive&&log.machine===item.options[0];
+ const image=(primaryCore?window.GymPhotos?.[item.id]:null)||window.GymPhotos?.[photoKey];
+ const src=image?.local||image?.remote;
+ const fallback='assets/equipment/'+encodeURIComponent(MACHINE[log.machine]?log.machine:'BODY')+'.svg';
+ const fallbackLabel='Schemat sprzętu — '+machineName(log.machine)+'. '+(item.tip||'');
+ const photo='<img class="machine-img" loading="lazy" decoding="async" alt="'+esc(src?(item.title+' — '+machineName(log.machine)):fallbackLabel)+'" src="'+esc(src||fallback)+'" data-fallback="'+esc(fallback)+'" onerror="this.onerror=null;this.src=this.dataset.fallback;this.alt=\'Schemat sprzętu — zdjęcie niedostępne\';this.nextElementSibling.hidden=false"><p class="image-error" '+(src?'hidden':'')+'>Schemat sprzętu, nie fotografia ani instrukcja ruchu. '+esc(item.tip||'')+'</p>';
+ const credit=image?.source?'<a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(image.source)+'">Źródło zdjęcia: '+esc(image.credit)+'</a>':'';
+ const photoNote=image?.note?'<p class="photo-note">'+esc(image.note)+'</p>':'';
  const previous=[...state.history,...Object.values(state.sessions)].filter(h=>h.date<state.selectedDate&&h.exercises?.[item.id]).sort((a,b)=>a.date.localeCompare(b.date)).reverse().find(h=>{
   const l=h.exercises[item.id];return l?.variants?.[log.machine]||l?.machine===log.machine;
  });
@@ -532,16 +513,16 @@ function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?
 function historyHTML(){return GymProgress.html(state,{PLAN,CORE,MACHINE,allLogged,sessionReport,machineName,unit,measure})}
 function settingsHTML(){
  return '<section class="hero"><div class="eyebrow">Dane</div><h1>Import i eksport</h1>'+
-  '<p class="muted">Dane treningów przechowujemy w Azure. Poniższe operacje dotyczą całej bazy przypisanej do zalogowanego konta GitHub.</p></section>'+
+  '<p class="muted">Dane treningów przechowujemy w Azure. Poniższe operacje dotyczą wyłącznie bazy aktywnego profilu.</p></section>'+
   '<div class="panel"><h2>Import danych</h2>'+
   '<p class="muted">Treningi z pliku <strong>nadpiszą treningi o tych samych datach</strong>. Brakujące zostaną dodane. Daty, których nie ma w pliku, pozostaną bez zmian.</p>'+
   '<label class="label" for="import-database">Wybierz plik JSON</label>'+
   '<input type="file" id="import-database" accept="application/json,.json" style="width:100%;margin:12px 0;color:#ccd8e1">'+
   '<p class="hint">Przed importem zobaczysz liczbę aktualizowanych i dodawanych treningów. Import nigdy nie usuwa innych dat.</p></div>'+
-  '<div class="panel"><h2>Eksport całej bazy</h2>'+
+  '<div class="panel"><h2>Eksport bazy aktywnego profilu</h2>'+
   '<p class="muted">Pobieramy aktualne rekordy bezpośrednio z Azure, a nie wyłącznie dane przechowywane na tym urządzeniu.</p>'+
-  '<div class="inline-actions"><button class="btn" id="export">↓ Cała baza JSON</button>'+
-  '<button class="btn secondary" id="exportcsv">↓ Cała baza CSV</button></div>'+
+  '<div class="inline-actions"><button class="btn" id="export">↓ Baza profilu JSON</button>'+
+  '<button class="btn secondary" id="exportcsv">↓ Baza profilu CSV</button></div>'+
   '<p class="hint">JSON zachowuje pełną strukturę i nadaje się do późniejszego importu. CSV zawiera tabelę wszystkich ćwiczeń, serii i notatek do analizy.</p></div>'+
   (window.GymCloud?.html?.()||'');
 }
@@ -592,7 +573,7 @@ async function importDatabaseFile(file){
  const preview=await GymCloud.importDatabase(rows,false);
  if(!preview.ok)throw Error(preview.reason);
  const {added,updated,unchanged,total}=preview.preview;
- if(!confirm('Zaimportować '+total+' treningów do Azure?\n'+
+ if(!confirm('Zaimportować '+total+' treningów do Azure w aktywnym profilu?\n'+
    'Nadpisane istniejące: '+updated+'\n'+
    'Dodane nowe: '+added+'\n'+
    'Bez zmian: '+unchanged+'\n\n'+
@@ -714,8 +695,9 @@ document.addEventListener('input',event=>{const t=event.target;
  if(t.dataset.field){mutateSet(t.dataset.field,Number(t.dataset.set),t.dataset.type,t.value)}
  else if(t.id==='notes'){activeSession(true).notes=t.value;save()}
 });
+window.gymProfileCanLeave=()=>!savingWorkout&&abandonHistoryEdit();
 (async()=>{try{state=normalize(await GymStorage.load(status));}catch(e){console.error(e);status('⚠ Nie można wczytać danych','warn')}render();
-  if(window.GymCloud)void GymCloud.init({getState:()=>state,hasWorkoutData,workoutRecords,cloudState,meaningfulSignature,workoutDetails,applySnapshot:async data=>{
+  if(window.GymCloud)await GymCloud.init({getState:()=>state,hasWorkoutData,workoutRecords,cloudState,meaningfulSignature,workoutDetails,applySnapshot:async data=>{
  const preserved={...data.sessions};
  const locallyUnsaved=new Set(state.unsavedDates||[]);
  for(const [key,entry] of Object.entries(state.sessions||{})){
@@ -728,4 +710,5 @@ document.addEventListener('input',event=>{const t=event.target;
  state=normalize({...state,history:retainedHistory,sessions:preserved,savedAt:Date.now()});
  GymStorage.save(state);await GymStorage.flush();render()
 },backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{if(state.view==='settings')render()}});
+  window.GymProfiles?.ready();
   if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW:',e))})();

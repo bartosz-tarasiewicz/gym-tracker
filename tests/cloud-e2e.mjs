@@ -7,38 +7,49 @@ import {chromium} from 'playwright';
 const files={'/':'index.html','/index.html':'index.html','/storage.js':'storage.js','/sync.js':'sync.js',
  '/week-ui.js':'week-ui.js','/progress-ui.js':'progress-ui.js','/app.js':'app.js','/sw.js':'sw.js',
  '/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/icon-apple.png':'icon-apple.png'};
-const store=new Map(),operations=[];let etagCounter=10;
+const store=new Map(),profileStores=new Map(),profileRegistry=[{id:'default',name:'Profil domyślny'}],profileSettings=new Map(),operations=[];let etagCounter=10;
 const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data))};
 const server=http.createServer(async(req,res)=>{
  const url=new URL(req.url,'http://localhost');
+ const profile=url.searchParams.get('profile')||'default';
+ if(!profileStores.has(profile))profileStores.set(profile,profile==='default'?store:new Map());
+ const activeStore=profileStores.get(profile);
+ if(url.pathname==='/api/profiles'){
+  if(req.method==='POST'){let raw='';for await(const chunk of req)raw+=chunk;const p=JSON.parse(raw);if(!profileRegistry.some(x=>x.id===p.id))profileRegistry.push(p);return json(res,200,{profile:p});}
+  return json(res,200,{profiles:profileRegistry});
+ }
+ if(url.pathname==='/api/profile-settings'){
+  if(req.method==='PUT'){let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw);const old=profileSettings.get(profile);if((old?.etag||null)!==body.expectedEtag)return json(res,409,{});profileSettings.set(profile,{settings:body.settings,etag:'"'+(++etagCounter)+'"'});}
+  return json(res,200,profileSettings.get(profile)||{settings:null,etag:null});
+ }
  if(url.pathname==='/.auth/me')return json(res,200,{clientPrincipal:{
   identityProvider:'github',userId:'test-owner',userDetails:'Test User',userRoles:['authenticated']}});
  if(url.pathname==='/api/workouts'&&req.method==='GET'){
-  return json(res,200,{version:1,workouts:[...store].map(([id,value])=>({id,...value}))});
+  return json(res,200,{version:1,workouts:[...activeStore].map(([id,value])=>({id,...value}))});
  }
  if(url.pathname.startsWith('/api/workouts/')&&['PUT','DELETE'].includes(req.method)){
   const id=decodeURIComponent(url.pathname.slice('/api/workouts/'.length));
   let raw='';for await(const chunk of req)raw+=chunk;
-  const body=JSON.parse(raw),old=store.get(id);
+  const body=JSON.parse(raw),old=activeStore.get(id);
   if((old?.etag||null)!==body.expectedEtag)return json(res,409,{error:'workout_changed'});
   if(req.method==='DELETE'){
-   store.delete(id);operations.push({id,method:'DELETE'});return json(res,200,{ok:true,deleted:true});
+   activeStore.delete(id);operations.push({id,method:'DELETE'});return json(res,200,{ok:true,deleted:true});
   }
-  if(!old&&[...store].some(([key,value])=>key!==id&&value.record?.date===body.record?.date))
+  if(!old&&[...activeStore].some(([key,value])=>key!==id&&value.record?.date===body.record?.date))
    return json(res,409,{error:'workout_date_exists'});
   const etag='"'+(++etagCounter)+'"';
-  store.set(id,{kind:id.split(':')[0],record:structuredClone(body.record),etag});
+  activeStore.set(id,{kind:id.split(':')[0],record:structuredClone(body.record),etag});
   operations.push({id,method:'PUT'});
   return json(res,200,{ok:true,id,etag});
  }
- const file=files[url.pathname];if(!file){res.writeHead(404);return res.end('Not Found')}
+ const file=files[url.pathname]||(['/profiles.js','/photos.js'].includes(url.pathname)?url.pathname.slice(1):url.pathname.startsWith('/assets/')&&!url.pathname.includes('..')?url.pathname.slice(1):null);if(!file){res.writeHead(404);return res.end('Not Found')}
  res.writeHead(200,{'content-type':({'.html':'text/html','.js':'application/javascript','.svg':'image/svg+xml',
-  '.png':'image/png','.webmanifest':'application/manifest+json'})[path.extname(file)]||'text/plain'});
+  '.jpg':'image/jpeg','.webp':'image/webp','.png':'image/png','.webmanifest':'application/manifest+json'})[path.extname(file)]||'text/plain'});
  res.end(fs.readFileSync(file));
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const base='http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({headless:true});
+const browser=await chromium.launch({headless:true,...(process.env.GYM_BROWSER_CHANNEL?{channel:process.env.GYM_BROWSER_CHANNEL}:{})});
 const context=()=>browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
 const errors=[];
 const waitFor=async(fn,label)=>{for(let i=0;i<140;i++){if(fn())return;await new Promise(r=>setTimeout(r,100))}
@@ -277,6 +288,57 @@ try{
  log('Historical session changes type using same cloud ID without altering next Friday');
 
 
+
+ // Profile switch reloads its entire runtime, including unsubmitted drafts,
+ // per-date plans and preferences. A second tab keeps its original scope.
+ await phone.locator('#active-profile:not([disabled])').waitFor();
+ const legacyBefore=JSON.stringify([...store]);
+ phone.once('dialog',d=>void d.accept('Anna'));
+ await phone.locator('#add-profile').click();
+ await phone.waitForFunction(()=>window.GymProfiles?.id().startsWith('p-')&&document.querySelector('#active-profile')?.disabled===false);
+ const anna=await phone.evaluate(()=>GymProfiles.id());
+ assert.equal(await phone.evaluate(()=>state.history.length+Object.keys(state.sessions).length),0);
+ assert.equal(await pc.evaluate(()=>GymProfiles.id()),'default','other tab retains default scope');
+ await phone.locator('#week-date').fill('2026-11-13');
+ await phone.locator('#workout-type').selectOption('5');
+ await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().fill('17');
+ await phone.locator('.done-button[data-type="work"]').first().click();
+ await phone.locator('#save-training').click();
+ await waitFor(()=>profileStores.get(anna)?.size===1,'Anna workout saved');
+ assert.equal(JSON.stringify([...store]),legacyBefore,'default cloud records unchanged');
+ await phone.evaluate(()=>GymProfiles.preference('progress',{metric:'reps',range:'6'}));
+ await waitFor(()=>profileSettings.get(anna)?.settings.preferences.progress.metric==='reps','Anna preferences persisted');
+ await phone.locator('[data-view="settings"]').click();
+ const scopedDownload=phone.waitForEvent('download');await phone.locator('#export').click();
+ const scopedExport=JSON.parse(fs.readFileSync(await (await scopedDownload).path(),'utf8'));
+ assert.equal(scopedExport.profileId,anna);assert.equal(scopedExport.workouts.length,1);
+ await phone.locator('#active-profile').selectOption('default');
+ await phone.waitForFunction(()=>window.GymProfiles?.id()==='default'&&document.querySelector('#active-profile')?.disabled===false);
+ assert.equal(JSON.stringify([...store]),legacyBefore);
+ assert.notEqual(await phone.evaluate(()=>GymProfiles.preference('progress')?.metric),'reps');
+ await phone.locator('#active-profile').selectOption(anna);
+ await phone.waitForFunction(()=>window.GymProfiles?.id().startsWith('p-')&&document.querySelector('#active-profile')?.disabled===false);
+ assert.equal(await phone.evaluate(()=>GymProfiles.preference('progress').metric),'reps');
+ assert.equal(await phone.evaluate(()=>Object.values(state.sessions)[0].exercises.legpress.variants['MG-PL70'].sets[0].kg),'17');
+ await phone.locator('[data-view="train"]').click();await phone.locator('#week-date').fill('2026-11-13');
+ await phone.locator('[data-item="1"]').click();
+ assert.ok(await phone.locator('[data-machine="BAND-LEG-CURL"]').count());
+ await phone.locator('[data-machine="BAND-LEG-CURL"]').click();
+ assert.match(await phone.locator('.machine-img').getAttribute('src'),/assets\/equipment\/BAND-LEG-CURL.svg/);
+
+ await phone.locator('[data-view="settings"]').click();
+ const annaImport={format:'gym-tracker-db-export-v1',workouts:[row('2026-11-13',19,'Anna import')]};
+ await uploadFile(phone,annaImport);
+ await waitFor(()=>[...profileStores.get(anna).values()].some(x=>x.record.notes==='Anna import'),'profile import');
+ await phone.waitForTimeout(100);
+ assert.equal(JSON.stringify([...store]),legacyBefore,'profile import never touches default dates');
+ await pc.reload({waitUntil:'domcontentloaded'});
+ await pc.locator('#active-profile option[value="'+anna+'"]').waitFor({state:'attached'});
+ await pc.locator('#active-profile:not([disabled])').selectOption(anna);
+ await pc.waitForFunction(()=>window.GymProfiles?.id().startsWith('p-')&&document.querySelector('#active-profile')?.disabled===false);
+ assert.ok(await pc.evaluate(()=>Object.values(state.sessions).some(x=>x.notes==='Anna import')||state.history.some(x=>x.notes==='Anna import')),'profile discovered and hydrated on second device');
+ await phone.screenshot({path:'profile-preview.png',fullPage:true});
+ log('Profiles isolate same-date workouts, plans, filters, export/import, cache and parallel tabs');
  assert.deepEqual(errors,[],'Uncaught browser JavaScript errors: '+errors.join('; '));
  log('No JavaScript errors');
  console.log('SUCCESS: per-date workout overrides, rest/GRIT and cross-device persistence alongside full Azure import/export');

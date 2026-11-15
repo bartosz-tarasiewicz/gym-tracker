@@ -107,3 +107,53 @@ test('v0.4 health probe contains no private workout data or storage credentials'
  assert.equal(r.status,200);
  assert.deepEqual(r.jsonBody,{status:'ok',runtime:'workouts-v04'});
 });
+
+const scoped=(request,profile)=>({...request,query:new Map([['profile',profile]])});
+const profileA='p-11111111-1111-4111-8111-111111111111';
+const profileB='p-22222222-2222-4222-8222-222222222222';
+test('Profiles isolate identical IDs/dates, ETags, deletes and legacy migration',async()=>{
+ const user='profiles-owner',id='draft:2026-11-15-5';
+ const request=(profile,method='GET',body=null)=>scoped(req(user,method,method==='GET'?null:id,body),profile);
+ const data={date:'2026-11-15',day:5,notes:'original',planSnapshots:{0:{notes:'plan A'}},exercises:{}};
+ const old=await handle(req(user,'PUT',id,{record:data,expectedEtag:null}),context);
+ const legacy=await handle(request('default'),context);
+ assert.equal(legacy.jsonBody.workouts[0].etag,old.jsonBody.etag);
+ for(const profile of [profileA,profileB]){
+  assert.deepEqual((await handle(request(profile),context)).jsonBody.workouts,[]);
+  assert.equal((await handle(request(profile,'PUT',{record:{...data,notes:profile},expectedEtag:null}),context)).status,200);
+ }
+ const a=(await handle(request(profileA),context)).jsonBody.workouts[0];
+ assert.equal((await handle(request(profileB,'PUT',{record:data,expectedEtag:a.etag}),context)).status,409);
+ assert.equal((await handle(request(profileA,'DELETE',{expectedEtag:a.etag}),context)).status,200);
+ assert.equal((await handle(request(profileB),context)).jsonBody.workouts[0].record.notes,profileB);
+ assert.deepEqual((await handle(req(user),context)).jsonBody.workouts[0].record,data);
+ assert.equal((await handle(request('../bad'),context)).status,400);
+ assert.equal((await handle(scoped(req('other-owner'),profileB),context)).jsonBody.workouts.length,0);
+});
+test('Profile registry and settings persist per owner/profile with version protection',async()=>{
+ const registry=require('../src/functions/profiles').handle;
+ const settings=require('../src/functions/profile-settings').handle;
+ assert.equal((await registry(req(null),context)).status,401);
+ assert.equal((await registry(req('registry','POST',null,{id:profileA,name:'Anna'}),context)).status,200);
+ assert.equal((await registry(req('registry','POST',null,{id:profileA,name:'Anna'}),context)).status,200);
+ assert.equal((await registry(req('registry'),context)).jsonBody.profiles.length,2);
+ assert.equal((await registry(req('other-registry'),context)).jsonBody.profiles.length,1);
+ const data={preferences:{progress:{metric:'reps'}},plans:{week:{0:5}}};
+ const a=await settings(scoped(req('registry','PUT',null,{settings:data,expectedEtag:null}),profileA),context);
+ assert.equal(a.status,200);
+ assert.deepEqual((await settings(scoped(req('registry'),profileA),context)).jsonBody.settings,data);
+ assert.equal((await settings(scoped(req('registry'),profileB),context)).jsonBody.settings,null);
+ assert.equal((await settings(scoped(req('registry','PUT',null,{settings:{},expectedEtag:null}),profileA),context)).status,409);
+ assert.equal((await settings(scoped(req('registry','PUT',null,{settings:{},expectedEtag:a.jsonBody.etag}),profileA),context)).status,200);
+});
+
+test('Legacy snapshot endpoint also respects profile scope and retains default backup',async()=>{
+ const snapshots=require('../src/functions/snapshot').handler;
+ const data={history:[{date:'2026-11-15',notes:'old backup'}],sessions:{}};
+ const write=await snapshots(req('snapshot-profiles','PUT',null,{snapshot:data,expectedEtag:null}),context);
+ assert.equal(write.status,200);
+ const empty=await snapshots(scoped(req('snapshot-profiles'),profileA),context);
+ assert.equal(empty.jsonBody.snapshot,null);
+ assert.equal((await snapshots(scoped(req('snapshot-profiles','PUT',null,{snapshot:{history:[],sessions:{}},expectedEtag:null}),profileA),context)).status,200);
+ assert.deepEqual((await snapshots(req('snapshot-profiles'),context)).jsonBody.snapshot.history,data.history);
+});
