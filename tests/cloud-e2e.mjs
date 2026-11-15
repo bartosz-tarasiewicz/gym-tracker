@@ -70,6 +70,15 @@ let first,second;
 try{
  first=await context();const phone=await first.newPage();phone.on('pageerror',e=>errors.push(e.message));
  await phone.goto(base,{waitUntil:'domcontentloaded'});
+ // Chromium does not emulate iOS safe-area env values; inject the measured inset.
+ await phone.evaluate(()=>document.documentElement.style.setProperty('--safe-top','59px'));
+ assert.ok((await phone.locator('#profiles').boundingBox()).y>=59,'Profile panel clears iPhone status bar');
+ await phone.evaluate(()=>window.scrollTo(0,500));
+ assert.ok((await phone.locator('.top').boundingBox()).y>=59,'Sticky header clears status bar after scrolling');
+ assert.equal(await phone.evaluate(()=>getComputedStyle(document.body,'::before').height),'59px');
+ await phone.evaluate(()=>{window.scrollTo(0,0);document.documentElement.style.removeProperty('--safe-top')});
+ assert.ok((await phone.locator('#profiles').boundingBox()).y<30,'No extra inset in normal browser');
+ log('Mobile safe area: profile and sticky header stay below status bar');
  await phone.locator('[data-view="settings"]').click();
  assert.equal(await phone.locator('#import-database').count(),1);
  assert.equal(await phone.locator('#export').count(),1);
