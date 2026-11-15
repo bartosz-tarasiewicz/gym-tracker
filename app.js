@@ -84,15 +84,24 @@ const TRAINING_TYPES=[0,1,2,5,3,-1,-2];
 const trainingName=day=>({0:'Klatka',1:'Plecy',2:'Barki, biceps, triceps',
   5:'Nogi, pośladki i core',3:'Les Mills GRIT Strength',
   '-1':'Dzień wolny / regeneracja','-2':'Inny trening'})[day]||'Inny trening';
+function confirmedRows(record){
+ return Object.values(record?.exercises||{}).reduce((sum,log)=>sum+
+  Object.values(log?.variants&&Object.keys(log.variants).length?log.variants:{legacy:log})
+   .reduce((n,v)=>n+[...(v?.sets||[]),...(v?.warmups||[])].filter(row=>row?.done===true).length,0),0);
+}
 function dayRecord(data,date){
  const sessions=Object.values(data.sessions||{}).filter(x=>x?.date===date);
- const unsaved=(data.unsavedDates||[]);
- const pending=sessions.find(x=>unsaved.includes(date+'|'+x.day));
- if(pending)return pending;
  const historical=(data.history||[]).filter(x=>x?.date===date);
- if(historical.length)return historical[historical.length-1];
- return sessions.find(x=>x.planOverride===true||
-    String(x.notes||'').trim()||Object.keys(x.exercises||{}).length) || null;
+ const all=[...historical,...sessions];
+ const pending=sessions.find(x=>(data.unsavedDates||[]).includes(date+'|'+x.day));
+ if(pending)return pending;
+ const explicit=all.find(x=>x.syncId&&x.syncId===data.selectedRecordId);
+ if(explicit)return explicit;
+ // Older exports contain navigation-created templates for every workout type.
+ // Confirmed work/warmups take precedence over those untouched templates.
+ const completed=all.filter(x=>confirmedRows(x)>0);
+ if(completed.length)return completed.sort((a,b)=>confirmedRows(b)-confirmedRows(a))[0];
+ return all.find(x=>x.planOverride===true)||all.find(x=>String(x.notes||'').trim())||historical[historical.length-1]||null;
 }
 function trainingTypeForDate(date,data=state){
  const record=dayRecord(data,date);
@@ -398,6 +407,8 @@ async function saveSelectedWorkout(){
  const previous=storedDay()||([-1,3,-2].includes(day)?activeSession(true):null);
  if(!previous){toast('Nie ma jeszcze wyników do zapisania');return;}
  const input=cloneWorkout(pendingHistoryEdit?.draft||previous);
+ const draftEntry=Object.entries(state.sessions).find(([,record])=>record===previous);
+ if(!input.syncId&&draftEntry)input.syncId='draft:'+draftEntry[0];
  if(!window.GymCloud?.saveWorkoutForDate){alert('Odśwież aplikację, żeby użyć nowego zapisu.');return;}
  savingWorkout=true;
  const button=document.getElementById('save-training');
@@ -424,9 +435,9 @@ async function saveSelectedWorkout(){
    return;
   }
   // Keep only the canonical Azure record for this training day locally.
-  state.history=state.history.filter(h=>h.date!==date);
+  state.history=state.history.filter(h=>result.preserveDateRecords?h.syncId!==result.id:h.date!==date);
   for(const [key,s] of Object.entries(state.sessions||{})){
-   if(s.date===date&&Number(s.day)===day)delete state.sessions[key];
+   if(result.preserveDateRecords?'draft:'+key===result.id:s.date===date&&Number(s.day)===day)delete state.sessions[key];
   }
   const record=cloneWorkout(result.record);
   if(result.kind==='history'){

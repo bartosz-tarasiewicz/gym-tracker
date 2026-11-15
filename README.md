@@ -1,3 +1,7 @@
+## Wybór wpisu po imporcie starszej bazy
+
+Gdy data zawiera starsze szkice utworzone samym przeglądaniem szablonów, ekran wybiera wpis z potwierdzonymi seriami roboczymi lub rozgrzewkowymi, zamiast pierwszego pustego szablonu. Niezapisane zmiany i jawnie wybrany wpis zachowują pierwszeństwo. Zapis wskazanego rekordu zachowuje jego ID i pozostałe rekordy z tej samej daty; nie scala ani nie usuwa ich automatycznie. Test lokalny można dodatkowo uruchomić z `GYM_TEST_EXPORT` wskazującym eksport JSON — dane użytkownika nie są dodawane do repozytorium.
+
 ## Import kopii z wieloma wpisami jednego dnia
 
 Pełny eksport może zawierać kilka historycznych rekordów dla tej samej daty. Import zachowuje je oddzielnie według ID, zamiast odrzucać plik lub scalać wyniki. Podsumowanie pokazuje liczbę takich dat. Ponowienie importu tego samego pliku nie tworzy kolejnych wpisów. Pojedyncze rekordy nadal aktualizują istniejący trening według daty. Jeśli w docelowym profilu istnieją niepasujące identyfikatory dla dnia z wieloma wpisami, import zatrzymuje się przed zapisem i wskazuje daty. Starsze rekordy bez pola `exercises` są traktowane jako wpisy bez ćwiczeń; wszystkie notatki i pozostałe pola zostają zachowane. Zwykły zapis formularza nadal chroni przed przypadkowym tworzeniem kilku wpisów na datę.

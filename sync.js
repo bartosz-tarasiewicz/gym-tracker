@@ -654,9 +654,10 @@ window.GymCloud=(()=>{
   try{
    const snapshot=serverRows(await request());
    const sameDay=[...snapshot.values()].filter(x=>x.record?.date===date);
-   if(sameDay.length>1)
+   const selected=sameDay.find(x=>x.id===sourceId);
+   if(sameDay.length>1&&!selected)
     return {ok:false,reason:'W Azure istnieje więcej niż jeden trening z tej daty. Nie chcę usuwać żadnego z nich automatycznie.'};
-   const existing=sameDay[0]||null;
+   const existing=selected||sameDay[0]||null;
    const id=existing?.id || (sourceId&&/^(draft|history):[a-zA-Z0-9:_-]+$/.test(sourceId)?
      sourceId:'draft:'+date+'-'+day);
    const kind=existing?.kind||(id.startsWith('history:')?'history':'draft');
@@ -684,7 +685,7 @@ window.GymCloud=(()=>{
     if(key===id)tombstones.delete(key);
    }
    persist();
-   return {ok:true,id,kind,record,already:existing?.sig===sig};
+   return {ok:true,id,kind,record,preserveDateRecords:sameDay.length>1,already:existing?.sig===sig};
   }catch(e){
    console.warn('Form workout save failed',e.message);
    return {ok:false,reason:'Zapis do Azure nie powiódł się. Wyniki na tym urządzeniu pozostają bez zmian.'};

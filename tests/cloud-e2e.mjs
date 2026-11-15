@@ -421,6 +421,48 @@ try{
  assert.match(conflictMessage,/jednoznacznie/);assert.equal(operations.length,repeatedWrites);
  await archiveContext.close();
  log('Full export with multiple same-date records and legacy notes imports losslessly, idempotently and without modifying source');
+
+ // Six legacy navigation templates on the reported date. Optionally exercise
+ // the exact user-provided export locally, without checking personal data in.
+ const regressionContext=await context(),regression=await regressionContext.newPage();
+ await regression.goto(base,{waitUntil:'domcontentloaded'});
+ let reportedRows;
+ if(process.env.GYM_TEST_EXPORT){
+  reportedRows=JSON.parse(fs.readFileSync(process.env.GYM_TEST_EXPORT,'utf8')).workouts.filter(x=>x.record.date==='2026-11-13');
+ }else{
+  reportedRows=await regression.evaluate(()=>[0,1,2,3,4,5].map(day=>{
+   const exercises=Object.fromEntries([...(PLAN[day]?.items||[]),...CORE].map(item=>{
+    const log=defaultLog(item);log.variants[log.machine]={sets:cloneWorkout(log.sets),warmups:cloneWorkout(log.warmups),rir:''};return [item.id,log];
+   }));
+   if(day===5)for(const id of ['legpress','legcurl','glute','extension','calf']){
+    const log=exercises[id],v=log.variants[log.machine];for(const row of [...v.sets,...v.warmups])row.done=true;
+    if(id==='legpress')for(const row of v.sets)row.kg='60';
+   }
+   return {id:'draft:2026-11-13-'+day,kind:'draft',record:{date:'2026-11-13',day,exercises,coreEnabled:{},notes:day===5?'Leg workout note':''}};
+  }));
+ }
+ for(const [id,row] of [...store])if(row.record.date==='2026-11-13')store.delete(id);
+ for(const row of reportedRows)store.set(row.id,{kind:row.kind,record:structuredClone(row.record),etag:'"fixture-'+(++etagCounter)+'"'});
+ await regression.reload({waitUntil:'domcontentloaded'});
+ await regression.locator('#week-date').fill('2026-11-13');
+ assert.equal(await regression.locator('#workout-type').inputValue(),'5');
+ assert.equal(await regression.locator('.done-button.checked[data-type="work"]').count(),3);
+ assert.equal(await regression.locator('.done-button.checked[data-type="warm"]').count(),3);
+ assert.equal(await regression.locator('.set-row input[data-field="kg"][data-type="work"]').first().inputValue(),'60');
+ const meaningful=reportedRows.find(x=>x.record.day===5),savedId=meaningful.id;
+ const untouched=JSON.stringify([...store].filter(([id])=>id!==savedId));
+ const recordCount=store.size;
+ await regression.locator('#notes').fill('Updated regression note');
+ await regression.locator('#save-training').click();
+ await waitFor(()=>store.get(savedId).record.notes==='Updated regression note','save selected populated legacy draft');
+ assert.equal(store.size,recordCount);assert.equal(JSON.stringify([...store].filter(([id])=>id!==savedId)),untouched);
+ assert.equal(await regression.evaluate(()=>Object.values(state.sessions).filter(x=>x.date==='2026-11-13').length),6);
+ await regression.reload({waitUntil:'domcontentloaded'});
+ assert.equal(await regression.locator('#workout-type').inputValue(),'5');
+ assert.equal(await regression.locator('.done-button.checked[data-type="warm"]').count(),3);
+ assert.equal(await regression.locator('.done-button.checked[data-type="work"]').count(),3);
+ await regressionContext.close();
+ log('13 November selects confirmed leg workout over five empty templates and preserves every other record when saving');
  assert.deepEqual(errors,[],'Uncaught browser JavaScript errors: '+errors.join('; '));
  log('No JavaScript errors');
  console.log('SUCCESS: per-date workout overrides, rest/GRIT and cross-device persistence alongside full Azure import/export');
