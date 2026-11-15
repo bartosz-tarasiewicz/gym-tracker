@@ -116,67 +116,6 @@
     "note": "Matrix G7-S72-02 — przykład seated leg curl; sprawdź model na siłowni.",
     "local": "assets/photos/LEG-CURL.jpg"
   },
-  "core-crunch": {
-    "remote": "https://images.ctfassets.net/3s5io6mnxfqz/7qb4qHUCjKe8j487NACvu3/f7fb4f5d7ce91ae86e57d707bcf875a9/AdobeStock_29077916_2.jpeg",
-    "source": "https://www.masterclass.com/articles/cable-crunches-guide",
-    "credit": "MasterClass",
-    "note": "",
-    "local": "assets/photos/core-crunch.jpg"
-  },
-  "core-knees": {
-    "remote": "https://www.living.fit/cdn/shop/files/ca-16-vertical-knee-raise-2_535x.jpg?v=1755653302",
-    "source": "https://www.living.fit/products/leg-raise-captains-chair-with-dip-and-push-up-station",
-    "credit": "Living.Fit",
-    "note": "",
-    "local": "assets/photos/core-knees.jpg"
-  },
-  "core-woodchop": {
-    "remote": "https://app-media.fitbod.me/v2/79/images/angles/1.jpg",
-    "source": "https://fitbod.me/exercises/cable-wood-chop",
-    "credit": "Fitbod",
-    "note": ""
-  },
-  "core-side-plank": {
-    "remote": "https://pilatesc.jp/wp-content/uploads/2025/10/hj%E3%80%81%EF%BD%88%EF%BD%8A.1-1024x724.jpeg",
-    "source": "https://pilatesc.jp/onomichi-pilates-side-plank-hiplift/",
-    "credit": "Pilates C",
-    "note": "",
-    "local": "assets/photos/core-side-plank.jpg"
-  },
-  "core-rack": {
-    "remote": "https://images.squarespace-cdn.com/content/v1/5a5e65fe8dd0411461e901a2/1518203311717-MQRQMQ5LMKLVPCDCMVSV/KBFitBrit_222.jpg?format=2500w",
-    "source": "https://www.kbfitbritt.com/shop/biathlon",
-    "credit": "KB Fit Britt",
-    "note": "Pozycja front rack — w carry poruszaj się spokojnie, bez przechylania tułowia.",
-    "local": "assets/photos/core-rack.jpg"
-  },
-  "core-drag": {
-    "remote": "https://www.mensjournal.com/.image/NDI6MDAwMDAwMDAxMTQ2ODQx/plank-drags-header.jpg",
-    "source": "https://www.mensjournal.com/health-fitness/strength-coach-reveals-the-best-anti-movement-abs-exercises-for-a-bulletproof-core-and-heavier-compound-lifts",
-    "credit": "Men's Journal",
-    "note": "",
-    "local": "assets/photos/core-drag.jpg"
-  },
-  "core-wheel": {
-    "remote": "https://i0.wp.com/www.muscleandfitness.com/wp-content/uploads/2018/05/1109-ab-wheel-rollout.jpg?quality=86&strip=all",
-    "source": "https://www.muscleandfitness.com/workouts/abs-and-core-exercises/11-hardest-abs-exercises-all-time/",
-    "credit": "Muscle & Fitness",
-    "note": ""
-  },
-  "core-pallof": {
-    "remote": "https://i.vimeocdn.com/video/1025961123-863a0a9daf9b4b20223983416f965e68fb569473a35b2b54318afb22318febbf-d",
-    "source": "https://vimeo.com/495920365",
-    "credit": "Vimeo",
-    "note": "",
-    "local": "assets/photos/core-pallof.jpg"
-  },
-  "core-bend": {
-    "remote": "https://static.movimente.me/media/imgs/exercises/IMG_0751.jpg",
-    "source": "https://movimente.me/exercicio/flexao-lateral-de-tronco-em-pe-c-polia-baixa/",
-    "credit": "Movimente.me",
-    "note": "",
-    "local": "assets/photos/core-bend.jpg"
-  },
   "DIVERGING-ROW": {
     "remote": "https://images.jhtassets.com/uploads/G7-S34-Iced-Silver.jpg",
     "source": "https://cpo.matrixfitness.com/products/strength/ultra/matrix-ultra-g7-s34-diverging-seated-row-3/",
@@ -190,19 +129,5 @@
     "credit": "Matrix Fitness",
     "note": "Matrix G3-S52 — zdjęcie poglądowe, model na siłowni niepotwierdzony.",
     "local": "assets/photos/BACK-EXT.jpg"
-  },
-  "CABLE": {
-    "remote": "https://images.jhtassets.com/uploads/Aura-FT-400-Lb.jpg",
-    "source": "https://cpo.matrixfitness.com/products/strength/aura/aura-functional-trainer-400-lb-refurbished-iced-silver/",
-    "credit": "Matrix Fitness",
-    "note": "Przykładowa brama Matrix Aura G3-MSFT4-02; zdjęcie sprzętu, nie techniki ćwiczenia.",
-    "local": "assets/photos/CABLE.jpg"
-  },
-  "DUMBBELL": {
-    "remote": "https://images.jhtassets.com/uploads/Troy-5-50-Lb.jpg",
-    "source": "https://cpo.matrixfitness.com/products/strength/accessories/troy-12-sided-urethane-db-set-5-50lb/",
-    "credit": "Matrix CPO / Troy",
-    "note": "Przykładowe hantle Troy — zdjęcie sprzętu, nie techniki ćwiczenia.",
-    "local": "assets/photos/DUMBBELL.jpg"
   }
 }

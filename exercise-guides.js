@@ -1,0 +1,465 @@
+'use strict';
+window.GymExerciseGuides={
+  "flat|DUMBBELL": {
+    "exerciseId": "Dumbbell_Bench_Press",
+    "title": "Wyciskanie hantli na płasko",
+    "tip": "Oprzyj stopy, ustabilizuj łopatki. Opuść hantle po bokach klatki i wyciśnij bez odbijania.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Dumbbell_Bench_Press.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Dumbbell_Bench_Press/0.jpg",
+      "assets/guides/Dumbbell_Bench_Press/1.jpg"
+    ]
+  },
+  "incline|DUMBBELL": {
+    "exerciseId": "Incline_Dumbbell_Press",
+    "title": "Wyciskanie hantli na skosie",
+    "tip": "Oprzyj plecy o skośną ławkę. Prowadź hantle nad klatkę, bez unoszenia barków do uszu.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Incline_Dumbbell_Press.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Incline_Dumbbell_Press/0.jpg",
+      "assets/guides/Incline_Dumbbell_Press/1.jpg"
+    ]
+  },
+  "fly|DUMBBELL": {
+    "exerciseId": "Dumbbell_Flyes",
+    "title": "Rozpiętki z hantlami",
+    "tip": "Lekko ugnij łokcie i utrzymuj ten kąt. Rozłóż ramiona do komfortowego zakresu, następnie zbliż hantle nad klatką.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Dumbbell_Flyes.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Dumbbell_Flyes/0.jpg",
+      "assets/guides/Dumbbell_Flyes/1.jpg"
+    ]
+  },
+  "pullover|PULLOVER": {
+    "exerciseId": "Bent-Arm_Dumbbell_Pullover",
+    "title": "Przenoszenie hantla za głowę",
+    "tip": "Trzymaj jeden hantel oburącz. Przy stabilnym tułowiu przenieś go za głowę i wróć nad klatkę.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Bent-Arm_Dumbbell_Pullover.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Bent-Arm_Dumbbell_Pullover/0.jpg",
+      "assets/guides/Bent-Arm_Dumbbell_Pullover/1.jpg"
+    ]
+  },
+  "laterals|DUMBBELL": {
+    "exerciseId": "Side_Lateral_Raise",
+    "title": "Unoszenie hantli bokiem",
+    "tip": "Unieś ramiona bokiem do wysokości barków i powoli opuść. Nie podrzucaj ciężaru tułowiem.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Side_Lateral_Raise.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Side_Lateral_Raise/0.jpg",
+      "assets/guides/Side_Lateral_Raise/1.jpg"
+    ]
+  },
+  "shoulder|DUMBBELL": {
+    "exerciseId": "Dumbbell_Shoulder_Press",
+    "title": "Wyciskanie hantli nad głowę",
+    "tip": "Ustabilizuj tułów. Wyciśnij hantle z wysokości barków i opuść je pod kontrolą.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Dumbbell_Shoulder_Press.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Dumbbell_Shoulder_Press/0.jpg",
+      "assets/guides/Dumbbell_Shoulder_Press/1.jpg"
+    ]
+  },
+  "preacher|DUMBBELL": {
+    "exerciseId": "One_Arm_Dumbbell_Preacher_Curl",
+    "title": "Uginanie hantla na modlitewniku",
+    "tip": "Oprzyj ramię o poduszkę. Uginaj łokieć bez odrywania ramienia; powoli wróć.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/One_Arm_Dumbbell_Preacher_Curl.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/One_Arm_Dumbbell_Preacher_Curl/0.jpg",
+      "assets/guides/One_Arm_Dumbbell_Preacher_Curl/1.jpg"
+    ]
+  },
+  "preacher|CABLE": {
+    "exerciseId": "Cable_Preacher_Curl",
+    "title": "Uginanie na modlitewniku z wyciągiem",
+    "tip": "Oprzyj ramiona o poduszkę, uginaj łokcie bez unoszenia barków i kontroluj opuszczanie.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Cable_Preacher_Curl.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Cable_Preacher_Curl/0.jpg",
+      "assets/guides/Cable_Preacher_Curl/1.jpg"
+    ]
+  },
+  "hammer|HAMMER": {
+    "exerciseId": "Hammer_Curls",
+    "title": "Uginanie młotkowe z hantlami",
+    "tip": "Utrzymuj dłonie zwrócone do siebie. Uginaj łokcie przy nieruchomych ramionach.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Hammer_Curls.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Hammer_Curls/0.jpg",
+      "assets/guides/Hammer_Curls/1.jpg"
+    ]
+  },
+  "hammer|CABLE": {
+    "exerciseId": "Cable_Hammer_Curls_-_Rope_Attachment",
+    "title": "Uginanie młotkowe z liną",
+    "tip": "Chwyć linę neutralnie. Zbliż dłonie do barków, nie przesuwając łokci do przodu.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Cable_Hammer_Curls_-_Rope_Attachment.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Cable_Hammer_Curls_-_Rope_Attachment/0.jpg",
+      "assets/guides/Cable_Hammer_Curls_-_Rope_Attachment/1.jpg"
+    ]
+  },
+  "rear|DUMBBELL": {
+    "exerciseId": "Seated_Bent-Over_Rear_Delt_Raise",
+    "title": "Odwrotne rozpiętki w opadzie",
+    "tip": "Pochyl tułów i ustabilizuj plecy. Unieś ramiona na boki bez zamachu, potem powoli opuść.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Seated_Bent-Over_Rear_Delt_Raise.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Seated_Bent-Over_Rear_Delt_Raise/0.jpg",
+      "assets/guides/Seated_Bent-Over_Rear_Delt_Raise/1.jpg"
+    ]
+  },
+  "row|CABLE": {
+    "exerciseId": "Seated_Cable_Rows",
+    "title": "Wiosłowanie na wyciągu siedząc",
+    "tip": "Utrzymaj tułów stabilny. Przyciągnij uchwyt do brzucha, prowadząc łokcie w tył; kontroluj powrót.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Seated_Cable_Rows.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Seated_Cable_Rows/0.jpg",
+      "assets/guides/Seated_Cable_Rows/1.jpg"
+    ]
+  },
+  "lat|CABLE": {
+    "exerciseId": "Wide-Grip_Lat_Pulldown",
+    "title": "Ściąganie drążka do klatki",
+    "tip": "Oprzyj uda pod wałkami. Ściągnij drążek przed siebie do górnej klatki, bez kołysania tułowiem.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Wide-Grip_Lat_Pulldown.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Wide-Grip_Lat_Pulldown/0.jpg",
+      "assets/guides/Wide-Grip_Lat_Pulldown/1.jpg"
+    ]
+  },
+  "straight|CABLE": {
+    "exerciseId": "Straight-Arm_Pulldown",
+    "title": "Ściąganie na prostych ramionach",
+    "tip": "Przy lekko ugiętych łokciach prowadź uchwyt do ud. Nie zmieniaj kąta łokci w trakcie ruchu.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Straight-Arm_Pulldown.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Straight-Arm_Pulldown/0.jpg",
+      "assets/guides/Straight-Arm_Pulldown/1.jpg"
+    ]
+  },
+  "straight|STRAIGHT-ARM": {
+    "exerciseId": "Straight-Arm_Pulldown",
+    "title": "Ściąganie na prostych ramionach",
+    "tip": "Przy lekko ugiętych łokciach prowadź uchwyt do ud. Nie zmieniaj kąta łokci w trakcie ruchu.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Straight-Arm_Pulldown.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Straight-Arm_Pulldown/0.jpg",
+      "assets/guides/Straight-Arm_Pulldown/1.jpg"
+    ]
+  },
+  "pullover|CABLE": {
+    "exerciseId": "Straight-Arm_Pulldown",
+    "title": "Zamiennik: ściąganie na prostych ramionach",
+    "tip": "To zamiennik na wyciągu. Prowadź uchwyt do ud bez uginania i prostowania łokci.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Straight-Arm_Pulldown.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Straight-Arm_Pulldown/0.jpg",
+      "assets/guides/Straight-Arm_Pulldown/1.jpg"
+    ]
+  },
+  "triceps-rope|TRICEPS-ROPE": {
+    "exerciseId": "Triceps_Pushdown_-_Rope_Attachment",
+    "title": "Prostowanie ramion z liną",
+    "tip": "Trzymaj łokcie przy tułowiu. Wyprostuj ramiona, rozsuń końce liny i kontroluj powrót.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Triceps_Pushdown_-_Rope_Attachment.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Triceps_Pushdown_-_Rope_Attachment/0.jpg",
+      "assets/guides/Triceps_Pushdown_-_Rope_Attachment/1.jpg"
+    ]
+  },
+  "triceps-rope|CABLE": {
+    "exerciseId": "Triceps_Pushdown_-_Rope_Attachment",
+    "title": "Prostowanie ramion z liną",
+    "tip": "Trzymaj łokcie przy tułowiu. Wyprostuj ramiona, rozsuń końce liny i kontroluj powrót.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Triceps_Pushdown_-_Rope_Attachment.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Triceps_Pushdown_-_Rope_Attachment/0.jpg",
+      "assets/guides/Triceps_Pushdown_-_Rope_Attachment/1.jpg"
+    ]
+  },
+  "triceps-preacher|CABLE": {
+    "exerciseId": "Triceps_Pushdown",
+    "title": "Zamiennik: prostowanie ramion na wyciągu",
+    "tip": "Łokcie pozostają przy tułowiu. Prostuj przedramiona w dół bez pochylania się nad uchwytem.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Triceps_Pushdown.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Triceps_Pushdown/0.jpg",
+      "assets/guides/Triceps_Pushdown/1.jpg"
+    ]
+  },
+  "back-extension|ROMAN": {
+    "exerciseId": "Hyperextensions_Back_Extensions",
+    "title": "Prostowanie tułowia na ławce",
+    "tip": "Oprzyj biodra o poduszkę. Opuść tułów i wróć do linii nóg, bez odchylania się za tę linię.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Hyperextensions_Back_Extensions.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Hyperextensions_Back_Extensions/0.jpg",
+      "assets/guides/Hyperextensions_Back_Extensions/1.jpg"
+    ]
+  },
+  "back-extension|BODY": {
+    "exerciseId": "Hyperextensions_With_No_Hyperextension_Bench",
+    "title": "Zamiennik: prostowanie tułowia na podłodze",
+    "tip": "Leżąc na brzuchu unieś górę tułowia w małym, kontrolowanym zakresie, następnie opuść.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Hyperextensions_With_No_Hyperextension_Bench.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Hyperextensions_With_No_Hyperextension_Bench/0.jpg",
+      "assets/guides/Hyperextensions_With_No_Hyperextension_Bench/1.jpg"
+    ]
+  },
+  "calf|DB-CALF": {
+    "exerciseId": "Dumbbell_Seated_One-Leg_Calf_Raise",
+    "title": "Wspięcia siedząc z hantlem — jedna noga",
+    "tip": "Oprzyj hantel na udzie, przytrzymując go dłonią. Unieś piętę, zatrzymaj i powoli opuść; zmień stronę.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Dumbbell_Seated_One-Leg_Calf_Raise.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Dumbbell_Seated_One-Leg_Calf_Raise/0.jpg",
+      "assets/guides/Dumbbell_Seated_One-Leg_Calf_Raise/1.jpg"
+    ]
+  },
+  "core-crunch|CABLE": {
+    "exerciseId": "Cable_Crunch",
+    "title": "Spięcia brzucha na wyciągu",
+    "tip": "W klęku zbliż żebra do miednicy. Uchwyt utrzymuj przy głowie, nie ciągnij samymi ramionami.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Cable_Crunch.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Cable_Crunch/0.jpg",
+      "assets/guides/Cable_Crunch/1.jpg"
+    ]
+  },
+  "core-crunch|PLATE": {
+    "exerciseId": "Weighted_Crunches",
+    "title": "Spięcia brzucha z talerzem",
+    "tip": "Leżąc trzymaj talerz przy klatce. Unieś łopatki przez spięcie brzucha i kontroluj opuszczanie.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Weighted_Crunches.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Weighted_Crunches/0.jpg",
+      "assets/guides/Weighted_Crunches/1.jpg"
+    ]
+  },
+  "core-knees|BODY": {
+    "exerciseId": "Knee_Hip_Raise_On_Parallel_Bars",
+    "title": "Unoszenie kolan na poręczach",
+    "tip": "Oprzyj przedramiona na poręczach. Unieś kolana, podwijając miednicę; unikaj kołysania.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Knee_Hip_Raise_On_Parallel_Bars.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Knee_Hip_Raise_On_Parallel_Bars/0.jpg",
+      "assets/guides/Knee_Hip_Raise_On_Parallel_Bars/1.jpg"
+    ]
+  },
+  "core-knees|LYING-KNEES": {
+    "exerciseId": "Bent-Knee_Hip_Raise",
+    "title": "Unoszenie kolan leżąc",
+    "tip": "Leżąc z ugiętymi nogami przyciągnij kolana i lekko podwiń miednicę. Opuść nogi pod kontrolą.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Bent-Knee_Hip_Raise.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Bent-Knee_Hip_Raise/0.jpg",
+      "assets/guides/Bent-Knee_Hip_Raise/1.jpg"
+    ]
+  },
+  "core-woodchop|CABLE": {
+    "exerciseId": "Standing_Cable_Wood_Chop",
+    "title": "Woodchop na wyciągu",
+    "tip": "Prowadź uchwyt po skosie z góry w dół. Obracaj się płynnie razem z biodrami, bez szarpania.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Standing_Cable_Wood_Chop.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Standing_Cable_Wood_Chop/0.jpg",
+      "assets/guides/Standing_Cable_Wood_Chop/1.jpg"
+    ]
+  },
+  "core-wheel|AB-WHEEL": {
+    "exerciseId": "Ab_Roller",
+    "title": "Rollout z kółkiem z kolan",
+    "tip": "Napnij brzuch. Odsuwaj kółko tylko tak daleko, jak utrzymujesz pozycję tułowia, następnie wróć.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Ab_Roller.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Ab_Roller/0.jpg",
+      "assets/guides/Ab_Roller/1.jpg"
+    ]
+  },
+  "core-bend|DUMBBELL": {
+    "exerciseId": "Dumbbell_Side_Bend",
+    "title": "Skłony boczne z hantlem",
+    "tip": "Trzymaj jeden hantel. Wykonaj mały skłon boczny i wróć do pionu, bez skręcania tułowia.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Dumbbell_Side_Bend.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Dumbbell_Side_Bend/0.jpg",
+      "assets/guides/Dumbbell_Side_Bend/1.jpg"
+    ]
+  },
+  "core-bend|CABLE": {
+    "exerciseId": "One-Arm_High-Pulley_Cable_Side_Bends",
+    "title": "Skłony boczne na wyciągu",
+    "tip": "Demonstracja z górnym wyciągiem. Ustawienie uchwytu różni się od dolnego wyciągu; nie skręcaj tułowia.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/One-Arm_High-Pulley_Cable_Side_Bends.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/One-Arm_High-Pulley_Cable_Side_Bends/0.jpg",
+      "assets/guides/One-Arm_High-Pulley_Cable_Side_Bends/1.jpg"
+    ]
+  },
+  "fly|G3-S12": {
+    "exerciseId": "Butterfly",
+    "title": "Rozpiętki na maszynie — przykład ruchu",
+    "tip": "Ustaw siedzisko tak, aby uchwyty były na wysokości klatki. Zbliż ramiona bez odrywania pleców od oparcia.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Butterfly.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Butterfly/0.jpg",
+      "assets/guides/Butterfly/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "fly|G7-S22": {
+    "exerciseId": "Butterfly",
+    "title": "Rozpiętki na maszynie — przykład ruchu",
+    "tip": "Ustaw siedzisko tak, aby uchwyty były na wysokości klatki. Zbliż ramiona bez odrywania pleców od oparcia.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Butterfly.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Butterfly/0.jpg",
+      "assets/guides/Butterfly/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "rear|G3-S22": {
+    "exerciseId": "Reverse_Machine_Flyes",
+    "title": "Odwrotne rozpiętki na maszynie — przykład ruchu",
+    "tip": "Usiądź przodem do oparcia. Rozprowadź ramiona na boki bez unoszenia barków i kontroluj powrót.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Reverse_Machine_Flyes.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Reverse_Machine_Flyes/0.jpg",
+      "assets/guides/Reverse_Machine_Flyes/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "rear|G7-S22": {
+    "exerciseId": "Reverse_Machine_Flyes",
+    "title": "Odwrotne rozpiętki na maszynie — przykład ruchu",
+    "tip": "Usiądź przodem do oparcia. Rozprowadź ramiona na boki bez unoszenia barków i kontroluj powrót.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Reverse_Machine_Flyes.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Reverse_Machine_Flyes/0.jpg",
+      "assets/guides/Reverse_Machine_Flyes/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "shoulder|MG-PL23": {
+    "exerciseId": "Leverage_Shoulder_Press",
+    "title": "Wyciskanie na maszynie dźwigniowej — przykład ruchu",
+    "tip": "Ustaw siedzisko, oprzyj plecy i wyciśnij uchwyty nad głowę bez wypychania tułowia.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Leverage_Shoulder_Press.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Leverage_Shoulder_Press/0.jpg",
+      "assets/guides/Leverage_Shoulder_Press/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "preacher|MG-PL41": {
+    "exerciseId": "Machine_Preacher_Curls",
+    "title": "Uginanie na maszynie — przykład ruchu",
+    "tip": "Oprzyj ramiona o poduszkę. Uginaj łokcie, utrzymując barki i ramiona nieruchomo.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Machine_Preacher_Curls.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Machine_Preacher_Curls/0.jpg",
+      "assets/guides/Machine_Preacher_Curls/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "row|MG-PL34": {
+    "exerciseId": "Leverage_Iso_Row",
+    "title": "Wiosłowanie na maszynie — przykład ruchu",
+    "tip": "Oprzyj klatkę o poduszkę. Przyciągnij uchwyty przez prowadzenie łokci w tył, następnie powoli wróć.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Leverage_Iso_Row.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Leverage_Iso_Row/0.jpg",
+      "assets/guides/Leverage_Iso_Row/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "row|DIVERGING-ROW": {
+    "exerciseId": "Leverage_Iso_Row",
+    "title": "Wiosłowanie na maszynie — przykład ruchu",
+    "tip": "Oprzyj klatkę o poduszkę. Przyciągnij uchwyty przez prowadzenie łokci w tył, następnie powoli wróć.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Leverage_Iso_Row.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Leverage_Iso_Row/0.jpg",
+      "assets/guides/Leverage_Iso_Row/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "legcurl|LEG-CURL": {
+    "exerciseId": "Seated_Leg_Curl",
+    "title": "Uginanie nóg siedząc — przykład ruchu",
+    "tip": "Ustaw oś maszyny przy kolanie i wałek nad piętą. Ugnij kolana, nie odrywając bioder od siedziska.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Seated_Leg_Curl.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Seated_Leg_Curl/0.jpg",
+      "assets/guides/Seated_Leg_Curl/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "extension|G7-S71": {
+    "exerciseId": "Leg_Extensions",
+    "title": "Prostowanie nóg na maszynie — przykład ruchu",
+    "tip": "Ustaw oś maszyny przy kolanie, wałek nad kostką. Wyprostuj kolana pod kontrolą, bez kopnięcia.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Leg_Extensions.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Leg_Extensions/0.jpg",
+      "assets/guides/Leg_Extensions/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  },
+  "calf|MG-PL77": {
+    "exerciseId": "Seated_Calf_Raise",
+    "title": "Wspięcia siedząc na maszynie — przykład ruchu",
+    "tip": "Ustaw przodostopie na podparciu, uda pod poduszką. Unieś pięty i opuść je powoli przez komfortowy zakres.",
+    "source": "https://github.com/yuhonas/free-exercise-db/blob/main/exercises/Seated_Calf_Raise.json",
+    "credit": "Free Exercise DB / public domain",
+    "images": [
+      "assets/guides/Seated_Calf_Raise/0.jpg",
+      "assets/guides/Seated_Calf_Raise/1.jpg"
+    ],
+    "note": "Demonstracja ruchu na maszynie poglądowej, nie na konkretnym modelu Matrix. Zdjęcie właściwego modelu jest w sekcji „Rozpoznaj maszynę”."
+  }
+};

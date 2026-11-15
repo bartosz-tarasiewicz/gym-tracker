@@ -42,7 +42,7 @@ const server=http.createServer(async(req,res)=>{
   operations.push({id,method:'PUT'});
   return json(res,200,{ok:true,id,etag});
  }
- const file=files[url.pathname]||(['/profiles.js','/photos.js'].includes(url.pathname)?url.pathname.slice(1):url.pathname.startsWith('/assets/')&&!url.pathname.includes('..')?url.pathname.slice(1):null);if(!file){res.writeHead(404);return res.end('Not Found')}
+ const file=files[url.pathname]||(['/profiles.js','/photos.js','/exercise-guides.js'].includes(url.pathname)?url.pathname.slice(1):url.pathname.startsWith('/assets/')&&!url.pathname.includes('..')?url.pathname.slice(1):null);if(!file){res.writeHead(404);return res.end('Not Found')}
  res.writeHead(200,{'content-type':({'.html':'text/html','.js':'application/javascript','.svg':'image/svg+xml',
   '.jpg':'image/jpeg','.webp':'image/webp','.png':'image/png','.webmanifest':'application/manifest+json'})[path.extname(file)]||'text/plain'});
  res.end(fs.readFileSync(file));
@@ -89,6 +89,45 @@ try{
  await phone.locator('#week-date').fill('2026-11-13');
  await phone.waitForFunction(()=>document.querySelector('#notes')?.value==='Old Azure note');
  log('Calendar initially loads existing Azure training');
+ const undoWrites=operations.length;
+ await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().fill('99');
+ await phone.locator('#notes').fill('Przypadkowa zmiana');
+ await phone.locator('#undo-training').click();
+ await phone.waitForFunction(()=>!window.GymCloud.isBusy());
+ await phone.waitForTimeout(150);
+ assert.equal(await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().inputValue(),'50');
+ assert.equal(await phone.locator('#notes').inputValue(),'Old Azure note');
+ assert.equal(operations.length,undoWrites,'Undo never writes or deletes Azure records');
+ assert.equal(store.get(originalId).record.notes,'Old Azure note');
+ phone.once('dialog',d=>void d.accept());await phone.locator('#workout-type').selectOption('0');
+ await phone.locator('#undo-training').click();
+ await phone.waitForFunction(()=>!window.GymCloud.isBusy());
+ await phone.waitForTimeout(150);
+ assert.equal(await phone.locator('#workout-type').inputValue(),'5','Undo also restores original workout type');
+ await phone.locator('#week-date').fill('2026-11-20');
+ await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().fill('88');
+ await phone.reload({waitUntil:'domcontentloaded'});
+ await phone.locator('#undo-training').click();
+ await phone.waitForFunction(()=>!window.GymCloud.isBusy());
+ await phone.waitForTimeout(150);
+ assert.equal(await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().inputValue(),'50','Undo baseline survives offline form reload');
+ assert.equal(await phone.evaluate(()=>Object.values(state.sessions).some(s=>s.date==='2026-11-20')),false,'New unsaved day is removed locally');
+ await phone.locator('#week-date').fill('2026-11-13');
+ log('Undo restores historical values, notes and plans, survives reload and never writes Azure');
+ await phone.locator('#week-date').fill('2026-11-23');
+ await phone.locator('[data-item="2"]').click();
+ assert.match(await phone.locator('.movement-img').first().getAttribute('src'),/Dumbbell_Flyes/);
+ await phone.locator('.movement-img').first().scrollIntoViewIfNeeded();
+ await phone.locator('.panel').filter({has:phone.locator('.movement-photos')}).screenshot({path:'exercise-preview.png'});
+ await phone.locator('[data-item="0"]').click();
+ await phone.locator('[data-machine="DUMBBELL"]').click();
+ assert.match(await phone.locator('.movement-img').first().getAttribute('src'),/Dumbbell_Bench_Press/);
+ assert.equal(await phone.locator('img[src*="photos/DUMBBELL"]').count(),0);
+ await phone.locator('#undo-training').click();
+ await phone.locator('#week-date').fill('2026-11-13');
+ log('Dumbbell photos demonstrate the selected movement and change per exercise');
+
+
 
  await phone.locator('[data-view="settings"]').click();
  const imported={
@@ -293,8 +332,15 @@ try{
  // per-date plans and preferences. A second tab keeps its original scope.
  await phone.locator('#active-profile:not([disabled])').waitFor();
  const legacyBefore=JSON.stringify([...store]);
- phone.once('dialog',d=>void d.accept('Anna'));
+ // Embedded browsers may suppress native prompt dialogs entirely.
+ await phone.evaluate(()=>{window.prompt=()=>null;});
  await phone.locator('#add-profile').click();
+ await phone.locator('#profile-name').fill('Anna');
+ await phone.locator('#cancel-profile').click();
+ assert.equal(await phone.locator('#profile-form').count(),0);
+ await phone.locator('#add-profile').click();
+ await phone.locator('#profile-name').fill('Anna');
+ await phone.locator('#profile-form button[type="submit"]').click();
  await phone.waitForFunction(()=>window.GymProfiles?.id().startsWith('p-')&&document.querySelector('#active-profile')?.disabled===false);
  const anna=await phone.evaluate(()=>GymProfiles.id());
  assert.equal(await phone.evaluate(()=>state.history.length+Object.keys(state.sessions).length),0);
@@ -324,7 +370,8 @@ try{
  await phone.locator('[data-item="1"]').click();
  assert.ok(await phone.locator('[data-machine="BAND-LEG-CURL"]').count());
  await phone.locator('[data-machine="BAND-LEG-CURL"]').click();
- assert.match(await phone.locator('.machine-img').getAttribute('src'),/assets\/equipment\/BAND-LEG-CURL.svg/);
+ assert.equal(await phone.locator('.movement-img').count(),0);
+ assert.match(await phone.locator('.detail').first().textContent(),/Leżąc na brzuchu/);
 
  await phone.locator('[data-view="settings"]').click();
  const annaImport={format:'gym-tracker-db-export-v1',workouts:[row('2026-11-13',19,'Anna import')]};

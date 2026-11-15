@@ -10,7 +10,7 @@ window.GymProfiles=(()=>{
  const suffix=()=>active==='default'?'':':profile:'+active;
  function persist(){localStorage.setItem(KEY,JSON.stringify(profiles));}
  const settingsKey='gym-profile-settings-v1'+suffix();
- let settings={preferences:{},plans:{}},settingsEtag=null,settingsDirty=false,settingsBusy=false,settingsTimer,notice='';
+ let settings={preferences:{},plans:{}},settingsEtag=null,settingsDirty=false,settingsBusy=false,settingsTimer,notice='',formOpen=false,profileName='',formError='';
  try{const cached=JSON.parse(localStorage.getItem(settingsKey)||'null');if(cached){settings=cached.settings;settingsEtag=cached.etag;settingsDirty=cached.dirty;}}catch{}
  function cacheSettings(){localStorage.setItem(settingsKey,JSON.stringify({settings,etag:settingsEtag,dirty:settingsDirty}));}
  async function syncSettings(){
@@ -36,7 +36,7 @@ window.GymProfiles=(()=>{
  }
  function render(){
   const root=document.getElementById('profiles');if(!root)return;
-  root.innerHTML='<label class="label" for="active-profile">Profil użytkownika</label><div class="inline-actions"><select class="equipment" id="active-profile" '+(!ready||changing?'disabled':'')+'>'+profiles.map(p=>'<option value="'+p.id+'" '+(p.id===active?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select><button class="btn secondary" id="add-profile" '+(!ready||changing?'disabled':'')+'>+ Dodaj profil</button></div><p class="hint">Treningi, historia i ustawienia dotyczą wybranego profilu.</p><p class="hint" role="status">'+esc(notice)+'</p>';
+  root.innerHTML='<label class="label" for="active-profile">Profil użytkownika</label><div class="inline-actions"><select class="equipment" id="active-profile" '+(!ready||changing?'disabled':'')+'>'+profiles.map(p=>'<option value="'+p.id+'" '+(p.id===active?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select><button type="button" class="btn secondary" id="add-profile" aria-expanded="'+formOpen+'" '+(changing?'disabled':'')+'>+ Dodaj profil</button></div><p class="hint">Treningi, historia i ustawienia dotyczą wybranego profilu.</p><p class="hint" role="status">'+esc(notice)+'</p>'+(formOpen?'<form id="profile-form"><label class="label" for="profile-name">Nazwa nowego profilu</label><input class="equipment" id="profile-name" name="profile-name" maxlength="60" required autocomplete="off" value="'+esc(profileName)+'"><p class="hint" id="profile-error" role="status">'+esc(formError||(!ready?'Wczytywanie danych. Za chwilę będzie można utworzyć profil.':''))+'</p><div class="inline-actions"><button class="btn" type="submit" '+(!ready||changing?'disabled':'')+'>Utwórz profil</button><button class="btn secondary" type="button" id="cancel-profile">Anuluj</button></div></form>':'');
  }
  async function request(method='GET',body){
   const response=await fetch('/api/profiles',{method,credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(10000)});
@@ -65,12 +65,22 @@ window.GymProfiles=(()=>{
   catch(e){changing=false;render();alert('Nie udało się przełączyć profilu. Dane zachowano.');}
  }
  document.addEventListener('change',e=>{if(e.target.id==='active-profile')void switchTo(e.target.value);});
- document.addEventListener('click',async e=>{
-  if(!e.target.closest('#add-profile')||!ready||changing)return;
-  const name=prompt('Nazwa nowego profilu (do 60 znaków):');if(name===null)return;
-  if(!name.trim()||name.trim().length>60){alert('Wpisz nazwę od 1 do 60 znaków.');return;}
-  const profile={id:'p-'+crypto.randomUUID(),name:name.trim()};
-  try{profiles.push(profile);persist();}catch{profiles=profiles.filter(p=>p.id!==profile.id);alert('Brak miejsca na zapis profilu.');return;}
+ document.addEventListener('input',e=>{if(e.target.id==='profile-name')profileName=e.target.value;});
+ document.addEventListener('click',e=>{
+  if(e.target.closest('#add-profile')){formOpen=true;formError='';render();document.getElementById('profile-name')?.focus();}
+  if(e.target.closest('#cancel-profile')){formOpen=false;profileName='';formError='';render();}
+ });
+ document.addEventListener('submit',async e=>{
+  if(e.target.id!=='profile-form')return;e.preventDefault();
+  if(!ready||changing)return;
+  const name=profileName.trim();
+  if(!name||name.length>60){formError='Wpisz nazwę od 1 do 60 znaków.';render();return;}
+  if(window.GymCloud?.isBusy()||settingsBusy){formError='Trwa synchronizacja. Spróbuj za chwilę.';render();return;}
+  if(window.gymProfileCanLeave?.()===false)return;
+  const profile={id:'p-'+crypto.randomUUID(),name};
+  try{profiles.push(profile);persist();}catch{profiles=profiles.filter(p=>p.id!==profile.id);formError='Brak miejsca na zapis profilu.';render();return;}
+  // Switching starts synchronously, preventing duplicate submissions. Leave the
+  // form available if the switch fails; the new profile is already in the list.
   await switchTo(profile.id);
  });
  window.addEventListener('online',()=>void sync());

@@ -1,3 +1,9 @@
+## Poprawki v0.9.1
+
+- **Dodaj profil** otwiera formularz bezpośrednio na stronie. Nie wymaga `prompt`, który może być blokowany w osadzonych przeglądarkach. Test obejmuje otwarcie, anulowanie i utworzenie profilu przy wyłączonym `prompt`.
+- **Cofnij zmiany**, obok zapisu, przywraca lokalną wersję ostatniego zapisu wybranego dnia: serie, ciężary, notatki, sprzęt i rodzaj treningu. Nie wykonuje zapisu ani usuwania w Azure. Działa też dla niezapisanych formularzy po odświeżeniu strony. Nie cofa już zatwierdzonego zapisu w Azure. Kopia do cofania jest izolowana razem z całym stanem profilu.
+- Usunięto zdjęcie hantli w kartonie i automatyczne przypisywanie jednego zdjęcia wszystkim ćwiczeniom z hantlami. Katalog zawiera 70 zdjęć demonstracyjnych dla 41 par ćwiczenie–wariant. Dwa ujęcia ruchu, polski opis i źródło są dobierane do wybranego wariantu. Fotografie Matrix pozostają w osobnej sekcji identyfikacji maszyny. Inny model na demonstracji jest wyraźnie opisany. Przy braku pasującej demonstracji pozostaje opis ruchu, bez udawania zdjęcia ćwiczenia schematem sprzętu.
+
 # Gym Tracker — v0.9 · Profile użytkowników
 
 Na samej górze ekranu wybierz profil lub użyj **+ Dodaj profil**. Nowy profil zaczyna z pustym dziennikiem i tym samym szablonem ćwiczeń. Nazwy mogą się powtarzać: dane identyfikuje niezależny identyfikator. Profile są dodatkowymi dziennikami w obrębie zalogowanego konta, nie oddzielnymi loginami.
@@ -9,7 +15,7 @@ Na samej górze ekranu wybierz profil lub użyj **+ Dodaj profil**. Nowy profil 
 
 Wszystkie 30 ćwiczeń ma co najmniej dwa warianty. Dodano siedem wariantów nóg i CORE z osobnymi seriami i jednostkami. Warianty nie przeliczają automatycznie ciężarów między sprzętami.
 
-Zdjęcia: 26 lokalnych plików (około 5,5 MB), źródła i oznaczenia modeli w `assets/photo-sources.json` oraz podpisach w aplikacji. Preferowane są rzeczywiste zdjęcia/obrazy produktowe Matrix. Zdjęcia sprzętu i modeli poglądowych są opisane; niepotwierdzony model nie jest przedstawiany jako dokładne wyposażenie siłowni. Przy braku lub błędzie obrazu pojawia się lokalny, opisany schemat sprzętu. Usunięto niedopasowane zdjęcie hollow hold. Nowy service worker przechowuje zdjęcia i schematy do pracy offline. Źródła zachowują prawa do zdjęć.
+Zdjęcia identyfikacyjne maszyn: 17 lokalnych plików, źródła i oznaczenia modeli w `assets/photo-sources.json` oraz podpisach w aplikacji. Preferowane są rzeczywiste zdjęcia/obrazy produktowe Matrix. Zdjęcia sprzętu i modeli poglądowych są opisane; niepotwierdzony model nie jest przedstawiany jako dokładne wyposażenie siłowni. Przy braku zdjęcia wykonania pojawia się opis ruchu. Usunięto niedopasowane zdjęcie hollow hold. Nowy service worker przechowuje zdjęcia i schematy do pracy offline. Źródła zachowują prawa do zdjęć.
 
 Weryfikacja lokalna:
 

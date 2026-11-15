@@ -103,6 +103,34 @@ let state=initial();
 let pendingHistoryEdit=null;
 // History edits are isolated from the Azure-synced state until explicit Save.
 const cloneWorkout=value=>JSON.parse(JSON.stringify(value));
+function dayCopy(date){return {
+ sessions:Object.fromEntries(Object.entries(state.sessions).filter(([,r])=>r.date===date)),
+ history:state.history.filter(r=>r.date===date),day:state.activeDay,selectedRecordId:state.selectedRecordId
+};}
+function rememberDay(){
+ const date=state.selectedDate;
+ const dirty=historyEditChanged()||(state.unsavedDates||[]).some(k=>k.startsWith(date+'|'));
+ state.undoDays=state.undoDays||{};
+ if(!dirty)state.undoDays[date]=cloneWorkout(dayCopy(date));
+}
+function undoDayHTML(){return '<button type="button" id="undo-training" class="btn secondary full" style="margin-top:8px" '+(!state.undoDays?.[state.selectedDate]?'disabled':'')+'>↶ Cofnij zmiany</button><p class="hint">Przywraca ostatni zapis wybranego dnia. Nie zmienia danych w Azure.</p>';}
+async function undoSelectedDay(){
+ if(savingWorkout)return;
+ const requestedDate=state.selectedDate;
+ if(window.GymCloud?.isBusy()){
+  toast('Czekam na zakończenie synchronizacji…');
+  for(let n=0;n<150&&window.GymCloud?.isBusy();n++)await new Promise(resolve=>setTimeout(resolve,100));
+  if(window.GymCloud?.isBusy()||state.selectedDate!==requestedDate){toast('Ponów cofnięcie zmian po synchronizacji.');return;}
+ }
+ const date=state.selectedDate,original=state.undoDays?.[date];
+ if(!original){toast('Brak zapisanej wersji do przywrócenia.');return;}
+ state.sessions={...Object.fromEntries(Object.entries(state.sessions).filter(([,r])=>r.date!==date)),...cloneWorkout(original.sessions)};
+ state.history=[...state.history.filter(r=>r.date!==date),...cloneWorkout(original.history)].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+ state.unsavedDates=(state.unsavedDates||[]).filter(k=>!k.startsWith(date+'|'));
+ pendingHistoryEdit=null;state.selectedRecordId=original.selectedRecordId||'';
+ state.activeDay=original.day;state.activeExercise=0;state.activeCore=0;state.activeArea='main';
+ save(false);await GymStorage.flush();render();toast('Przywrócono zapis z '+date+'.');
+}
 function historyEditChanged(){return !!pendingHistoryEdit&&JSON.stringify(pendingHistoryEdit.draft)!==pendingHistoryEdit.original}
 function abandonHistoryEdit(){
  if(historyEditChanged()&&!confirm('Masz niezapisane zmiany w tym treningu. Odrzucić je?'))return false;
@@ -434,8 +462,24 @@ function setsHTML(list,type,item){
    '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>';
  }).join('');
 }
+function exerciseMediaHTML(item,machine){
+ const guide=window.GymExerciseGuides?.[item.id+'|'+machine];
+ const tips={
+  'BAND-LEG-CURL':'Leżąc na brzuchu zaczep gumę o stabilny punkt i kostkę. Zegnij kolano, utrzymując biodra nieruchomo, następnie powoli wyprostuj nogę.',
+  'BAND-EXTENSION':'Siedząc zaczep gumę za sobą i na kostce. Prostuj kolano w kontrolowanym zakresie bez odrywania uda od siedziska.',
+  'DB-HIP-THRUST':'Oprzyj górę pleców o stabilną ławkę. Przytrzymaj hantel na biodrach, unieś biodra do linii tułowia i powoli opuść.',
+  'SIDE-PLANK-KNEES':'Oprzyj się bokiem na przedramieniu i ugiętych kolanach. Unieś biodra, utrzymując bark nad łokciem, potem kontrolowanie opuść.',
+  'TUCK-HOLD':'Leżąc podwiń miednicę i dociśnij lędźwie do podłoża. Unieś łopatki oraz ugięte nogi; utrzymuj pozycję bez odrywania lędźwi.'
+ };
+ const product=window.GymPhotos?.[machine];
+ const instruction='<div class="detail"><strong>Jak wykonać · '+esc(guide?.title||item.title)+'</strong><p>'+esc(guide?.tip||tips[machine]||item.tip)+'</p></div>';
+ const movement=guide?'<div class="movement-photos">'+guide.images.map((src,i)=>'<figure><img class="movement-img" loading="lazy" src="'+esc(src)+'" alt="'+esc(guide.title)+' — pozycja '+(i+1)+'" onerror="this.hidden=true;this.nextElementSibling.textContent=\'Zdjęcie niedostępne — skorzystaj z opisu poniżej\'"><figcaption>Pozycja '+(i+1)+'</figcaption></figure>').join('')+'</div><a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(guide.source)+'">Demonstracja: '+esc(guide.credit)+'</a>':'<p class="hint">Dla tego wariantu nie ma jeszcze zweryfikowanej fotografii wykonania. Poniżej opis ruchu.</p>';
+ const reference=product?.local?'<details class="machine-reference"><summary>Rozpoznaj maszynę · '+esc(machineName(machine))+'</summary><p class="hint">Zdjęcie sprzętu, nie demonstracja ćwiczenia.</p><img class="machine-img" loading="lazy" src="'+esc(product.local)+'" alt="'+esc(machineName(machine))+'"><p class="hint">'+esc(product.note||'Porównaj oznaczenie modelu na maszynie.')+'</p><a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(product.source)+'">Źródło: '+esc(product.credit)+'</a></details>':'';
+ return movement+(guide?.note?'<p class="hint">'+esc(guide.note)+'</p>':'')+instruction+reference;
+}
 function selectedDayReports(){return state.history.filter(h=>h.date===state.selectedDate&&h.day===state.activeDay)}
 function trainHTML(){
+ rememberDay();
  const calendar=GymWeek.html(state),d=state.activeDay;
  const standard=GymWeek.dayIndex(state.selectedDate);
  const typeSelector='<div class="panel workout-type-panel">'+
@@ -454,7 +498,7 @@ function trainHTML(){
    '<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div>'+
    '<textarea class="notes" id="notes" placeholder="Opcjonalny opis dnia lub aktywności…">'+
    esc(note)+'</textarea>'+
-   '<button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień</button>'+
+   '<button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień</button>'+undoDayHTML()+
    '<p class="hint">Zapis w Azure dotyczy tylko tej daty. Możesz później zmienić rodzaj treningu.</p></div>';
  }
  const s=activeSession(),day=PLAN[d],{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
@@ -466,15 +510,6 @@ function trainHTML(){
  const coreTabs=CORE.map((e,i)=>'<button type="button" class="core-choice '+(coreActive&&index===i?'active':'')+'" data-core="'+i+'">'+(isCoreEnabled(e)?'✓ ':'＋ ')+esc(e.title)+'</button>').join('');
  const selected=item.options.map(k=>'<option value="'+esc(k)+'" '+(log.machine===k?'selected':'')+'>'+esc(machineName(k))+'</option>').join('');
  const choices=item.options.map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k).split(' · ')[0])+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
- const photoKey=({'PULLOVER':'DUMBBELL','HAMMER':'DUMBBELL','DB-HIP-THRUST':'DUMBBELL','DB-CALF':'DUMBBELL','STRAIGHT-ARM':'CABLE','TRICEPS-ROPE':'CABLE'})[log.machine]||log.machine;
- const primaryCore=coreActive&&log.machine===item.options[0];
- const image=(primaryCore?window.GymPhotos?.[item.id]:null)||window.GymPhotos?.[photoKey];
- const src=image?.local||image?.remote;
- const fallback='assets/equipment/'+encodeURIComponent(MACHINE[log.machine]?log.machine:'BODY')+'.svg';
- const fallbackLabel='Schemat sprzętu — '+machineName(log.machine)+'. '+(item.tip||'');
- const photo='<img class="machine-img" loading="lazy" decoding="async" alt="'+esc(src?(item.title+' — '+machineName(log.machine)):fallbackLabel)+'" src="'+esc(src||fallback)+'" data-fallback="'+esc(fallback)+'" onerror="this.onerror=null;this.src=this.dataset.fallback;this.alt=\'Schemat sprzętu — zdjęcie niedostępne\';this.nextElementSibling.hidden=false"><p class="image-error" '+(src?'hidden':'')+'>Schemat sprzętu, nie fotografia ani instrukcja ruchu. '+esc(item.tip||'')+'</p>';
- const credit=image?.source?'<a class="img-link" target="_blank" rel="noopener noreferrer" href="'+esc(image.source)+'">Źródło zdjęcia: '+esc(image.credit)+'</a>':'';
- const photoNote=image?.note?'<p class="photo-note">'+esc(image.note)+'</p>':'';
  const previous=[...state.history,...Object.values(state.sessions)].filter(h=>h.date<state.selectedDate&&h.exercises?.[item.id]).sort((a,b)=>a.date.localeCompare(b.date)).reverse().find(h=>{
   const l=h.exercises[item.id];return l?.variants?.[log.machine]||l?.machine===log.machine;
  });
@@ -487,7 +522,7 @@ function trainHTML(){
  const overview='<div class="panel workout-overview"><div class="flex"><div><div class="eyebrow">Wykonane serie</div><div class="title">'+sum.done+'<span class="muted"> / '+sum.planned+'</span></div></div><span class="chip">'+esc(state.selectedDate)+'</span></div><div class="meter"><div style="width:'+(sum.planned?Math.round(100*sum.done/sum.planned):0)+'%"></div></div><p class="hint">Główne: '+sum.mainDone+' · CORE: '+sum.coreDone+'</p></div>';
  const chooseArea='<div class="inline-actions"><button class="btn '+(coreActive?'secondary':'')+'" data-area="main">🏋️ Trening</button><button class="btn '+(!coreActive?'secondary':'')+'" data-area="core">🧱 CORE BONUS</button></div>';
  const chooser=coreActive?'<div class="panel"><div class="eyebrow">Wybierz ćwiczenie CORE</div><p class="hint">Ćwiczenia opcjonalne. Nieaktywne nie są liczone do planu.</p><div class="core-chooser">'+coreTabs+'</div></div>':'<div class="exercise-strip">'+tabs+'</div>';
- const photoSection='<div class="img-frame">'+photo+'</div>'+credit+photoNote;
+ const photoSection=exerciseMediaHTML(item,log.machine);
  const selectedVariants='<div class="label">Maszyna / hantle / zamiennik</div><div class="machine-options">'+choices+'</div><select id="machine" class="equipment" aria-label="Wybierz wariant sprzętu">'+selected+'</select>';
  const sets='<p class="ex-note">Jednostka: <strong>'+esc(unit(log.machine))+'</strong> · '+esc(measure(item))+'. Każdy wariant sprzętu ma osobne wyniki.</p>'+preview+
   (v.warmups?.length?'<div class="section-header"><strong>Rozgrzewka</strong><span class="smallcaps">Poza licznikiem serii</span></div><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.warmups,'warm',item):'')+
@@ -500,7 +535,7 @@ function trainHTML(){
   '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Wstecz</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
  const isHistory=!!savedHistoryRecord();
  const notes='<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, ból, uwagi…">'+esc(s.notes||'')+'</textarea>'+
-  '<button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+
+  '<button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+undoDayHTML()+
 
   '<p class="hint">Kliknij Zapisz, aby '+(saved?'zaktualizować istniejący':'utworzyć nowy')+' trening w Azure. Zmiany przed zapisem pozostają na tym urządzeniu.</p></div>';
  return calendar+typeSelector+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
@@ -658,6 +693,7 @@ function changeArea(area){state.activeArea=area;save(false);render()}
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
  if(window.GymProgress?.handleClick?.(b,render))return;
+ if(b.id==='undo-training'){await undoSelectedDay();return;}
  if(b.id==='save-training'){await saveSelectedWorkout();return;}
  if(b.dataset.week!==undefined){selectDate(b.dataset.week==='today'?dateKey():GymWeek.shift(state.selectedDate,Number(b.dataset.week)));return}
  if(b.dataset.date!==undefined){selectDate(b.dataset.date);return}

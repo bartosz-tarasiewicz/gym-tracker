@@ -3,3 +3,5 @@ api/node_modules/
 *.log
 e2e-failure.png
 profile-preview.png
+exercise-source.tmp.json
+exercise-preview.png

@@ -28,6 +28,15 @@ try {
  await page.locator('[data-day="2"]').waitFor({timeout:20000});
  assert.match(await page.title(),/Gym Tracker/);
  pass('Public Azure site loads at the supplied URL');
+ if(process.env.GYM_REQUIRE_LATEST_UI==='1'){
+  await page.evaluate(()=>{window.prompt=()=>null;});
+  await page.locator('#add-profile').click();
+  await page.locator('#profile-name').fill('Test formularza');
+  assert.equal(await page.locator('#profile-name').inputValue(),'Test formularza');
+  await page.locator('#cancel-profile').click();
+  assert.equal(await page.locator('#profile-form').count(),0);
+  pass('Add profile opens an inline form when native prompts are blocked');
+ }
  await page.locator('[data-day="2"]').click();
  await page.locator('[data-item="1"]').click();
  await input('kg').fill('42.5');

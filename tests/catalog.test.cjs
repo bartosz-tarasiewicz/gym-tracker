@@ -22,6 +22,20 @@ test('Cached catalogue photos are real image bytes, attributed and pre-cached',(
   assert.ok(bytes[0]===0xff||bytes.subarray(0,4).toString()==='RIFF'||bytes[0]===0x89,photo.local);
   assert.ok(fs.readFileSync('sw.js','utf8').includes(photo.local));count++;
  }
- assert.equal(count,26);
+ assert.equal(count,17);
  assert.ok(!photos['core-hollow'],'Unrelated handstand photo must never return');
+});
+
+test('Exercise demonstrations are keyed by both exercise and equipment, with two local photos',()=>{
+ const guides=JSON.parse(fs.readFileSync('assets/exercise-guides.json','utf8'));
+ assert.ok(!JSON.parse(fs.readFileSync('assets/photo-sources.json','utf8')).DUMBBELL,'No generic crate of dumbbells');
+ assert.notEqual(guides['flat|DUMBBELL'].exerciseId,guides['fly|DUMBBELL'].exerciseId);
+ assert.notEqual(guides['fly|DUMBBELL'].exerciseId,guides['laterals|DUMBBELL'].exerciseId);
+ for(const [key,guide] of Object.entries(guides)){
+  const [id,machine]=key.split('|');
+  const item=[...PLAN.flatMap(p=>p.items),...CORE].find(x=>x.id===id);
+  assert.ok(item?.options.includes(machine),key);
+  assert.equal(guide.images.length,2);
+  for(const file of guide.images){assert.ok(fs.existsSync(file),file);assert.ok(fs.readFileSync('sw.js','utf8').includes(file));}
+ }
 });
