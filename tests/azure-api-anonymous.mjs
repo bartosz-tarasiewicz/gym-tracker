@@ -22,3 +22,7 @@ const v4Data=await v4Health.json();
 assert.equal(v4Health.status,200,'Workout API v0.4 health failed HTTP '+v4Health.status);
 assert.deepEqual(v4Data,{status:'ok',runtime:'workouts-v04'});
 console.log('PASS: Live v0.4 Azure Functions runtime and Table Storage connection');
+
+const versions=await fetch(v4Base+'/api/workouts/history:test/versions',{redirect:'manual',headers:{accept:'application/json'}});
+assert.ok([302,401,403].includes(versions.status),'Workout version archive must reject anonymous reads');
+console.log('PASS: Workout version archive rejects anonymous reads');

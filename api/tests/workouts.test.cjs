@@ -172,3 +172,19 @@ test('Explicit archive restore preserves multiple same-date records; ordinary sa
  assert.equal((await handle(req(null,'PUT',b,{record,expectedEtag:null,preserveRecords:true}),context)).status,401);
  assert.equal((await handle(scoped(req(user),profileA),context)).jsonBody.workouts.length,0);
 });
+
+test('saved versions are bounded, immutable, profile-scoped and atomic with ETag updates',async()=>{
+ const user='revision-owner',id='history:versioned',record={date:'2026-11-13',day:5,notes:'v0',exercises:{}};
+ const call=(method,body)=>handle(scoped(req(user,method,id,body),profileA),context);
+ let saved=await call('PUT',{record,expectedEtag:null});let etag=saved.jsonBody.etag;
+ assert.equal((await call('GET')).jsonBody.versions.length,0);
+ for(let n=1;n<=12;n++){saved=await call('PUT',{record:{...record,notes:'v'+n},expectedEtag:etag});assert.equal(saved.status,200);etag=saved.jsonBody.etag;}
+ const versions=(await call('GET')).jsonBody;assert.equal(versions.versions.length,10);assert.equal(versions.versions[0].record.notes,'v11');assert.equal(versions.versions[9].record.notes,'v2');
+ assert.equal((await call('PUT',{record:{...record,notes:'stale'},expectedEtag:'old'})).status,409);assert.deepEqual((await call('GET')).jsonBody,versions);
+ assert.equal((await call('PUT',{record:{...record,notes:'v12'},expectedEtag:etag})).jsonBody.etag,etag,'saving an unchanged record creates no revision');
+ assert.equal((await handle(req(null,'GET',id),context)).status,401);
+ assert.equal((await handle(scoped(req(user,'GET',id),profileB),context)).status,404);
+ assert.equal((await handle(scoped(req('different-user','GET',id),profileA),context)).status,404);
+ saved=await call('PUT',{record:versions.versions[0].record,expectedEtag:etag});assert.equal(saved.status,200);
+ assert.equal((await call('GET')).jsonBody.versions[0].record.notes,'v12','restoring archives the replaced value');
+});

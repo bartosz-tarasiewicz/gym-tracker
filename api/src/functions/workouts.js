@@ -46,6 +46,21 @@ function decompressed(packed){
  if(typeof packed!=='string'||packed.length>60_000)throw Error('bad stored row');
  return JSON.parse(gunzipSync(Buffer.from(packed,'base64'),{maxOutputLength:400_000}).toString('utf8'));
 }
+// The archive is committed in the same entity/ETag operation as the new value.
+// Failed or concurrent writes therefore cannot produce phantom revisions.
+function archivedVersions(row){
+ if(!row.versionParts)return [];
+ if(!Number.isInteger(row.versionParts)||row.versionParts<1||row.versionParts>2)throw Error('invalid archive');
+ let packed='';for(let i=0;i<row.versionParts;i++)packed+=row['version'+i];
+ const versions=JSON.parse(gunzipSync(Buffer.from(packed,'base64'),{maxOutputLength:700_000}).toString('utf8'));
+ if(!Array.isArray(versions)||versions.length>10)throw Error('invalid archive');return versions;
+}
+function archiveFields(previous){
+ const versions=[{id:hash(previous.packed+previous.etag).slice(0,24),packed:previous.packed,savedAt:previous.updatedAt||null},...archivedVersions(previous)].slice(0,10);
+ let packed;while(versions.length){packed=gzipSync(Buffer.from(JSON.stringify(versions))).toString('base64');if(packed.length<=62000)break;versions.pop();}
+ if(!versions.length)throw Error('previous version exceeds archive capacity');
+ return {versionCount:versions.length,versionParts:Math.ceil(packed.length/31000),version0:packed.slice(0,31000),...(packed.length>31000?{version1:packed.slice(31000)}:{})};
+}
 function legacySnapshot(row){
  if(row.format!=='gzip-base64-v1'||!(row.count>0&&row.count<=25))throw Error('unknown legacy format');
  let encoded='';
@@ -109,6 +124,11 @@ async function handle(request,context){
  const part=profilePartition(p,profile);
  try{
   if(request.method==='GET'){
+   if(request.params?.id){
+    const id=request.params.id;if(!identifier(id))return reply(400,{error:'invalid_id'});
+    try{const row=await t.getEntity(part,rowKey(id));return reply(200,{id,etag:row.etag,versions:archivedVersions(row).map(v=>({id:v.id,savedAt:v.savedAt,record:decompressed(v.packed)}))});}
+    catch(e){if(e.statusCode===404)return reply(404,{error:'workout_not_found'});throw e;}
+   }
    if(profile==='default')await migrateLegacy(t,part);
    return reply(200,{version:1,workouts:await list(t,part)});
   }
@@ -135,7 +155,13 @@ async function handle(request,context){
      if(body.preserveRecords!==true&&workouts.some(x=>x.id!==id&&x.record?.date===body.record.date))
       return reply(409,{error:'workout_date_exists'});
      await t.createEntity(entity);
-    }else await t.updateEntity(entity,'Replace',{etag:body.expectedEtag,matchConditions:'IfNotModified'});
+    }else{
+     const previous=await t.getEntity(part,key);
+     if(previous.etag!==body.expectedEtag)return reply(409,{error:'workout_changed'});
+     if(previous.packed===packed)return reply(200,{ok:true,id,etag:previous.etag});
+     Object.assign(entity,archiveFields(previous));
+     await t.updateEntity(entity,'Replace',{etag:body.expectedEtag,matchConditions:'IfNotModified'});
+    }
     const saved=await t.getEntity(part,key);
     return reply(200,{ok:true,id,etag:saved.etag||null});
    }catch(e){
@@ -175,4 +201,5 @@ async function healthHandler(request,context){
 app.http('workouts-health',{methods:['GET'],route:'workouts-health',authLevel:'anonymous',handler:healthHandler});
 app.http('workouts-list',{methods:['GET'],route:'workouts',authLevel:'anonymous',handler:handle});
 app.http('workouts-item',{methods:['PUT','DELETE'],route:'workouts/{id}',authLevel:'anonymous',handler:handle});
+app.http('workouts-versions',{methods:['GET'],route:'workouts/{id}/versions',authLevel:'anonymous',handler:handle});
 module.exports={handle,healthHandler,compressed,decompressed,identity,partition,rowKey,legacyId,migrateLegacy,list,identifier};

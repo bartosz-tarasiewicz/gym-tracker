@@ -112,6 +112,14 @@ try {
  await page.locator('#trend-machine').selectOption('MG-PL23');
  assert.match(await page.locator('.trend-stats').innerText(),/42,5/,'Trends survive reload');
  pass('Seven-day calendar and trends survive refresh on deployed Azure');
+ if(process.env.GYM_REQUIRE_LATEST_UI==='1'){
+  assert.equal(await page.locator('#weekly-summary').count(),1);
+  assert.equal(await page.locator('#personal-records').count(),1);
+  assert.ok(await page.locator('#cloud-save-status').innerText());
+  await page.locator('[data-view="train"]').click();
+  assert.equal(await page.locator('.workout-versions').count(),1);
+  pass('Deployed app includes personal records, weekly summaries, save status and version history');
+ }
  assert.equal(errors.length,0,'JavaScript errors: '+errors.join('; '));
  pass('No uncaught browser JavaScript errors');
  console.log('SUCCESS: '+checks+' real-browser checks against Azure');

@@ -1,0 +1,24 @@
+import {test,expect,date,weight,done,seed} from './fixtures.mjs';
+async function history(p){await p.locator('.workout-versions > summary').click();await p.locator('#load-versions').click();await expect(p.locator('[data-restore-version]')).toHaveCount(1);await p.locator('#versions-list details > summary').first().click();}
+test('saved revision preview, canceled restore, undo, explicit restore and backup preserve other records',async({app:p,db})=>{
+ const id=seed(db),other=seed(db,'2026-11-06','55');await p.reload();await date(p);await weight(p).fill('75');await expect(p.locator('#cloud-save-status')).toContainText('wybierz Zapisz');await p.locator('#save-training').click();await expect.poll(()=>db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('75');
+ await history(p);await expect(p.locator('#versions-list pre')).toContainText('60');p.once('dialog',d=>d.dismiss());await p.locator('[data-restore-version]').click();await expect(weight(p)).toHaveValue('75');
+ p.once('dialog',d=>d.accept());await p.locator('[data-restore-version]').click();await expect(weight(p)).toHaveValue('60');await expect(done(p)).toHaveClass(/checked/);expect(db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('75');await p.locator('#undo-training').click();await expect(weight(p)).toHaveValue('75');
+ await history(p);p.once('dialog',d=>d.accept());await p.locator('[data-restore-version]').click();await p.locator('#save-training').click();await expect.poll(()=>db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('60');expect(db.store.get(other).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('55');expect(db.store.size).toBe(2);expect(db.store.get(id).versions[0].record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('75');
+ await p.reload();await expect(weight(p)).toHaveValue('60');await expect(p.locator('#cloud-save-status')).not.toContainText('wybierz Zapisz');
+ await p.locator('[data-view="settings"]').click();const event=p.waitForEvent('download');await p.locator('#export-local').click();const stream=await (await event).createReadStream();let text='';for await(const chunk of stream)text+=chunk;const backup=JSON.parse(text);expect(backup.history.some(x=>x.date==='2026-11-06')).toBe(true);
+});
+
+test('restoring an old version refuses a later remote update and retains the form',async({app:p,db})=>{
+ const id=seed(db);await p.reload();await date(p);await weight(p).fill('70');await p.locator('#save-training').click();await expect.poll(()=>db.store.get(id).versions?.length).toBe(1);await history(p);p.once('dialog',d=>d.accept());await p.locator('[data-restore-version]').click();
+ const remote=db.store.get(id);remote.etag='"another-device"';remote.record.exercises.legpress.variants['MG-PL70'].sets[0].kg='90';p.once('dialog',d=>{expect(d.message()).toContain('zmienił się');d.accept();});await p.locator('#save-training').click();await expect(weight(p)).toHaveValue('60');expect(db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('90');await expect(p.locator('#cloud-save-status')).toContainText('wybierz Zapisz');
+});
+
+test('revision history is empty for a new record and network errors allow retry',async({app:p,db})=>{
+ seed(db);await p.reload();await date(p);await p.locator('.workout-versions > summary').click();await p.route('**/versions?*',r=>r.fulfill({status:503,json:{}}));await p.locator('#load-versions').click();await expect(p.locator('#versions-list')).toContainText('Nie udało');await p.unroute('**/versions?*');await p.locator('#load-versions').click();await expect(p.locator('#versions-list')).toContainText('Brak wcześniejszych');
+});
+
+test('restoring one of several same-date records survives reload and preserves every sibling record',async({app:p,db})=>{
+ const id=seed(db);const sibling=structuredClone(db.store.get(id));sibling.record.exercises.legpress.variants['MG-PL70'].sets[0].kg='95';db.store.set('history:sibling',sibling);await p.reload();await date(p);await p.locator('#session-picker').selectOption(id);await weight(p).fill('70');await p.locator('#save-training').click();await expect.poll(()=>db.store.get(id).versions?.length).toBe(1);
+ await history(p);p.once('dialog',d=>d.accept());await p.locator('[data-restore-version]').click();await p.reload();await expect(p.locator('#active-profile')).toBeEnabled();await expect(weight(p)).toHaveValue('60');await p.locator('#save-training').click();await expect.poll(()=>db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('60');expect(db.store.get('history:sibling').record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('95');expect(db.store.size).toBe(2);expect(await p.evaluate(()=>Object.values(state.sessions).filter(r=>r.restoreExpectedEtag!==undefined).length)).toBe(0);
+});

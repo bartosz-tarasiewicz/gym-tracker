@@ -27,6 +27,7 @@ const server=http.createServer(async(req,res)=>{
  if(url.pathname==='/api/workouts'&&req.method==='GET'){
   return json(res,200,{version:1,workouts:[...activeStore].map(([id,value])=>({id,...value}))});
  }
+ if(url.pathname.startsWith('/api/workouts/')&&url.pathname.endsWith('/versions')&&req.method==='GET'){const id=decodeURIComponent(url.pathname.slice('/api/workouts/'.length,-'/versions'.length)),old=activeStore.get(id);return old?json(res,200,{id,etag:old.etag,versions:old.versions||[]}):json(res,404,{});}
  if(url.pathname.startsWith('/api/workouts/')&&['PUT','DELETE'].includes(req.method)){
   const id=decodeURIComponent(url.pathname.slice('/api/workouts/'.length));
   let raw='';for await(const chunk of req)raw+=chunk;
@@ -38,11 +39,11 @@ const server=http.createServer(async(req,res)=>{
   if(!old&&body.preserveRecords!==true&&[...activeStore].some(([key,value])=>key!==id&&value.record?.date===body.record?.date))
    return json(res,409,{error:'workout_date_exists'});
   const etag='"'+(++etagCounter)+'"';
-  activeStore.set(id,{kind:id.split(':')[0],record:structuredClone(body.record),etag});
+  activeStore.set(id,{kind:id.split(':')[0],record:structuredClone(body.record),etag,versions:old?[{id:'v'+etagCounter,savedAt:new Date().toISOString(),record:structuredClone(old.record)},...(old.versions||[])].slice(0,10):[]});
   operations.push({id,method:'PUT'});
   return json(res,200,{ok:true,id,etag});
  }
- const file=files[url.pathname]||(['/profiles.js','/photos.js','/exercise-guides.js','/plans.js','/plan-editor.js'].includes(url.pathname)?url.pathname.slice(1):url.pathname.startsWith('/assets/')&&!url.pathname.includes('..')?url.pathname.slice(1):null);if(!file){res.writeHead(404);return res.end('Not Found')}
+ const file=files[url.pathname]||(['/profiles.js','/photos.js','/exercise-guides.js','/plans.js','/plan-editor.js','/results.js'].includes(url.pathname)?url.pathname.slice(1):url.pathname.startsWith('/assets/')&&!url.pathname.includes('..')?url.pathname.slice(1):null);if(!file){res.writeHead(404);return res.end('Not Found')}
  res.writeHead(200,{'content-type':({'.html':'text/html','.js':'application/javascript','.svg':'image/svg+xml',
   '.jpg':'image/jpeg','.webp':'image/webp','.png':'image/png','.webmanifest':'application/manifest+json'})[path.extname(file)]||'text/plain'});
  res.end(fs.readFileSync(file));

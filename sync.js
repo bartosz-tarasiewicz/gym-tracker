@@ -648,8 +648,8 @@ window.GymCloud=(()=>{
       ![-2,-1,0,1,2,3,5].includes(Number(workout.day)))
    return {ok:false,reason:'Nieprawidłowa data lub dzień treningowy.'};
   const record=clone(workout),date=record.date,day=Number(record.day);
-  const sourceId=record.syncId;
-  delete record.syncId;
+  const sourceId=record.syncId,restoreEtag=record.restoreExpectedEtag;
+  delete record.syncId;delete record.restoreExpectedEtag;
   importBusy=true;
   try{
    const snapshot=serverRows(await request());
@@ -658,6 +658,7 @@ window.GymCloud=(()=>{
    if(sameDay.length>1&&!selected)
     return {ok:false,reason:'W Azure istnieje więcej niż jeden trening z tej daty. Nie chcę usuwać żadnego z nich automatycznie.'};
    const existing=selected||sameDay[0]||null;
+   if(restoreEtag!==undefined&&restoreEtag!==existing?.etag)return {ok:false,reason:'Trening zmienił się od wczytania poprzedniej wersji. Wczytaj historię wersji ponownie, aby nie nadpisać nowszych wyników.'};
    const id=existing?.id || (sourceId&&/^(draft|history):[a-zA-Z0-9:_-]+$/.test(sourceId)?
      sourceId:'draft:'+date+'-'+day);
    const kind=existing?.kind||(id.startsWith('history:')?'history':'draft');
@@ -833,5 +834,11 @@ window.GymCloud=(()=>{
    return {ready:false,reason:'Azure nie jest aktualnie zsynchronizowane. Nie importowano niczego.'};
   return {ready:true};
  }
- return {isBusy:()=>busy||flushBusy||importBusy,init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,saveWorkoutForDate,exportDatabase,importDatabase,refreshAutomatically,getStatus:()=>flag};
+ async function versions(id){
+  if(!principal)return {ok:false,reason:'Zaloguj się, aby odczytać historię zapisów.'};
+  try{const response=await fetch('/api/workouts/'+encodeURIComponent(id)+'/versions?profile='+encodeURIComponent(GymProfiles.id()),{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)});
+   if(!response.ok)throw Error('unavailable');return {ok:true,...await response.json()};
+  }catch{return {ok:false,reason:'Nie udało się pobrać wersji z Azure. Spróbuj ponownie po połączeniu.'};}
+ }
+ return {versions,isBusy:()=>busy||flushBusy||importBusy,init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,saveWorkoutForDate,exportDatabase,importDatabase,refreshAutomatically,getStatus:()=>flag};
 })();

@@ -93,7 +93,7 @@ function dayRecord(data,date){
  const sessions=Object.values(data.sessions||{}).filter(x=>x?.date===date);
  const historical=(data.history||[]).filter(x=>x?.date===date);
  const all=[...historical,...sessions];
- const pending=sessions.find(x=>(data.unsavedDates||[]).includes(date+'|'+x.day));
+ const pending=sessions.find(x=>x.restoreExpectedEtag!==undefined&&(data.unsavedDates||[]).includes(date+'|'+x.day))||sessions.find(x=>(data.unsavedDates||[]).includes(date+'|'+x.day));
  if(pending)return pending;
  const explicit=all.find(x=>x.syncId&&x.syncId===data.selectedRecordId);
  if(explicit)return explicit;
@@ -210,8 +210,9 @@ function selectDate(date){
 }
 const sessionKey=()=>state.selectedDate+'-'+state.activeDay;
 function storedDay(){
- const candidate=Object.values(state.sessions).find(x=>
+ const candidates=Object.values(state.sessions).filter(x=>
   x?.date===state.selectedDate&&Number(x.day)===state.activeDay);
+ const candidate=candidates.find(x=>x.restoreExpectedEtag!==undefined)||candidates[0];
  const unsaved=(state.unsavedDates||[]).includes(state.selectedDate+'|'+state.activeDay);
  if(unsaved&&candidate)return candidate;
  return editableHistoryRecord()||candidate||null;
@@ -415,7 +416,7 @@ function meaningfulSignature(data){
   return JSON.stringify({history:h,drafts:p.drafts});
 }
 function save(sync=true){
- if(sync&&pendingHistoryEdit)return;
+ if(sync&&pendingHistoryEdit){renderSaveStatus();return;}
  // Form changes stay on the device until Save is clicked.
  if(sync&&state.view==='train'&&TRAINING_TYPES.includes(state.activeDay)){
   const key=state.selectedDate+'|'+state.activeDay;
@@ -423,7 +424,7 @@ function save(sync=true){
   sync=false;
  }
  state.savedAt=Date.now();
- GymStorage.save(state);
+ GymStorage.save(state);renderSaveStatus();
  if(sync)window.GymCloud?.schedule?.();
 }
 let savingWorkout=false;
@@ -437,7 +438,7 @@ async function saveSelectedWorkout(){
  const draftEntry=Object.entries(state.sessions).find(([,record])=>record===previous);
  if(!input.syncId&&draftEntry)input.syncId='draft:'+draftEntry[0];
  if(!window.GymCloud?.saveWorkoutForDate){alert('Odśwież aplikację, żeby użyć nowego zapisu.');return;}
- savingWorkout=true;
+ savingWorkout=true;renderSaveStatus();
  const button=document.getElementById('save-training');
  if(button){button.disabled=true;button.textContent='Zapisywanie w Azure…';}
  try{
@@ -464,7 +465,7 @@ async function saveSelectedWorkout(){
   // Keep only the canonical Azure record for this training day locally.
   state.history=state.history.filter(h=>result.preserveDateRecords?h.syncId!==result.id:h.date!==date);
   for(const [key,s] of Object.entries(state.sessions||{})){
-   if(result.preserveDateRecords?'draft:'+key===result.id:s.date===date&&Number(s.day)===day)delete state.sessions[key];
+   if(s.syncId===result.id||(result.preserveDateRecords?'draft:'+key===result.id:s.date===date&&Number(s.day)===day))delete state.sessions[key];
   }
   const record=cloneWorkout(result.record);
   if(result.kind==='history'){
@@ -482,7 +483,7 @@ async function saveSelectedWorkout(){
   render();
   toast('Zapisano w Azure · '+date);
  }finally{
-  savingWorkout=false;
+  savingWorkout=false;renderSaveStatus();
  }
 }
 function status(str,level){const n=document.getElementById('storage-status');if(n){n.textContent=str;n.classList.toggle('warn',level==='warn')}}
@@ -490,14 +491,15 @@ function toast(str){const t=document.getElementById('toast');t.textContent=str;t
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:activePlan().items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
-function render(force=false){if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;window.GymProfiles?.render();document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();updateRestTimer()}
+function render(force=false){renderSaveStatus();if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;window.GymProfiles?.render();document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();updateRestTimer()}
 function setsHTML(list,type,item){
+ const previous=type==='work'?lastCompletedVariant(item,exerciseLog(item).machine):null;
  return (list||[]).map((s,j)=>{
   const head=type==='warm'?'R'+(j+1):String(j+1);
   return '<div class="set-row '+(s.done?'done':'')+'"><strong>'+head+'</strong>'+
    '<input aria-label="Ciężar '+type+' '+(j+1)+'" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="'+type+'" data-field="kg" data-set="'+j+'" value="'+esc(s.kg??'')+'">'+
    '<div class="nudge-wrap"><button type="button" data-nudge="-1" data-type="'+type+'" data-set="'+j+'" aria-label="Odejmij powtórzenie">−</button><input aria-label="'+esc(measure(item))+' '+type+' '+(j+1)+'" inputmode="numeric" type="number" min="0" step="1" placeholder="'+(item.mode?.startsWith('sec')?'s':'powt.')+'" data-type="'+type+'" data-field="reps" data-set="'+j+'" value="'+esc(s.reps??'')+'"><button type="button" data-nudge="1" data-type="'+type+'" data-set="'+j+'" aria-label="Dodaj powtórzenie">+</button></div>'+
-   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>';
+   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>'+(previous?.rows[j]?'<div class="previous-set">Poprzednio ('+esc(previous.record.date)+'): '+esc(previous.rows[j].kg||'0')+' kg × '+esc(previous.rows[j].reps)+' '+esc(measure(item))+'</div>':'');
  }).join('');
 }
 function exerciseMediaHTML(item,machine){
@@ -549,20 +551,23 @@ function exerciseMediaHTML(item,machine){
 }
 function selectedDayReports(){return state.history.filter(h=>h.date===state.selectedDate&&h.day===state.activeDay)}
 let restUntil=0,restAlerted=false;
+const restKey='gym-rest-timer'+GymProfiles.suffix();
+try{restUntil=Number(sessionStorage.getItem(restKey))||0;}catch{}
+function persistRestTimer(){try{sessionStorage.setItem(restKey,String(restUntil));}catch{}}
 function restOptions(){return GymProfiles.preference('restTimer')||{seconds:90,auto:false};}
 function restTimerHTML(){const options=restOptions();return '<div class="rest-timer"><strong>Przerwa <span id="rest-remaining">—</span></strong><label> Czas <select id="rest-duration" aria-label="Czas przerwy">'+[30,60,90,120,180,240].map(n=>'<option value="'+n+'" '+(n===Number(options.seconds)?'selected':'')+'>'+n+' s</option>').join('')+'</select></label><label><input type="checkbox" id="rest-auto" '+(options.auto?'checked':'')+'> Auto</label><div class="inline-actions"><button type="button" class="btn secondary small" id="rest-start">Start</button><button type="button" class="btn secondary small" data-rest-adjust="-15">−15 s</button><button type="button" class="btn secondary small" data-rest-adjust="15">+15 s</button><button type="button" class="btn secondary small" id="rest-skip">Pomiń</button></div></div>';}
 function updateRestTimer(){const label=document.getElementById('rest-remaining');if(!label)return;const left=restUntil?Math.max(0,Math.ceil((restUntil-Date.now())/1000)):0;label.textContent=restUntil?Math.floor(left/60)+':'+String(left%60).padStart(2,'0'):'—';if(restUntil&&left===0&&!restAlerted){restAlerted=true;toast('Koniec przerwy');}}
 setInterval(updateRestTimer,1000);
 function lastCompletedVariant(item,machine){
  const records=[...state.history,...Object.values(state.sessions)].filter(h=>h.date<state.selectedDate&&h.exercises?.[item.id]).sort((a,b)=>b.date.localeCompare(a.date)||String(b.started||'').localeCompare(String(a.started||'')));
- for(const record of records){const log=record.exercises[item.id],variant=log?.variants?.[machine]||(log?.machine===machine?log:null);const rows=(variant?.sets||[]).filter(row=>row.done===true);if(rows.length)return {record,rows};}
+ for(const record of records){const definition=record.planDefinition?.items.find(x=>x.id===item.id)||[...PLAN.flatMap(p=>p.items),...CORE].find(x=>x.id===item.id);if((definition?.mode||'reps')!==(item.mode||'reps'))continue;const log=record.exercises[item.id],variant=log?.variants?.[machine]||(log?.machine===machine?log:null);const rows=(variant?.sets||[]).filter(row=>row.done===true);if(rows.length)return {record,rows};}
  return null;
 }
 function machineNoteKey(item,machine){return item.id+'|'+machine;}
 function trainHTML(){
  rememberDay();
  const calendar=GymWeek.html(state),d=state.activeDay;
- const standard=GymWeek.dayIndex(state.selectedDate);
+ const standard=GymPlans.scheduled(state.selectedDate)?.dayType??GymWeek.dayIndex(state.selectedDate);
  const typeSelector='<div class="panel workout-type-panel">'+
   '<label class="label" for="workout-type">Rodzaj treningu w wybranym dniu</label>'+
   '<select class="equipment" id="workout-type" aria-label="Rodzaj treningu">'+
@@ -579,7 +584,7 @@ function trainHTML(){
    '<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div>'+
    '<textarea class="notes" id="notes" placeholder="Opcjonalny opis dnia lub aktywności…">'+
    esc(note)+'</textarea>'+
-   '<button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień</button>'+undoDayHTML()+
+   '<button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień</button>'+undoDayHTML()+versionsHTML()+
    '<p class="hint">Zapis w Azure dotyczy tylko tej daty. Możesz później zmienić rodzaj treningu.</p></div>';
  }
  const s=activeSession(),day=activePlan(),{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
@@ -613,10 +618,26 @@ function trainHTML(){
   '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Wstecz</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
  const isHistory=!!savedHistoryRecord();
  const notes='<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, ból, uwagi…">'+esc(s.notes||'')+'</textarea>'+
-  '<button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+undoDayHTML()+
+  '<button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+undoDayHTML()+versionsHTML()+
 
   '<p class="hint">Kliknij Zapisz, aby '+(saved?'zaktualizować istniejący':'utworzyć nowy')+' trening w Azure. Zmiany przed zapisem pozostają na tym urządzeniu.</p></div>';
  return calendar+typeSelector+planSelector()+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
+}
+let versionHistory=null;
+function selectedCloudId(){const record=storedDay();if(!record)return '';if(record.syncId)return record.syncId;const entry=Object.entries(state.sessions).find(([,r])=>r===record);return entry?'draft:'+entry[0]:'';}
+function versionsHTML(){
+ const id=selectedCloudId();if(!id)return '';
+ const loaded=versionHistory?.id===id&&versionHistory.date===state.selectedDate?versionHistory:null;
+ return '<details class="workout-versions"><summary>Historia zapisów</summary><p class="hint">Do 10 wcześniejszych wersji w Azure, w granicach rozmiaru rekordu. Historia zbiera się od wprowadzenia tej funkcji. Przywrócenie wymaga późniejszego zapisu.</p><button class="btn secondary" id="load-versions">Pobierz poprzednie wersje</button><div id="versions-list">'+(loaded?.error?'<p role="alert">'+esc(loaded.error)+'</p>':loaded?(loaded.versions.length?loaded.versions.map((v,i)=>'<details><summary>Wersja '+(i+1)+' · '+esc(v.savedAt?new Date(v.savedAt).toLocaleString('pl-PL'):'wcześniejszy zapis')+'</summary><pre>'+esc(sessionReport(v.record))+'</pre><button class="btn secondary" data-restore-version="'+esc(v.id)+'">Wczytaj tę wersję do formularza</button></details>').join(''):'<p>Brak wcześniejszych zapisów tego treningu.</p>'):'')+'</div></details>';
+}
+async function loadVersions(){const id=selectedCloudId(),date=state.selectedDate;if(!id)return;const button=document.getElementById('load-versions');button.disabled=true;const result=await GymCloud.versions(id);if(date!==state.selectedDate||id!==selectedCloudId())return;versionHistory={id,date,...(result.ok?{versions:result.versions,etag:result.etag}:{versions:[],error:result.reason})};render();const section=document.querySelector('.workout-versions');if(section)section.open=true;}
+function restoreVersion(id){
+ const loaded=versionHistory;if(!loaded||loaded.id!==selectedCloudId()||loaded.date!==state.selectedDate)return;
+ const version=loaded.versions.find(v=>v.id===id);if(!version)return;
+ if(!confirm('Wczytać poprzednią wersję do formularza? Zastąpi bieżące niezapisane zmiany. Azure zmieni się dopiero po kliknięciu Zapisz.'))return;
+ rememberDay();const record=cloneWorkout(version.record);record.syncId=loaded.id;record.restoreExpectedEtag=loaded.etag;
+ state.sessions['restore-'+stableHash(loaded.id)] = record;pendingHistoryEdit=null;state.activeDay=Number(record.day);state.activeExercise=0;state.activeCore=0;state.activeArea='main';state.selectedRecordId=loaded.id;
+ state.unsavedDates=[...new Set([...(state.unsavedDates||[]),record.date+'|'+record.day])];save(false);render();toast('Wczytano wersję. Sprawdź wyniki i wybierz Zapisz lub Cofnij zmiany.');
 }
 function allLogged(s){const items=[...(s.planDefinition?.items||PLAN[s.day]?.items||[]),...CORE];const archived={'core-deadbug':'Dead Bug (archiwalne)','core-suitcase':'Suitcase Carry (archiwalne)'};return Object.entries(s.exercises||{}).map(([id,log])=>({item:items.find(x=>x.id===id)||{id,title:archived[id]||('Ćwiczenie archiwalne: '+id),mode:id==='core-suitcase'?'secSide':'reps'},log}));}
 function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${s.planDefinition?.name||PLAN[s.day]?.name||s.day}`,`Źródło: ${s.source||'zapis użytkownika'}`];for(const {item,log} of allLogged(s)){
@@ -625,6 +646,7 @@ function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${s.planDefini
  }if(s.notes)lines.push(`\nNotatka: ${s.notes}`);return lines.join('\n')}
 function historyHTML(){return GymProgress.html(state,{PLAN,CORE,MACHINE,allLogged,sessionReport,machineName,unit,measure})}
 // Cloud refresh must not detach the file input while a native file picker is open.
+function renderSaveStatus(){const el=document.getElementById('cloud-save-status');if(!el)return;const dirty=historyEditChanged()||(state.unsavedDates||[]).some(k=>k.startsWith(state.selectedDate+'|'));const cloud=window.GymCloud?.getStatus();el.textContent=savingWorkout?'Azure: zapisuję…':dirty?'Zmiany lokalne · wybierz Zapisz':cloud==='synced'?'Azure: aktualne dane':cloud==='syncing'?'Azure: synchronizacja…':cloud==='conflict'?'Azure: sprawdź konflikt w Danych':'Azure: brak potwierdzenia połączenia';el.classList.toggle('warn',dirty||cloud==='conflict');}
 function renderCloudPanel(){const panel=document.getElementById('cloud-panel');if(panel)panel.innerHTML=window.GymCloud?.html?.()||'';}
 function settingsHTML(){
  return '<section class="hero"><div class="eyebrow">Dane</div><h1>Import i eksport</h1>'+
@@ -638,7 +660,8 @@ function settingsHTML(){
   '<p class="muted">Pobieramy aktualne rekordy bezpośrednio z Azure, a nie wyłącznie dane przechowywane na tym urządzeniu.</p>'+
   '<div class="inline-actions"><button class="btn" id="export">↓ Baza profilu JSON</button>'+
   '<button class="btn secondary" id="exportcsv">↓ Baza profilu CSV</button></div>'+
-  '<p class="hint">JSON zachowuje pełną strukturę i nadaje się do późniejszego importu. CSV zawiera tabelę wszystkich ćwiczeń, serii i notatek do analizy.</p></div>'+
+  '<p class="hint">JSON zachowuje bieżące treningi i nadaje się do późniejszego importu. CSV zawiera ćwiczenia, serie i notatki. Historia wcześniejszych zapisów pozostaje w Azure; kopię biblioteki planów pobierzesz w zakładce Plany.</p></div>'+
+  '<div class="panel"><h2>Kopia z tego urządzenia</h2><p class="hint">Działa także offline. Zawiera zapisane lokalnie treningi i niezapisane zmiany nowych treningów. Otwarte poprawki historycznego treningu wymagają wcześniejszego zapisu.</p><button class="btn secondary" id="export-local">↓ Kopia lokalna JSON</button></div>'+
   '<div id="cloud-panel">'+(window.GymCloud?.html?.()||'')+'</div>';
 }
 
@@ -680,6 +703,7 @@ function parseDatabaseImport(payload){
   if(Object.hasOwn(rec,'planDefinition'))GymPlanModel.validate(rec.planDefinition);
   for(const snapshot of [...Object.values(rec.planSnapshots||{}),...Object.values(rec.planChoices||{})])if(snapshot.planDefinition)GymPlanModel.validate(snapshot.planDefinition);
   seenIds.add(row.id);
+  delete rec.restoreExpectedEtag;
   delete rec.syncId; // The cloud ID is stored in the row wrapper, not the record.
  }
  return rows;
@@ -778,9 +802,9 @@ document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
  if(GymPlans.click(b))return;
  if(window.GymProgress?.handleClick?.(b,render))return;
- if(b.id==='rest-start'){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;updateRestTimer();return;}
- if(b.id==='rest-skip'){restUntil=0;restAlerted=false;updateRestTimer();return;}
- if(b.dataset.restAdjust!==undefined){if(restUntil){restUntil=Math.max(Date.now(),restUntil+Number(b.dataset.restAdjust)*1000);restAlerted=false;updateRestTimer();}return;}
+ if(b.id==='rest-start'){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();updateRestTimer();return;}
+ if(b.id==='rest-skip'){restUntil=0;restAlerted=false;persistRestTimer();updateRestTimer();return;}
+ if(b.dataset.restAdjust!==undefined){if(restUntil){restUntil=Math.max(Date.now(),restUntil+Number(b.dataset.restAdjust)*1000);restAlerted=false;persistRestTimer();updateRestTimer();}return;}
  if(b.id==='copy-previous'){
   const {item}=currentItem(),variant=currentVariant(item,true),log=exerciseLog(item),previous=lastCompletedVariant(item,log.machine);
   if(!previous?.rows.length)return;
@@ -788,6 +812,9 @@ document.addEventListener('click',async event=>{
   previous.rows.slice(0,15).forEach((row,i)=>{if(!variant.sets[i])variant.sets.push({kg:'',reps:'',done:false});Object.assign(variant.sets[i],{kg:String(row.kg??''),reps:String(row.reps??''),done:false});});
   save();render();return;
  }
+ if(b.id==='load-versions'){await loadVersions();return;}
+ if(b.dataset.restoreVersion){restoreVersion(b.dataset.restoreVersion);return;}
+ if(b.id==='export-local'){download('gym-tracker-lokalne-'+dateKey()+'.json',JSON.stringify(state,null,2),'application/json');return;}
  if(b.id==='undo-training'){await undoSelectedDay();return;}
  if(b.id==='save-training'){await saveSelectedWorkout();return;}
  if(b.dataset.week!==undefined){selectDate(b.dataset.week==='today'?dateKey():GymWeek.shift(state.selectedDate,Number(b.dataset.week)));return}
@@ -800,7 +827,7 @@ document.addEventListener('click',async event=>{
  if(b.dataset.area){changeArea(b.dataset.area);return}
  if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);save(false);render();return}
  if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);save(false);render();return}
- if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(s.done&&restOptions().auto){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;}if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();return}
+ if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(s.done&&restOptions().auto){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();}if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();return}
  if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;save(false);render();return}
  if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item,true);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
  if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item,true);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession(true).coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
@@ -847,6 +874,6 @@ window.gymProfileCanLeave=()=>!savingWorkout&&GymPlans.leave()&&abandonHistoryEd
  }
  state=normalize({...state,history:retainedHistory,sessions:preserved,savedAt:Date.now()});
  GymStorage.save(state);await GymStorage.flush();render()
-},backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{if(state.view==='settings')renderCloudPanel()}});
+},backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{renderSaveStatus();if(state.view==='settings')renderCloudPanel()}});
   window.GymProfiles?.ready();
   if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW:',e))})();
