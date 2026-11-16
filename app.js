@@ -806,9 +806,10 @@ document.addEventListener('click',async event=>{
  if(b.id==='rest-skip'){restUntil=0;restAlerted=false;persistRestTimer();updateRestTimer();return;}
  if(b.dataset.restAdjust!==undefined){if(restUntil){restUntil=Math.max(Date.now(),restUntil+Number(b.dataset.restAdjust)*1000);restAlerted=false;persistRestTimer();updateRestTimer();}return;}
  if(b.id==='copy-previous'){
-  const {item}=currentItem(),variant=currentVariant(item,true),log=exerciseLog(item),previous=lastCompletedVariant(item,log.machine);
+  const {item}=currentItem(),log=exerciseLog(item),previous=lastCompletedVariant(item,log.machine);
   if(!previous?.rows.length)return;
   if(!confirm('Wpisać poprzednie wyniki? Zastąpią wartości odpowiednich serii i usuną ich zaznaczenie wykonania.'))return;
+  const variant=currentVariant(item,true);
   previous.rows.slice(0,15).forEach((row,i)=>{if(!variant.sets[i])variant.sets.push({kg:'',reps:'',done:false});Object.assign(variant.sets[i],{kg:String(row.kg??''),reps:String(row.reps??''),done:false});});
   save();render();return;
  }

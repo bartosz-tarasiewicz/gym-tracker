@@ -180,7 +180,7 @@ test('machine settings stay separate by profile, exercise and variant and sync t
 test('previous results ignore empty newer sessions and copying never confirms work sets',async({app:p,db})=>{
  seed(db,'2026-11-13','60');const empty=record('2026-11-20','80');empty.exercises.legpress.variants['MG-PL70'].sets.forEach(s=>s.done=false);db.store.set('history:empty',{kind:'history',record:empty,etag:'"empty"'});
  await p.reload();await date(p,'2026-11-27');await expect(p.locator('.previous-results')).toContainText('2026-11-13');await expect(p.locator('.previous-results')).toContainText('60 kg × 12');
- p.once('dialog',d=>d.dismiss());await p.locator('#copy-previous').click();await expect(weight(p)).not.toHaveValue('60');
+ p.once('dialog',d=>d.dismiss());await p.locator('#copy-previous').click();await expect(weight(p)).not.toHaveValue('60');expect(await p.evaluate(()=>Object.values(state.sessions).some(s=>s.date==='2026-11-27'))).toBe(false);
  p.once('dialog',d=>d.accept());await p.locator('#copy-previous').click();await expect(weight(p)).toHaveValue('60');await expect(reps(p)).toHaveValue('12');await expect(done(p)).not.toHaveClass(/checked/);await p.reload();await expect(weight(p)).toHaveValue('60');await expect(done(p)).not.toHaveClass(/checked/);
 });
 
