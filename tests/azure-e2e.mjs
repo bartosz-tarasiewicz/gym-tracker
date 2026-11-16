@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
 const URL = 'https://salmon-bush-06df5a710.8.azurestaticapps.net/';
-const browser = await chromium.launch({headless:true});
+const browser = await chromium.launch({headless:true,channel:process.env.GYM_BROWSER_CHANNEL||undefined});
 const context = await browser.newContext({viewport:{width:390,height:844}, deviceScaleFactor:2, isMobile:true, hasTouch:true, acceptDownloads:true});
 const page = await context.newPage();
 const errors=[];
@@ -36,6 +36,16 @@ try {
   await page.locator('#cancel-profile').click();
   assert.equal(await page.locator('#profile-form').count(),0);
   pass('Add profile opens an inline form when native prompts are blocked');
+  await page.locator('.navitem[data-view="plans"]').click();
+  await page.locator('[data-plan-action="new"]').click();
+  await page.locator('#plan-name').fill('Test edytora');
+  assert.equal(await page.locator('.plan-item').count(),4);
+  assert.equal(await page.locator('#plan-name').inputValue(),'Test edytora');
+  page.once('dialog',d=>d.accept());
+  await page.locator('[data-plan-action="cancel"]').click();
+  assert.equal(await page.locator('#plan-form').count(),0);
+  await page.locator('.navitem[data-view="train"]').click();
+  pass('Published plan editor opens, edits and cancels without saving test data');
  }
  await page.locator('[data-day="2"]').click();
  await page.locator('[data-item="1"]').click();

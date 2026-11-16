@@ -48,7 +48,8 @@ window.GymProgress=(()=>{
  function html(state,api){
   const records=allRecords(state);
   const exercises=new Map();
-  for(const e of [...api.PLAN.flatMap(p=>p.items),...api.CORE])exercises.set(e.id,e.title);
+  const catalogue=[...api.PLAN.flatMap(p=>p.items),...api.CORE,...records.flatMap(r=>r.planDefinition?.items||[])];
+  for(const e of catalogue)exercises.set(e.id,e.title);
   const archived={'core-deadbug':'Dead Bug (archiwalne)','core-suitcase':'Suitcase Carry (archiwalne)'};
   for(const rec of records)for(const id of Object.keys(rec.exercises||{}))if(!exercises.has(id))exercises.set(id,archived[id]||id);
   const ids=[...exercises].sort((a,b)=>a[1].localeCompare(b[1],'pl'));
@@ -57,7 +58,7 @@ window.GymProgress=(()=>{
   for(const rec of records)for(const key of Object.keys(variants(rec.exercises?.[exercise]||{}))){
    if(rec.exercises?.[exercise]?.machine||rec.exercises?.[exercise]?.variants)usedMachines.add(key);
   }
-  const reference=[...api.PLAN.flatMap(p=>p.items),...api.CORE].find(e=>e.id===exercise);
+  const reference=catalogue.find(e=>e.id===exercise);
   for(const key of reference?.options||[])usedMachines.add(key);
   if(!usedMachines.has(machine))machine=usedMachines.values().next().value||'';
   const all=rows(state,exercise,machine);

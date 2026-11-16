@@ -2,7 +2,7 @@
   "name": "gym-tracker-tests",
   "private": true,
   "scripts": {
-    "test": "playwright test && node tests/cloud-e2e.mjs && node --test api/tests/*.test.cjs tests/catalog.test.cjs",
+    "test": "playwright test && node tests/cloud-e2e.mjs && node --test api/tests/*.test.cjs tests/*.test.cjs",
     "test:ui": "playwright test",
     "test:cloud": "node tests/cloud-e2e.mjs",
     "test:report": "playwright show-report"

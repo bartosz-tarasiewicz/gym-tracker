@@ -101,12 +101,12 @@ function dayRecord(data,date){
  // Confirmed work/warmups take precedence over those untouched templates.
  const completed=all.filter(x=>confirmedRows(x)>0);
  if(completed.length)return completed.sort((a,b)=>confirmedRows(b)-confirmedRows(a))[0];
- return all.find(x=>x.planOverride===true)||all.find(x=>String(x.notes||'').trim())||historical[historical.length-1]||null;
+ return all.find(x=>x.planOverride===true)||all.find(x=>x.planDefinition)||all.find(x=>String(x.notes||'').trim())||historical[historical.length-1]||null;
 }
 function trainingTypeForDate(date,data=state){
  const record=dayRecord(data,date);
  const day=Number(record?.day);
- return record&&TRAINING_TYPES.includes(day)?day:GymWeek.dayIndex(date);
+ return record&&TRAINING_TYPES.includes(day)?day:(GymPlans.scheduled(date)?.dayType??GymWeek.dayIndex(date));
 }
 let state=initial();
 let pendingHistoryEdit=null;
@@ -171,8 +171,29 @@ function editableHistoryRecord(){
 
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const machineName=k=>MACHINE[k]?.label||k;
+GymPlans.init({PLAN,MACHINE,render:()=>render(true),toast,download});
+function planFor(record,date=state.selectedDate,day=state.activeDay){
+ if(![0,1,2,4,5].includes(Number(record?.day??day)))return null;
+ const type=Number(record?.day??day),legacy=GymPlans.builtIn(type),configured=GymPlans.scheduled(date);
+ return GymPlanModel.resolve(record,configured?.dayType===type?configured:legacy,legacy);
+}
+function activePlan(){return planFor(storedDay());}
+function changeWorkoutPlan(id){
+ const next=id==='builtin-'+state.activeDay?GymPlans.builtIn(state.activeDay):GymPlans.library().plans.find(p=>p.id===id&&p.dayType===state.activeDay);
+ if(!next)return;const current=storedDay(),old=activePlan();if(old.id===id&&JSON.stringify(old)===JSON.stringify(next))return;
+ if(current&&Object.keys(current.exercises||{}).length&&!confirm('Zmienić plan tego treningu? Wartości poprzedniego planu zostaną zachowane do przywrócenia.')){render();return;}
+ rememberDay();const session=activeSession(true),choices=cloneWorkout(session.planChoices||{});
+ choices[old.id]={planDefinition:old,exercises:cloneWorkout(session.exercises||{}),coreEnabled:cloneWorkout(session.coreEnabled||{}),notes:session.notes||''};
+ const saved=choices[id]||{planDefinition:next,exercises:{},coreEnabled:{},notes:session.notes||''};
+ Object.assign(session,cloneWorkout(saved),{planChoices:choices,planOverride:true});state.activeExercise=0;state.activeArea='main';save();render();
+}
+function planSelector(){
+ const current=activePlan(),choices=[GymPlans.builtIn(state.activeDay),...GymPlans.library().plans.filter(p=>p.dayType===state.activeDay)];
+ if(!choices.some(p=>p.id===current.id))choices.push(current);
+ return '<div class="panel"><label class="label" for="workout-plan">Plan dla tego treningu</label><select class="equipment" id="workout-plan">'+choices.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===current.id?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select><p class="hint">Rozpoczęty trening zachowuje swoją wersję planu.</p><button class="btn secondary" data-view="plans">Moje plany · edytuj</button></div>';
+}
 function normalize(data){if(!data||typeof data!=='object'||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object'||Array.isArray(data.sessions))return initial();
- const s={...initial(),...data};s.unsavedDates=Array.isArray(s.unsavedDates)?s.unsavedDates.filter(x=>/^\d{4}-\d{2}-\d{2}\|[0125]$/.test(x)):[];if(Number(s.version)<2){
+ const s={...initial(),...data};s.unsavedDates=Array.isArray(s.unsavedDates)?s.unsavedDates.filter(x=>/^\d{4}-\d{2}-\d{2}\|(?:[01235]|-1|-2)$/.test(x)):[];if(Number(s.version)<2){
   if(s.activeDay===4)s.activeDay=5;
   s.history=s.history.map(h=>({...h,day:h.day===4?5:h.day}));
   const moved={};for(const [key,x] of Object.entries(s.sessions)){const originalDay=x.day;if(originalDay===4)x.day=5;const newKey=originalDay===4&&key.endsWith('-4')?key.slice(0,-1)+'5':key;moved[newKey]=x} s.sessions=moved;
@@ -196,9 +217,9 @@ function storedDay(){
  return editableHistoryRecord()||candidate||null;
 }
 function activeSession(create=false){
- const existing=storedDay();if(existing)return existing;
+ const existing=storedDay();if(existing){if(create&&!existing.planDefinition){const plan=planFor(existing);if(plan)existing.planDefinition=plan;}return existing;}
  const fresh={date:state.selectedDate,day:state.activeDay,started:new Date().toISOString(),exercises:{},coreEnabled:{},notes:''};
- if(create)state.sessions[sessionKey()]=fresh;
+ if(create){const plan=planFor(null);if(plan)fresh.planDefinition=plan;state.sessions[sessionKey()]=fresh;}
  return fresh;
 }
 // Changing a calendar day chooses a different template, NOT a different
@@ -213,7 +234,7 @@ function changeTrainingType(next){
  });
  const snapshots=cloneWorkout(original.planSnapshots||{});
  snapshots[String(previousDay)]={exercises:cloneWorkout(original.exercises||{}),
-  coreEnabled:cloneWorkout(original.coreEnabled||{}),notes:original.notes||''};
+  coreEnabled:cloneWorkout(original.coreEnabled||{}),notes:original.notes||'',planDefinition:original.planDefinition||([0,1,2,5].includes(previousDay)?activePlan():null),planChoices:original.planChoices||{}};
  const chosen=snapshots[String(next)]||{exercises:{},coreEnabled:{},notes:''};
  const hasSets=Object.values(original.exercises||{}).some(log=>
   Object.values(log?.variants&&Object.keys(log.variants).length?log.variants:{[log?.machine||'BODY']:log})
@@ -223,6 +244,10 @@ function changeTrainingType(next){
  const draft={...original,date,day:next,planOverride:true,planSnapshots:snapshots,
   exercises:cloneWorkout(chosen.exercises),coreEnabled:cloneWorkout(chosen.coreEnabled),
   notes:chosen.notes||''};
+ delete draft.planDefinition;delete draft.planChoices;
+ if(chosen.planDefinition)draft.planDefinition=cloneWorkout(chosen.planDefinition);
+ else if([0,1,2,5].includes(next))draft.planDefinition=planFor(null,date,next);
+ if(chosen.planChoices)draft.planChoices=cloneWorkout(chosen.planChoices);
  delete draft.syncId;
  // Pending editing is now represented by a persisted local form. The existing
  // Azure history row remains intact until the explicit Save button succeeds.
@@ -264,9 +289,9 @@ function counted(item){
 }
 function isCoreEnabled(item){const s=activeSession();return !!(s.coreEnabled?.[item.id]||counted(item)>0)}
 function summary(){
- const d=state.activeDay,mainDone=PLAN[d].items.reduce((n,x)=>n+counted(x),0);
+ const d=state.activeDay,mainDone=activePlan().items.reduce((n,x)=>n+counted(x),0);
  const coreDone=CORE.reduce((n,x)=>n+counted(x),0);
- const planned=PLAN[d].items.reduce((n,x)=>n+x.work.length,0)+CORE.filter(isCoreEnabled).reduce((n,x)=>n+x.work.length,0);
+ const planned=activePlan().items.reduce((n,x)=>n+x.work.length,0)+CORE.filter(isCoreEnabled).reduce((n,x)=>n+x.work.length,0);
  return {mainDone,coreDone,planned,done:mainDone+coreDone};
 }
 // Extract only meaningful workout data. Navigation, timestamps and untouched
@@ -292,13 +317,15 @@ function workoutProjection(data){
     if(!session||typeof session!=='object'){drafts.push({key,unknown:session});continue;}
     const record={key};
     if(session.planOverride===true)record.planOverride=session.day;
+    if(session.planDefinition)record.planDefinition=session.planDefinition;
+    if(session.planChoices)record.planChoices=session.planChoices;
     if(session.planSnapshots&&Object.keys(session.planSnapshots).length)record.planSnapshots=session.planSnapshots;
     if(String(session.notes||'').trim())record.notes=String(session.notes);
     const core=Object.entries(session.coreEnabled||{}).filter(([,enabled])=>!!enabled).map(([id])=>id).sort();
     if(core.length)record.core=core;
     const exerciseChanges=[];
     for(const [id,log] of Object.entries(session.exercises||{}).sort(([x],[y])=>x.localeCompare(y))){
-      const item=byId.get(id);
+      const item=session.planDefinition?.items.find(x=>x.id===id)||byId.get(id);
       if(!item||!log||typeof log!=='object'){
         exerciseChanges.push({id,unknown:log});continue;
       }
@@ -462,8 +489,8 @@ function status(str,level){const n=document.getElementById('storage-status');if(
 function toast(str){const t=document.getElementById('toast');t.textContent=str;t.style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.style.display='none',2400)}
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
-function currentItem(){const list=state.activeArea==='core'?CORE:PLAN[state.activeDay].items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
-function render(){window.GymProfiles?.render();document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():settingsHTML();updateRestTimer()}
+function currentItem(){const list=state.activeArea==='core'?CORE:activePlan().items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
+function render(force=false){if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;window.GymProfiles?.render();document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();updateRestTimer()}
 function setsHTML(list,type,item){
  return (list||[]).map((s,j)=>{
   const head=type==='warm'?'R'+(j+1):String(j+1);
@@ -555,7 +582,7 @@ function trainHTML(){
    '<button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień</button>'+undoDayHTML()+
    '<p class="hint">Zapis w Azure dotyczy tylko tej daty. Możesz później zmienić rodzaj treningu.</p></div>';
  }
- const s=activeSession(),day=PLAN[d],{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
+ const s=activeSession(),day=activePlan(),{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
  const old=selectedDayReports(),saved=storedDay(),coreActive=state.activeArea==='core',enabled=isCoreEnabled(item);
  const tabs=day.items.map((e,i)=>{
   const done=counted(e);
@@ -589,10 +616,10 @@ function trainHTML(){
   '<button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+undoDayHTML()+
 
   '<p class="hint">Kliknij Zapisz, aby '+(saved?'zaktualizować istniejący':'utworzyć nowy')+' trening w Azure. Zmiany przed zapisem pozostają na tym urządzeniu.</p></div>';
- return calendar+typeSelector+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
+ return calendar+typeSelector+planSelector()+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
 }
-function allLogged(s){const items=[...(PLAN[s.day]?.items||[]),...CORE];const archived={'core-deadbug':'Dead Bug (archiwalne)','core-suitcase':'Suitcase Carry (archiwalne)'};return Object.entries(s.exercises||{}).map(([id,log])=>({item:items.find(x=>x.id===id)||{id,title:archived[id]||('Ćwiczenie archiwalne: '+id),mode:id==='core-suitcase'?'secSide':'reps'},log}));}
-function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${PLAN[s.day]?.name||s.day}`,`Źródło: ${s.source||'zapis użytkownika'}`];for(const {item,log} of allLogged(s)){
+function allLogged(s){const items=[...(s.planDefinition?.items||PLAN[s.day]?.items||[]),...CORE];const archived={'core-deadbug':'Dead Bug (archiwalne)','core-suitcase':'Suitcase Carry (archiwalne)'};return Object.entries(s.exercises||{}).map(([id,log])=>({item:items.find(x=>x.id===id)||{id,title:archived[id]||('Ćwiczenie archiwalne: '+id),mode:id==='core-suitcase'?'secSide':'reps'},log}));}
+function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${s.planDefinition?.name||PLAN[s.day]?.name||s.day}`,`Źródło: ${s.source||'zapis użytkownika'}`];for(const {item,log} of allLogged(s)){
  lines.push(`\n${item.title}`);const vars=log.variants&&Object.keys(log.variants).length?log.variants:{[log.machine]:log};for(const [k,v] of Object.entries(vars)){
  const rows=(v.sets||[]).filter(x=>x.done);if(!rows.length)continue;lines.push(`  ${machineName(k)} (${unit(k)}): ${rows.map(x=>`${x.kg||'masa ciała'} × ${x.reps} ${measure(item)}`).join(' | ')}; RIR ${v.rir||'—'}`)}
  }if(s.notes)lines.push(`\nNotatka: ${s.notes}`);return lines.join('\n')}
@@ -650,6 +677,8 @@ function parseDatabaseImport(payload){
     row.id.split(':')[0]!==row.kind||
     seenIds.has(row.id))
    throw Error('Niepoprawny rekord '+String(row.id||'(bez ID)')+' dla daty '+String(rec?.date||'(brak daty)')+'. Sprawdź format danych i unikalność identyfikatorów.');
+  if(Object.hasOwn(rec,'planDefinition'))GymPlanModel.validate(rec.planDefinition);
+  for(const snapshot of [...Object.values(rec.planSnapshots||{}),...Object.values(rec.planChoices||{})])if(snapshot.planDefinition)GymPlanModel.validate(snapshot.planDefinition);
   seenIds.add(row.id);
   delete rec.syncId; // The cloud ID is stored in the row wrapper, not the record.
  }
@@ -699,7 +728,7 @@ function csvDatabase(data){
  for(const row of data.workouts){
   const s=row.record||{},exercises=s.exercises||{};
   let wrote=false;
-  const dayItems=[...(PLAN[s.day]?.items||[]),...CORE];
+  const dayItems=[...(s.planDefinition?.items||PLAN[s.day]?.items||[]),...CORE];
   for(const [id,log] of Object.entries(exercises)){
    const item=dayItems.find(e=>e.id===id),label=item?.title||id;
    const variants=log?.variants&&Object.keys(log.variants).length?
@@ -747,6 +776,7 @@ function mutateSet(field,j,type,value){const {item}=currentItem(),v=currentVaria
 function changeArea(area){state.activeArea=area;save(false);render()}
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
+ if(GymPlans.click(b))return;
  if(window.GymProgress?.handleClick?.(b,render))return;
  if(b.id==='rest-start'){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;updateRestTimer();return;}
  if(b.id==='rest-skip'){restUntil=0;restAlerted=false;updateRestTimer();return;}
@@ -765,7 +795,7 @@ document.addEventListener('click',async event=>{
  if(b.dataset.machine!==undefined){switchVariant(currentItem().item,b.dataset.machine);save();render();return}
  if(b.dataset.nudge!==undefined){const {item}=currentItem(),v=currentVariant(item,true),row=(b.dataset.type==='warm'?v.warmups:v.sets)[Number(b.dataset.set)];if(!row)return;const n=Number(row.reps)||0;row.reps=String(Math.max(0,n+Number(b.dataset.nudge)*(item.mode?.startsWith('sec')?5:1)));save();render();return}
   if(b.id&&b.id.startsWith('cloud-')){try{await GymCloud.action(b.id)}catch(e){console.warn('Cloud action:',e);toast('Błąd synchronizacji — lokalne dane zachowane')}render();return;}
- if(b.dataset.view){if(state.view==='train'&&b.dataset.view!=='train'&&!abandonHistoryEdit())return;const previous=state.view;state.view=b.dataset.view;save(false);render();if(previous!==state.view&&window.GymCloud)void GymCloud.refreshAutomatically();return}
+ if(b.dataset.view){if(state.view==='plans'&&b.dataset.view!=='plans'&&!GymPlans.leave())return;if(state.view==='train'&&b.dataset.view!=='train'&&!abandonHistoryEdit())return;const previous=state.view;state.view=b.dataset.view;if(state.view==='train')state.activeDay=trainingTypeForDate(state.selectedDate);save(false);render();if(previous!==state.view&&window.GymCloud)void GymCloud.refreshAutomatically();return}
  if(b.dataset.day!==undefined){const date=b.dataset.date;if(date)selectDate(date);return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
  if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);save(false);render();return}
@@ -778,6 +808,8 @@ document.addEventListener('click',async event=>{
  if(b.id==='exportcsv'){await exportDatabaseFile('csv');return}
 });
 document.addEventListener('change',async event=>{const el=event.target;
+ if(await GymPlans.change(el))return;
+ if(el.id==='workout-plan'){changeWorkoutPlan(el.value);return;}
  if(window.GymProgress?.handleChange?.(el,render))return;
  if(el.id==='rest-duration'||el.id==='rest-auto'){const options=restOptions();if(el.id==='rest-duration')options.seconds=Number(el.value);else options.auto=el.checked;GymProfiles.preference('restTimer',options);return;}
  if(el.id==='week-date'){selectDate(el.value);return}
@@ -793,12 +825,15 @@ document.addEventListener('change',async event=>{const el=event.target;
  }
 });
 document.addEventListener('input',event=>{const t=event.target;
+ if(GymPlans.input(t))return;
  if(t.dataset.field){mutateSet(t.dataset.field,Number(t.dataset.set),t.dataset.type,t.value)}
  else if(t.id==='machine-note'){const {item}=currentItem(),machine=exerciseLog(item).machine,notes={...(GymProfiles.preference('machineNotes')||{})};if(t.value)notes[machineNoteKey(item,machine)]=t.value;else delete notes[machineNoteKey(item,machine)];GymProfiles.preference('machineNotes',notes);}
  else if(t.id==='notes'){activeSession(true).notes=t.value;save()}
 });
-window.addEventListener('gym-preferences-loaded',()=>{const input=document.getElementById('machine-note');if(input&&input!==document.activeElement){const {item}=currentItem();input.value=GymProfiles.preference('machineNotes')?.[machineNoteKey(item,exerciseLog(item).machine)]||'';}const duration=document.getElementById('rest-duration'),auto=document.getElementById('rest-auto');if(duration&&duration!==document.activeElement)duration.value=String(restOptions().seconds||90);if(auto&&auto!==document.activeElement)auto.checked=!!restOptions().auto;});
-window.gymProfileCanLeave=()=>!savingWorkout&&abandonHistoryEdit();
+window.addEventListener('gym-preferences-loaded',()=>{if(state.view==='plans'){if(!GymPlans.editing())render();return;}if(state.view==='train'&&!storedDay()){state.activeDay=trainingTypeForDate(state.selectedDate);render();}const input=document.getElementById('machine-note');if(input&&input!==document.activeElement){const {item}=currentItem();input.value=GymProfiles.preference('machineNotes')?.[machineNoteKey(item,exerciseLog(item).machine)]||'';}const duration=document.getElementById('rest-duration'),auto=document.getElementById('rest-auto');if(duration&&duration!==document.activeElement)duration.value=String(restOptions().seconds||90);if(auto&&auto!==document.activeElement)auto.checked=!!restOptions().auto;});
+document.addEventListener('submit',e=>GymPlans.submit(e));
+window.addEventListener('beforeunload',e=>{if(GymPlans.dirty()){e.preventDefault();e.returnValue='';}});
+window.gymProfileCanLeave=()=>!savingWorkout&&GymPlans.leave()&&abandonHistoryEdit();
 (async()=>{try{state=normalize(await GymStorage.load(status));}catch(e){console.error(e);status('⚠ Nie można wczytać danych','warn')}render();
   if(window.GymCloud)await GymCloud.init({getState:()=>state,hasWorkoutData,workoutRecords,cloudState,meaningfulSignature,workoutDetails,applySnapshot:async data=>{
  const preserved={...data.sessions};

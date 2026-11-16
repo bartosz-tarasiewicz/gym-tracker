@@ -143,3 +143,11 @@ Jeśli Azure zgłosi, że brak procesu budowania lub niewłaściwy folder, spraw
 - `staticwebapp.config.json` — konfiguracja hostingu Azure
 
 Testy funkcjonalności, uruchamianie i mapa pokrycia: [tests/README.md](tests/README.md).
+
+## Własne plany
+
+Zakładka **Plany** pozwala tworzyć i duplikować szablony, dodawać ćwiczenia z katalogu i własne, zmieniać kolejność, sprzęt, rozgrzewkę i serie robocze. Zmiany edytora zatwierdza przycisk **Zapisz plan**; można je anulować. Rozkład tygodnia zapisuje się po wyborze planu przy dniu.
+
+Plany są przypisane do profilu i synchronizowane przez istniejący endpoint ustawień z kontrolą ETag. Rozpoczęty trening zawiera niezależną kopię `planDefinition`; zmiana lub usunięcie szablonu nie zmienia zapisanych wyników. Stare treningi bez kopii zachowują dotychczasowe definicje. Eksport treningów JSON zachowuje kopie planów; eksport CSV wykorzystuje historyczne nazwy ćwiczeń. Biblioteka i rozkład tygodnia mają osobny eksport/import w zakładce Plany. Import biblioteki wymaga potwierdzenia zastąpienia i nie zmienia treningów.
+
+Limity: 12 planów, 30 ćwiczeń w planie, do 15 serii każdego rodzaju na ćwiczenie. Biblioteka wraz z ustawieniami ma limit 18 KB, pozostawiający rezerwę względem limitu API 20 KB. Przekroczenie limitu nie zamyka edytora ani nie usuwa jego zmian. Własne ćwiczenia korzystają z istniejących rodzajów sprzętu; nie pobieramy do nich automatycznie niezweryfikowanych zdjęć.

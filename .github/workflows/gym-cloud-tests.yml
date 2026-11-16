@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths:
       - 'api/**'
-      - 'tests/catalog.test.cjs'
+      - 'tests/*.test.cjs'
       - 'assets/**'
       - 'app.js'
       - 'profiles.js'
@@ -23,4 +23,4 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --prefix api --no-audit --no-fund
-      - run: node --test api/tests/*.test.cjs tests/catalog.test.cjs
+      - run: node --test api/tests/*.test.cjs tests/*.test.cjs

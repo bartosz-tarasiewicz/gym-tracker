@@ -34,6 +34,14 @@ window.GymProfiles=(()=>{
   settings.preferences={...settings.preferences,[key]:value};settingsDirty=true;cacheSettings();
   clearTimeout(settingsTimer);settingsTimer=setTimeout(()=>void syncSettings(),500);
  }
+ function plans(value){
+  if(value===undefined)return settings.plans?.version===1?JSON.parse(JSON.stringify(settings.plans)):{version:1,plans:[],weekdays:Array(7).fill(null)};
+  const next={...settings,plans:value};
+  if(new TextEncoder().encode(JSON.stringify(next)).length>18000)throw Error('Brak miejsca na kolejne plany w profilu. Wyeksportuj i usuń nieużywany plan lub skróć opisy. Treningi pozostaną w historii.');
+  // Persist before replacing in-memory data: a quota failure keeps the editor draft.
+  localStorage.setItem(settingsKey,JSON.stringify({settings:next,etag:settingsEtag,dirty:true}));
+  settings=next;settingsDirty=true;clearTimeout(settingsTimer);settingsTimer=setTimeout(()=>void syncSettings(),500);
+ }
  function render(){
   const root=document.getElementById('profiles');if(!root)return;
   root.innerHTML='<label class="label" for="active-profile">Profil użytkownika</label><div class="inline-actions"><select class="equipment" id="active-profile" '+(!ready||changing?'disabled':'')+'>'+profiles.map(p=>'<option value="'+p.id+'" '+(p.id===active?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select><button type="button" class="btn secondary" id="add-profile" aria-expanded="'+formOpen+'" '+(changing?'disabled':'')+'>+ Dodaj profil</button></div><p class="hint">Treningi, historia i ustawienia dotyczą wybranego profilu.</p><p class="hint" role="status">'+esc(notice)+'</p>'+(formOpen?'<form id="profile-form"><label class="label" for="profile-name">Nazwa nowego profilu</label><input class="equipment" id="profile-name" name="profile-name" maxlength="60" required autocomplete="off" value="'+esc(profileName)+'"><p class="hint" id="profile-error" role="status">'+esc(formError||(!ready?'Wczytywanie danych. Za chwilę będzie można utworzyć profil.':''))+'</p><div class="inline-actions"><button class="btn" type="submit" '+(!ready||changing?'disabled':'')+'>Utwórz profil</button><button class="btn secondary" type="button" id="cancel-profile">Anuluj</button></div></form>':'');
@@ -84,5 +92,5 @@ window.GymProfiles=(()=>{
   await switchTo(profile.id);
  });
  window.addEventListener('online',()=>void sync());
- return {preference,id:()=>active,suffix,render,sync,ready:()=>{ready=true;render();void sync();}};
+ return {preference,plans,id:()=>active,suffix,render,sync,ready:()=>{ready=true;render();void sync();}};
 })();
