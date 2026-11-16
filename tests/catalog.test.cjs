@@ -22,7 +22,7 @@ test('Cached catalogue photos are real image bytes, attributed and pre-cached',(
   assert.ok(bytes[0]===0xff||bytes.subarray(0,4).toString()==='RIFF'||bytes[0]===0x89,photo.local);
   assert.ok(fs.readFileSync('sw.js','utf8').includes(photo.local));count++;
  }
- assert.equal(count,17);
+ assert.equal(count,18);
  assert.ok(!photos['core-hollow'],'Unrelated handstand photo must never return');
 });
 

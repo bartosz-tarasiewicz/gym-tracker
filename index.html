@@ -64,8 +64,8 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
 .exercise-tab{scroll-snap-align:start;flex:0 0 auto;max-width:155px;min-width:97px;background:#22343e;border:1px solid #425562;border-radius:11px;color:#d5e4ea;padding:9px;display:flex;align-items:flex-start;flex-direction:column;gap:3px;text-align:left;font-size:12px;line-height:1.25}
 .exercise-tab.active{border-color:#66dbaa;background:#245146}
 .exercise-tab small{font-size:10px;color:#85ebb8}
-.machine-options{display:flex;gap:6px;overflow-x:auto;padding:7px 0;scroll-snap-type:x mandatory}
-.machine-choice{scroll-snap-align:start;flex:0 0 auto;border:1px solid #415662;background:#23333e;color:#e5f1f4;padding:9px 10px;border-radius:10px;font-size:12px;font-weight:700}
+.machine-options{display:flex;flex-wrap:wrap;gap:6px;padding:7px 0}
+.machine-choice{flex:0 1 auto;max-width:100%;white-space:normal;text-align:left;border:1px solid #415662;background:#23333e;color:#e5f1f4;padding:9px 10px;border-radius:10px;font-size:12px;font-weight:700}
 .machine-choice.active{border-color:#64dca9;color:#baf9df;background:#245147}
 .machine-choice:focus-visible,.week-day:focus-visible{outline:2px solid #67e6b5;outline-offset:2px}
 .previous-results{background:#1c3735;border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:5px;color:#d8f6e9;font-size:12px;margin-top:8px}

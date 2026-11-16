@@ -3,7 +3,7 @@
 const MACHINE={
  'MG-PL13':{label:'MG-PL13 · Supine Bench Press',type:'plates'},
  'MG-PL14':{label:'MG-PL14 · Incline Bench Press',type:'plates'},
- 'MULTI-INCLINE':{label:'Multi Incline · stos',type:'stack'},'G3-S12':{label:'G3-S12 · Pectoral Fly',type:'stack'},
+ 'MULTI-INCLINE':{label:'Multi Incline · stos',type:'stack'},'G3-S12':{label:'Matrix Pectoral Fly · G3-S12',type:'stack'},
  'G7-S22':{label:'G7-S22 · Pec Fly / Rear Delt',type:'stack'},
  'G3-S22':{label:'G3-S22 · Rear Delt',type:'stack'},'DUMBBELL':{label:'Hantle (jeden hantel)',type:'dumbbell'},
  'PULLOVER':{label:'Przenoszenie · jeden hantel',type:'single'},'MG-PL33':{label:'MG-PL33 · Lat Pulldown',type:'perSide'},
@@ -171,6 +171,8 @@ function editableHistoryRecord(){
 
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const machineName=k=>MACHINE[k]?.label||k;
+// Catalogue alternatives remain available in older plan snapshots without rewriting them.
+function availableMachineOptions(item){const current=[...PLAN.flatMap(p=>p.items),...CORE].find(x=>x.id===item.id);return [...new Set([...item.options,...(current?.options||[])])];}
 GymPlans.init({PLAN,MACHINE,render:()=>render(true),toast,download});
 function planFor(record,date=state.selectedDate,day=state.activeDay){
  if(![0,1,2,4,5].includes(Number(record?.day??day)))return null;
@@ -277,7 +279,7 @@ function currentVariant(item,create=false){
  return variant;
 }
 function switchVariant(item,newMachine){
- if(!item.options.includes(newMachine))return;
+ if(!availableMachineOptions(item).includes(newMachine))return;
  const log=exerciseLog(item,true);
  currentVariant(item,true);
  log.machine=newMachine;
@@ -594,7 +596,7 @@ function trainHTML(){
   return '<button type="button" class="exercise-tab '+(!coreActive&&i===index?'active':'')+'" data-item="'+i+'"><span>'+(done?'✓ ':'' )+(i+1)+'. '+esc(e.title)+'</span>'+(done?'<small>'+done+' serii</small>':'')+'</button>';
  }).join('');
  const coreTabs=CORE.map((e,i)=>'<button type="button" class="core-choice '+(coreActive&&index===i?'active':'')+'" data-core="'+i+'">'+(isCoreEnabled(e)?'✓ ':'＋ ')+esc(e.title)+'</button>').join('');
- const choices=item.options.map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" aria-pressed="'+(log.machine===k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k))+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
+ const choices=availableMachineOptions(item).map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" aria-pressed="'+(log.machine===k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k))+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
  const previous=lastCompletedVariant(item,log.machine),oldRows=previous?.rows||[];
  const preview=oldRows.length?'<div class="previous-results"><strong>Poprzednio · '+esc(previous.record.date)+'</strong><span>'+oldRows.map((x,i)=>'Seria '+(i+1)+': '+esc(x.kg||'0')+' kg × '+esc(x.reps)).join(' · ')+'</span><button type="button" class="btn secondary small" id="copy-previous">Wpisz poprzednie wyniki</button><small>Kopiowanie nie potwierdza serii.</small></div>':
   '<p class="hint">Wpisane liczby są propozycją. Nie są zaliczone, dopóki nie potwierdzisz serii.</p>';
