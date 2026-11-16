@@ -166,3 +166,33 @@ test('uniform exercise layout: instructions and sets stay visible, media opens o
  await p.locator('[data-machine="MG-PL13"]').click();await expect(weight(p)).toHaveValue('70');
  await p.locator('[data-machine="DUMBBELL"]').click();await expect(weight(p)).toHaveValue('20');
 });
+
+test('machine settings stay separate by profile, exercise and variant and sync to a second device',async({app:p,db,browser})=>{
+ await date(p,'2026-11-13');await p.locator('#machine-note').fill('Siedzisko 4');
+ await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|MG-PL70']).toBe('Siedzisko 4');
+ await p.locator('[data-machine="G7-S70"]').click();await expect(p.locator('#machine-note')).toHaveValue('');await p.locator('#machine-note').fill('Siedzisko 2');
+ await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|G7-S70']).toBe('Siedzisko 2');
+ await p.locator('[data-item="1"]').click();await expect(p.locator('#machine-note')).toHaveValue('');
+ const c=await browser.newContext({viewport:{width:390,height:844}}),other=await c.newPage();try{await other.goto(db.base);await expect(other.locator('#active-profile')).toBeEnabled();await date(other,'2026-11-13');await expect(other.locator('#machine-note')).toHaveValue('Siedzisko 4');}finally{await c.close()}
+ await p.locator('#add-profile').click();await p.locator('#profile-name').fill('Nowy');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('Nowy');await date(p,'2026-11-13');await expect(p.locator('#machine-note')).toHaveValue('');
+});
+
+test('previous results ignore empty newer sessions and copying never confirms work sets',async({app:p,db})=>{
+ seed(db,'2026-11-13','60');const empty=record('2026-11-20','80');empty.exercises.legpress.variants['MG-PL70'].sets.forEach(s=>s.done=false);db.store.set('history:empty',{kind:'history',record:empty,etag:'"empty"'});
+ await p.reload();await date(p,'2026-11-27');await expect(p.locator('.previous-results')).toContainText('2026-11-13');await expect(p.locator('.previous-results')).toContainText('60 kg × 12');
+ p.once('dialog',d=>d.dismiss());await p.locator('#copy-previous').click();await expect(weight(p)).not.toHaveValue('60');
+ p.once('dialog',d=>d.accept());await p.locator('#copy-previous').click();await expect(weight(p)).toHaveValue('60');await expect(reps(p)).toHaveValue('12');await expect(done(p)).not.toHaveClass(/checked/);await p.reload();await expect(weight(p)).toHaveValue('60');await expect(done(p)).not.toHaveClass(/checked/);
+});
+
+test('rest timer is optional, starts after completion, survives rerenders and counts real elapsed time',async({app:p,db})=>{
+ await date(p);await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-auto').check();await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.restTimer?.auto).toBe(true);await p.clock.install();await p.clock.pauseAt(new Date());
+ await done(p).click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');await p.clock.fastForward(15000);await p.evaluate(()=>updateRestTimer());await expect(p.locator('#rest-remaining')).toHaveText('0:45');await p.locator('[data-rest-adjust="15"]').click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');
+ await p.locator('[data-item="1"]').click();await expect(p.locator('#rest-remaining')).toHaveText(/^(1:00|0:5[5-9])$/);await p.locator('#rest-skip').click();await expect(p.locator('#rest-remaining')).toHaveText('—');
+});
+
+test('machine note edited during synchronization is sent after the first save',async({app:p,db})=>{
+ await date(p);let release;const gate=new Promise(resolve=>release=resolve);let first=true,startedResolve;const started=new Promise(resolve=>startedResolve=resolve);
+ await p.route('**/api/profile-settings?*',async route=>{if(route.request().method()==='PUT'&&first){first=false;startedResolve();await gate}await route.continue()});
+ await p.locator('#machine-note').fill('pierwsza');await started;await p.locator('#machine-note').fill('ostateczna');await p.waitForTimeout(650);release();
+ await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|MG-PL70'],{timeout:10000}).toBe('ostateczna');
+});

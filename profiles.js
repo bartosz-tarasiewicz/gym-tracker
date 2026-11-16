@@ -14,20 +14,20 @@ window.GymProfiles=(()=>{
  try{const cached=JSON.parse(localStorage.getItem(settingsKey)||'null');if(cached){settings=cached.settings;settingsEtag=cached.etag;settingsDirty=cached.dirty;}}catch{}
  function cacheSettings(){localStorage.setItem(settingsKey,JSON.stringify({settings,etag:settingsEtag,dirty:settingsDirty}));}
  async function syncSettings(){
-  if(settingsBusy)return;settingsBusy=true;
+  if(settingsBusy)return;settingsBusy=true;let completed=false;
   try{
    const url='/api/profile-settings?profile='+encodeURIComponent(active);
    if(settingsDirty){
     const sent=JSON.stringify(settings);
     const response=await fetch(url,{method:'PUT',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({settings,expectedEtag:settingsEtag}),signal:AbortSignal.timeout(10000)});
     if(!response.ok)throw Error('Settings retained locally');
-    settingsEtag=(await response.json()).etag;settingsDirty=JSON.stringify(settings)!==sent;cacheSettings();
+    settingsEtag=(await response.json()).etag;settingsDirty=JSON.stringify(settings)!==sent;cacheSettings();completed=true;
    }else{
     const response=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)});
     if(!response.ok)throw Error('Settings offline');const remote=await response.json();
     if(!settingsDirty){if(remote.settings)settings=remote.settings;settingsEtag=remote.etag;cacheSettings();window.dispatchEvent(new Event('gym-preferences-loaded'));}
    }
-  }catch{if(settingsDirty)notice='Ustawienia zachowano lokalnie. Synchronizacja wymaga ponownego połączenia lub odświeżenia.';}finally{settingsBusy=false;render();}
+  }catch{if(settingsDirty)notice='Ustawienia zachowano lokalnie. Synchronizacja wymaga ponownego połączenia lub odświeżenia.';}finally{settingsBusy=false;if(completed&&settingsDirty){clearTimeout(settingsTimer);settingsTimer=setTimeout(()=>void syncSettings(),500);}render();}
  }
  function preference(key,value){
   if(value===undefined)return settings.preferences?.[key];
