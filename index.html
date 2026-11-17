@@ -182,4 +182,22 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
 #app:has(.train-save-dock){padding-bottom:94px}
 @media(max-width:380px){.train-day-header{gap:6px}.train-type-control{flex-basis:119px}.exercise-tab{gap:6px}.active-exercise .nudge-wrap button{flex-basis:24px;min-width:24px}.active-exercise .set-row input{padding-left:2px;padding-right:2px}}
 @media(prefers-reduced-motion:reduce){.train-save-dock{backdrop-filter:none}}
-</style></head><body><div class="shell"><section id="profiles" class="panel" aria-label="Profile użytkowników"></section><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div style="text-align:right"><div id="today" class="chip"></div><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.10 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
+
+/* Guided set flow. Highlight the next uncompleted row without opening iOS keyboard. */
+.active-exercise .set-row.is-next{background:#244139;border-radius:12px;box-shadow:inset 3px 0 0 #75e4b6;padding:3px 4px;margin-left:-4px;margin-right:-4px}
+.active-exercise .set-row.is-next>strong{color:#8af1c3}
+.active-exercise .set-row.is-next .done-button{border-color:#68dba9;color:#8aefc2}
+.active-exercise .set-row.is-next input{border-color:#54766b}
+.active-exercise .rest-timer-bar{display:flex;align-items:stretch;gap:7px;margin:9px 0}
+.active-exercise .rest-timer-bar>.rest-timer{flex:1 1 auto;min-width:0;margin:0}
+.active-exercise .rest-timer-bar>.btn{flex:0 0 auto;min-width:87px;min-height:44px;padding:9px}
+.active-exercise .rest-timer-bar .rest-hint{margin-left:auto}
+.rir-quick-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:17px 0 10px}
+.rir-short-label{font-size:13px;font-weight:800;color:#cbe3d9}
+.rir-shortcuts{display:flex;gap:4px}
+.rir-chip{min-width:40px;min-height:44px;padding:7px 9px;border:1px solid #49616b;background:#263840;color:#d8ede6;border-radius:10px;font-weight:800}
+.rir-chip.active{background:#67dca9;border-color:#67dca9;color:#122a22}
+.rir-quick-row .rir-select{width:auto;max-width:100%;min-width:95px;flex:1 1 95px;height:44px;padding:8px 7px;font-size:12px}
+.exercise-finish{padding:11px 12px;background:#203f36;border:1px solid #386b55;color:#b6f3d5;border-radius:12px;font-size:12px;line-height:1.5;margin:11px 0}
+@media(max-width:380px){.rir-chip{min-width:36px;padding-left:7px;padding-right:7px}.active-exercise .rest-timer-bar>.btn{min-width:79px;padding-left:7px;padding-right:7px}}
+</style></head><body><div class="shell"><section id="profiles" class="panel" aria-label="Profile użytkowników"></section><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div style="text-align:right"><div id="today" class="chip"></div><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.11 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
