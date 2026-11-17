@@ -1,3 +1,11 @@
+## v0.16 — szybka korekta serii jedną ręką
+
+- Dotknij numeru serii **S1/S2** albo rozgrzewki **R1/R2**. Pod wybraną serią rozwinie się podręczny edytor z dużymi przyciskami **− / +** dla ciężaru i powtórzeń (lub czasu). Przycisk numeru ponownie zwija edytor. Nadal można wpisać dokładną wartość bezpośrednio w dotychczasowe pola.
+- Skok ciężaru wybierany jest z **0,5 / 1 / 2,5 / 5 kg**. Domyślne **1 kg dla stosów**, **2,5 kg dla talerzy i hantli**, z możliwością dopasowania do faktycznych stopniowania maszyny. Wybrana wartość jest zapamiętywana **oddzielnie dla każdej maszyny i profilu**, bez zmian w formacie rekordu treningowego.
+- Powtórzenia i kroki rosną/maleją o 1, a serie czasowe o **5 sekund**. Wartości nie spadają poniżej 0, a obliczenia są zaokrąglane do setnych (brak błędów zmiennoprzecinkowych w wyniku).
+- Korekta **nie** oznacza serii jako wykonanej, nie przenosi wartości pomiędzy wariantami maszyn i nie zapisuje automatycznie w Azure. Dane zmieniają się w bieżącym formularzu / lokalnym szkicu; do Azure trafiają dopiero po kliknięciu **Zapisz**.
+- Testy regresyjne: `tests/ui/quick-adjust.spec.mjs` (iPhone/desktop, warmups/CORE, kroki ciężaru, zapis do istniejącego rekordu Azure, szerokość 320 px i brak klawiatury).
+
 ## v0.15 — trening w trybie focus
 
 - **Lista ćwiczeń** jest domyślnie zwinięta do jednego wiersza z liczbą ukończonych ćwiczeń i wskaźnikami postępu. Dotknięcie rozwija pełną listę. Wybór ćwiczenia zamyka listę i kieruje do jednego aktywnego formularza; stan rozwinięcia jest zachowywany podczas rejestrowania serii.
