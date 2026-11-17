@@ -1,25 +1,21 @@
 name: Gym Tracker live browser tests
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: ["Azure Static Web Apps CI/CD"]
     branches: [main]
-    paths:
-      - 'profiles.js'
-      - 'photos.js'
-      - 'assets/**'
-      - 'progress-ui.js'
-      - 'app.js'
-      - 'storage.js'
-      - 'index.html'
-      - 'sw.js'
-      - 'tests/azure-e2e.mjs'
-      - '.github/workflows/gym-tracker-e2e.yml'
+    types: [completed]
 jobs:
   e2e:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      GYM_REQUIRE_LATEST_UI: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
