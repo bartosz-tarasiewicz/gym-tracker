@@ -905,7 +905,7 @@ document.addEventListener('change',async event=>{const el=event.target;
  if(await GymPlans.change(el))return;
  if(el.id==='workout-plan'){changeWorkoutPlan(el.value);return;}
  if(window.GymProgress?.handleChange?.(el,render))return;
- if(el.id==='rest-duration'||el.id==='rest-auto'){const options=restOptions();if(el.id==='rest-duration')options.seconds=Number(el.value);else options.auto=el.checked;GymProfiles.preference('restTimer',options);return;}
+ if(el.id==='rest-duration'||el.id==='rest-auto'){const options=restOptions();if(el.id==='rest-duration')options.seconds=Number(el.value);else options.auto=el.checked;GymProfiles.preference('restTimer',options);const quick=document.getElementById('rest-quick-start');if(quick){quick.textContent='Start '+Number(options.seconds||90)+' s';quick.setAttribute('aria-label','Uruchom przerwę '+Number(options.seconds||90)+' sekund');}return;}
  if(el.id==='week-date'){selectDate(el.value);return}
  if(el.id==='workout-type'){changeTrainingType(el.value);return}
  if(el.id==='session-picker'){if(!abandonHistoryEdit()){render();return}state.selectedRecordId=el.value;save(false);render();return}
@@ -924,7 +924,7 @@ document.addEventListener('input',event=>{const t=event.target;
  else if(t.id==='machine-note'){const {item}=currentItem(),machine=exerciseLog(item).machine,notes={...(GymProfiles.preference('machineNotes')||{})};if(t.value)notes[machineNoteKey(item,machine)]=t.value;else delete notes[machineNoteKey(item,machine)];GymProfiles.preference('machineNotes',notes);}
  else if(t.id==='notes'){activeSession(true).notes=t.value;save()}
 });
-window.addEventListener('gym-preferences-loaded',()=>{if(state.view==='plans'){if(!GymPlans.editing())render();return;}if(state.view==='train'&&!storedDay()){state.activeDay=trainingTypeForDate(state.selectedDate);render();}const input=document.getElementById('machine-note');if(input&&input!==document.activeElement){const {item}=currentItem();input.value=GymProfiles.preference('machineNotes')?.[machineNoteKey(item,exerciseLog(item).machine)]||'';}const duration=document.getElementById('rest-duration'),auto=document.getElementById('rest-auto');if(duration&&duration!==document.activeElement)duration.value=String(restOptions().seconds||90);if(auto&&auto!==document.activeElement)auto.checked=!!restOptions().auto;});
+window.addEventListener('gym-preferences-loaded',()=>{if(state.view==='plans'){if(!GymPlans.editing())render();return;}if(state.view==='train'&&!storedDay()){state.activeDay=trainingTypeForDate(state.selectedDate);render();}const input=document.getElementById('machine-note');if(input&&input!==document.activeElement){const {item}=currentItem();input.value=GymProfiles.preference('machineNotes')?.[machineNoteKey(item,exerciseLog(item).machine)]||'';}const duration=document.getElementById('rest-duration'),auto=document.getElementById('rest-auto');if(duration&&duration!==document.activeElement)duration.value=String(restOptions().seconds||90);if(auto&&auto!==document.activeElement)auto.checked=!!restOptions().auto;const quick=document.getElementById('rest-quick-start');if(quick){quick.textContent='Start '+Number(restOptions().seconds||90)+' s';quick.setAttribute('aria-label','Uruchom przerwę '+Number(restOptions().seconds||90)+' sekund');}});
 document.addEventListener('submit',e=>GymPlans.submit(e));
 window.addEventListener('beforeunload',e=>{if(GymPlans.dirty()){e.preventDefault();e.returnValue='';}});
 window.gymProfileCanLeave=()=>!savingWorkout&&GymPlans.leave()&&abandonHistoryEdit();
