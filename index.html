@@ -285,4 +285,30 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
  .active-exercise .exercise-set-progress{padding:6px;font-size:10px}
 }
 @media(prefers-reduced-motion:reduce){.queue-chevron{transition:none}}
-</style></head><body><div class="shell"><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div style="text-align:right"><div id="today" class="chip"></div><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.15 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
+
+/* v0.16: single-hand quick correction without an iOS keyboard or a floating overlay. */
+.active-exercise .set-row,.active-exercise .set-head{grid-template-columns:44px minmax(0,1fr) minmax(0,1.65fr) 44px}
+.active-exercise .set-row>.set-edit-toggle{width:44px;min-height:44px;border:1px solid #466558;border-radius:9px;background:#274037;color:#bde6d1;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;padding:1px}
+.active-exercise .set-row>.set-edit-toggle::after{content:"✎";font-size:11px;font-weight:500;line-height:1;color:#a9cabd}
+.active-exercise .set-row>.set-edit-toggle.selected{border-color:#8df0c0;background:#316e54;color:#f0fff7}
+.active-exercise .set-row>.set-edit-toggle:focus-visible,.fast-adjust-btn:focus-visible,.fast-kg-step:focus-visible{outline:3px solid #8cf1bc;outline-offset:2px}
+.fast-adjust-help{margin:5px 0 8px;color:#a4c6b9;font-size:11px;line-height:1.4}
+.set-fast-edit{margin:2px 0 11px;padding:10px;border:1px solid #4d836b;background:#1b3935;border-radius:13px;scroll-margin-top:130px}
+.fast-adjust-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.fast-adjust-head>strong{font-size:12px;color:#c9f4e0}
+.fast-adjust-head label{display:flex;align-items:center;gap:7px;color:#aecfc1;font-size:11px}
+.fast-kg-step{min-height:44px;min-width:84px;border:1px solid #628f79;border-radius:9px;background:#122e2c;color:#e7fff2;padding:7px 8px;font-size:13px;font-weight:700}
+.fast-adjust-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fast-adjust-group{min-width:0}
+.fast-adjust-label{display:block;margin-bottom:6px;color:#cee8db;font-size:11px;font-weight:700}
+.fast-adjust-controls{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:stretch;gap:4px;min-height:48px}
+.fast-adjust-btn{width:44px;min-height:48px;padding:0;border:1px solid #579375;border-radius:10px;background:#315946;color:#e4fceb;font-size:25px;font-weight:600;touch-action:manipulation}
+.fast-adjust-btn:active{background:#52896d}
+.fast-adjust-value{display:flex;align-items:center;justify-content:center;min-width:0;border:1px solid #3e675a;border-radius:9px;background:#122b2c;font-size:18px;font-weight:800;color:#f3fff8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:380px){
+ .active-exercise .set-row,.active-exercise .set-head{grid-template-columns:44px minmax(0,1fr) minmax(0,1.65fr) 44px;gap:3px}
+ .active-exercise .set-row input{font-size:16px}
+ .fast-adjust-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+ .fast-adjust-controls{grid-template-columns:44px minmax(0,1fr) 44px}
+}
+</style></head><body><div class="shell"><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div style="text-align:right"><div id="today" class="chip"></div><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.16 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
