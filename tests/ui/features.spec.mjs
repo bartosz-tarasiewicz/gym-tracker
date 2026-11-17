@@ -1,4 +1,4 @@
-import {test,expect,date,reps,weight,done,seed,record,upload} from './fixtures.mjs';
+import {test,expect,date,reps,weight,done,seed,record,upload,chooseExercise} from './fixtures.mjs';
 
 async function openExerciseOptions(p){
  const details=p.locator('.exercise-options');
@@ -19,7 +19,7 @@ test('mobile training focus: one active exercise, progressive disclosure and sav
  await expect(p.locator('.day-progress')).toContainText('serii wykonanych');
  await openExerciseOptions(p);
  await expect(p.locator('[data-machine="MG-PL13"]')).toBeVisible();
- await p.locator('[data-item="1"]').click();
+ await chooseExercise(p,1);
  await expect(p.locator('.exercise-options')).not.toHaveAttribute('open','');
  await expect(p.locator('.active-exercise .title')).toContainText('Wyciskanie na skosie');
 });
@@ -105,7 +105,7 @@ test('sets: mark all skips empty rows and additional sets stop at fifteen',async
 test('exercise navigation: previous/next boundaries and direct selection',async({app:p})=>{
  await date(p);await expect(p.locator('#prev')).toBeDisabled();await p.locator('#next').click();await expect(p.locator('[data-item="1"]')).toHaveClass(/active/);
  await p.locator('#prev').click();await expect(p.locator('[data-item="0"]')).toHaveClass(/active/);
- await p.locator('[data-item]').last().click();await expect(p.locator('#next')).toBeDisabled();
+ await chooseExercise(p,await p.locator('[data-item]').count()-1);await expect(p.locator('#next')).toBeDisabled();
 });
 
 test('profiles: whitespace rejected, cancel clears form, HTML name rendered as text',async({app:p})=>{
@@ -176,7 +176,7 @@ for(const type of ['0','1','2','5'])test('catalogue: every exercise and variant 
  test.setTimeout(90000);await date(p);await p.locator('#workout-type').selectOption(type);
  const n=await p.locator('[data-item]').count();expect(n).toBeGreaterThan(0);
  for(let i=0;i<n;i++){
-  await p.locator('[data-item="'+i+'"]').click();
+  await chooseExercise(p,i);
   const machines=await p.locator('[data-machine]').evaluateAll(xs=>xs.map(x=>x.dataset.machine));expect(machines.length).toBeGreaterThanOrEqual(2);
   for(const m of machines){await openExerciseOptions(p);await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('[data-machine="'+m+'"]')).toHaveAttribute('aria-pressed','true');await expect(p.locator('.detail')).toContainText('Jak wykonać');
    await p.locator('.exercise-media > summary').click();for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}
@@ -255,7 +255,7 @@ test('machine settings stay separate by profile, exercise and variant and sync t
  await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|MG-PL70']).toBe('Siedzisko 4');
  await p.locator('[data-machine="G7-S70"]').click();await expect(p.locator('#machine-note')).toHaveValue('');await p.locator('#machine-note').fill('Siedzisko 2');
  await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|G7-S70']).toBe('Siedzisko 2');
- await p.locator('[data-item="1"]').click();await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
+ await chooseExercise(p,1);await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
  const c=await browser.newContext({viewport:{width:390,height:844}}),other=await c.newPage();try{await other.goto(db.base);await expect(other.locator('#week-date')).toBeVisible();await date(other,'2026-11-13');await openExerciseOptions(other);await expect(other.locator('#machine-note')).toHaveValue('Siedzisko 4');}finally{await c.close()}
  await p.locator('[data-view="settings"]').click();await expect(p.locator('#active-profile')).toBeEnabled();await p.locator('#add-profile').click();await p.locator('#profile-name').fill('Nowy');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('Nowy');await p.locator('[data-view="train"]').click();await date(p,'2026-11-13');await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
 });
@@ -270,7 +270,7 @@ test('previous results ignore empty newer sessions and copying never confirms wo
 test('rest timer is optional, starts after completion, survives rerenders and counts real elapsed time',async({app:p,db})=>{
  await date(p);await openRestControls(p);await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-auto').check();await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.restTimer?.auto).toBe(true);await p.clock.install();await p.clock.pauseAt(new Date());
  await done(p).click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');await p.clock.fastForward(15000);await p.evaluate(()=>updateRestTimer());await expect(p.locator('#rest-remaining')).toHaveText('0:45');await p.locator('[data-rest-adjust="15"]').click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');
- await p.locator('[data-item="1"]').click();await expect(p.locator('#rest-remaining')).toHaveText(/^(1:00|0:5[5-9])$/);await p.locator('#rest-skip').click();await expect(p.locator('#rest-remaining')).toHaveText('—');
+ await chooseExercise(p,1);await expect(p.locator('#rest-remaining')).toHaveText(/^(1:00|0:5[5-9])$/);await p.locator('#rest-skip').click();await expect(p.locator('#rest-remaining')).toHaveText('—');
 });
 
 test('machine note edited during synchronization is sent after the first save',async({app:p,db})=>{
