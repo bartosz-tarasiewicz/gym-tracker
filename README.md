@@ -1,3 +1,10 @@
+## v0.12 — szybkie uzupełnianie serii i przeskakiwanie gotowych ćwiczeń
+
+- Przycisk **Wstaw** pokazuje się tylko, gdy wartości następnej *niewykonanej serii roboczej* różnią się od ostatniej ukończonej serii tego ćwiczenia i wariantu sprzętu. Gdy w bieżącym ćwiczeniu brak ukończonej serii, podpowiada wartości z ostatniego ukończonego treningu tego ćwiczenia i tego samego wariantu.
+- Jedno dotknięcie kopiuje **ciężar i powtórzenia**, ale **nie oznacza serii jako wykonanej**. Nie kopiuje RIR, nie dotyka alternatywnych maszyn i nie zapisuje do Azure bez kliknięcia Zapisz. Gdy liczby już są takie same, dodatkowy przycisk jest ukryty.
+- Po ukończeniu serii roboczych pojawia się świadoma akcja **Dalej: następne niewykonane ćwiczenie**. Pomija ukończone ćwiczenia i może przejść z końca listy na początek; nie przełącza się automatycznie, aby pozostawić czas na RIR.
+- Nie wprowadzono nowego formatu danych ani migracji. Pokrycie: `tests/ui/fast-log.spec.mjs`.
+
 ## v0.11 — prowadzenie między seriami i mniej dotknięć
 
 - Najbliższa niewykonana seria jest wyróżniona. Po potwierdzeniu serii interfejs sam przesuwa widok do następnej, **bez automatycznego otwierania klawiatury**. Zrobione serie nadal można odznaczyć lub poprawić.
