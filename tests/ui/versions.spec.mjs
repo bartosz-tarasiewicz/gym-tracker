@@ -1,5 +1,5 @@
 import {test,expect,date,weight,done,seed} from './fixtures.mjs';
-async function history(p){await p.locator('.workout-versions > summary').click();await p.locator('#load-versions').click();await expect(p.locator('[data-restore-version]')).toHaveCount(1);await p.locator('#versions-list details > summary').first().click();}
+async function history(p){await p.locator('.train-additional > summary').click();await p.locator('.workout-versions > summary').click();await p.locator('#load-versions').click();await expect(p.locator('[data-restore-version]')).toHaveCount(1);await p.locator('#versions-list details > summary').first().click();}
 test('saved revision preview, canceled restore, undo, explicit restore and backup preserve other records',async({app:p,db})=>{
  const id=seed(db),other=seed(db,'2026-11-06','55');await p.reload();await date(p);await weight(p).fill('75');await expect(p.locator('#cloud-save-status')).toContainText('wybierz Zapisz');await p.locator('#save-training').click();await expect.poll(()=>db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('75');
  await history(p);await expect(p.locator('#versions-list pre')).toContainText('60');p.once('dialog',d=>d.dismiss());await p.locator('[data-restore-version]').click();await expect(weight(p)).toHaveValue('75');
@@ -15,7 +15,7 @@ test('restoring an old version refuses a later remote update and retains the for
 });
 
 test('revision history is empty for a new record and network errors allow retry',async({app:p,db})=>{
- seed(db);await p.reload();await date(p);await p.locator('.workout-versions > summary').click();await p.route('**/versions?*',r=>r.fulfill({status:503,json:{}}));await p.locator('#load-versions').click();await expect(p.locator('#versions-list')).toContainText('Nie udało');await p.unroute('**/versions?*');await p.locator('#load-versions').click();await expect(p.locator('#versions-list')).toContainText('Brak wcześniejszych');
+ seed(db);await p.reload();await date(p);await p.locator('.train-additional > summary').click();await p.locator('.workout-versions > summary').click();await p.route('**/versions?*',r=>r.fulfill({status:503,json:{}}));await p.locator('#load-versions').click();await expect(p.locator('#versions-list')).toContainText('Nie udało');await p.unroute('**/versions?*');await p.locator('#load-versions').click();await expect(p.locator('#versions-list')).toContainText('Brak wcześniejszych');
 });
 
 test('restoring one of several same-date records survives reload and preserves every sibling record',async({app:p,db})=>{
