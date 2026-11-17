@@ -1,4 +1,4 @@
-import {test,expect,date,done,weight,reps,seed} from './fixtures.mjs';
+import {test,expect,date,done,weight,reps,seed,chooseExercise} from './fixtures.mjs';
 
 test('one tap repeats the last completed set without marking the next set done',async({app:p,db})=>{
  await date(p,'2026-11-09');
@@ -46,7 +46,7 @@ test('finished exercise offers deliberate jump to next unfinished exercise, incl
  await expect(p.locator('.next-unfinished')).toContainText('Wyciskanie na skosie');
  await p.locator('.next-unfinished').click();
  await expect(p.locator('[data-item="1"]')).toHaveClass(/active/);
- await p.locator('[data-item="3"]').click();
+ await chooseExercise(p,3);
  const lastRows=p.locator('.done-button[data-type="work"]');
  for(let i=0,n=await lastRows.count();i<n;i++)await lastRows.nth(i).click();
  await expect(p.locator('.next-unfinished')).toContainText('Wyciskanie na skosie');
