@@ -53,6 +53,9 @@ test('exercise navigation: previous/next boundaries and direct selection',async(
 });
 
 test('profiles: whitespace rejected, cancel clears form, HTML name rendered as text',async({app:p})=>{
+ await expect(p.locator('#profiles')).toHaveCount(0);
+ await p.locator('[data-view="settings"]').click();
+ await expect(p.locator('#active-profile')).toBeEnabled();
  await p.locator('#add-profile').click();await p.locator('#profile-name').fill('   ');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#profile-error')).toContainText('Wpisz nazwę');
  await p.locator('#cancel-profile').click();await expect(p.locator('#profile-form')).toHaveCount(0);await p.locator('#add-profile').click();await expect(p.locator('#profile-name')).toHaveValue('');
  await p.locator('#profile-name').fill('<b>Anna</b>');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('<b>Anna</b>');await expect(p.locator('#profiles b')).toHaveCount(0);
@@ -99,8 +102,8 @@ test('progress: checked work only, metrics, range, chart, read-only source',asyn
 });
 
 test('mobile layout: safe area, horizontal overflow and bottom navigation',async({app:p})=>{
- await p.evaluate(()=>document.documentElement.style.setProperty('--safe-top','59px'));expect((await p.locator('#profiles').boundingBox()).y).toBeGreaterThanOrEqual(59);
- for(const view of ['train','history','settings']){await p.locator('[data-view="'+view+'"]').click();expect(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(p.locator('.bottomnav')).toBeVisible();}
+ await p.evaluate(()=>document.documentElement.style.setProperty('--safe-top','59px'));expect((await p.locator('.top').boundingBox()).y).toBeGreaterThanOrEqual(59);
+ for(const view of ['train','history','settings']){await p.locator('[data-view="'+view+'"]').click();expect(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(p.locator('.bottomnav')).toBeVisible();await expect(p.locator('#profiles')).toHaveCount(view==='settings'?1:0);}
 });
 
 test('warmups and core: independent completion, seconds nudge and enabled state survive reload',async({app:p})=>{
@@ -197,8 +200,8 @@ test('machine settings stay separate by profile, exercise and variant and sync t
  await p.locator('[data-machine="G7-S70"]').click();await expect(p.locator('#machine-note')).toHaveValue('');await p.locator('#machine-note').fill('Siedzisko 2');
  await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|G7-S70']).toBe('Siedzisko 2');
  await p.locator('[data-item="1"]').click();await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
- const c=await browser.newContext({viewport:{width:390,height:844}}),other=await c.newPage();try{await other.goto(db.base);await expect(other.locator('#active-profile')).toBeEnabled();await date(other,'2026-11-13');await openExerciseOptions(other);await expect(other.locator('#machine-note')).toHaveValue('Siedzisko 4');}finally{await c.close()}
- await p.locator('#add-profile').click();await p.locator('#profile-name').fill('Nowy');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('Nowy');await date(p,'2026-11-13');await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
+ const c=await browser.newContext({viewport:{width:390,height:844}}),other=await c.newPage();try{await other.goto(db.base);await expect(other.locator('#week-date')).toBeVisible();await date(other,'2026-11-13');await openExerciseOptions(other);await expect(other.locator('#machine-note')).toHaveValue('Siedzisko 4');}finally{await c.close()}
+ await p.locator('[data-view="settings"]').click();await expect(p.locator('#active-profile')).toBeEnabled();await p.locator('#add-profile').click();await p.locator('#profile-name').fill('Nowy');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('Nowy');await p.locator('[data-view="train"]').click();await date(p,'2026-11-13');await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
 });
 
 test('previous results ignore empty newer sessions and copying never confirms work sets',async({app:p,db})=>{
