@@ -65,10 +65,13 @@ test('completion guide follows working sets, respects equipment and remains read
  await done(p).click();
  await expect(p.locator('.next-set-guide')).toContainText('S2');
  await chooseExercise(p,1);
- await expect(p.locator('.next-set-guide')).toContainText('Rozgrzewka R1');
+ await expect(p.locator('.next-set-guide')).toContainText('Seria robocza S1');
+ await expect(p.locator('.warmup-block')).toHaveCount(0);
  await p.locator('.exercise-options > summary').click();
  await p.locator('[data-machine="DUMBBELL"]').click();
  await expect(p.locator('.next-set-guide')).toBeVisible();
+ await chooseExercise(p,0);
+ await expect(p.locator('.warmup-block')).toBeVisible();
  await p.setViewportSize({width:320,height:720});
  const metrics=await p.evaluate(()=>{
   const hint=document.querySelector('.next-set-guide').getBoundingClientRect();
