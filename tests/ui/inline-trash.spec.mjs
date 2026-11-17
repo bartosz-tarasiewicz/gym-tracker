@@ -9,7 +9,7 @@ test('extra work set has an icon-only trash button in the same row as its values
  await expect(trash).toBeVisible();
  await expect(trash).toHaveAttribute('aria-label','Usuń dodaną serię S5');
  await expect(trash.locator('svg')).toHaveCount(1);
- await expect(trash).toBeEmpty();
+ await expect(trash).toHaveText('');
  await expect(p.locator('.extra-set-action')).toHaveCount(0);
  await expect(p.locator('[data-set-row="work-0"] [data-remove-set]')).toHaveCount(0);
  const coords=await row.evaluate(el=>{
@@ -48,7 +48,7 @@ test('compact set rows stay inside 320px iPhone viewport with inline trash icon'
   expect(metrics.trashLeft).toBeGreaterThan(metrics.rowLeft);
   expect(metrics.trashRight).toBeLessThanOrEqual(metrics.rowRight+1);
   expect(metrics.fieldWidth).toBeGreaterThanOrEqual(35);
-  expect(metrics.gridColumns.trim().split(/\\s+/)).toHaveLength(5);
+  expect(metrics.gridColumns.trim().split(/\s+/)).toHaveLength(5);
  }
 });
 
