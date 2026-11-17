@@ -711,7 +711,7 @@ function trainHTML(){
  const selectedOptions=TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+(x===standard?' (domyślnie)':'')+'</option>').join('');
  const dayProgress=[-1,3,-2].includes(d)?'':(()=>{
   const progress=summary(),percent=progress.planned?Math.round(progress.done/progress.planned*100):0;
-  return '<div class="day-progress"><span>'+progress.done+' / '+progress.planned+' serii</span><div class="meter"><div style="width:'+percent+'%"></div></div><strong>'+percent+'%</strong></div>';
+  return '<div class="day-progress"><span>'+progress.done+' / '+progress.planned+' serii wykonanych</span><div class="meter"><div style="width:'+percent+'%"></div></div><strong>'+percent+'%</strong></div>';
  })();
  // Workout type changes the activity on this date; plan variants change only the exercise list.
  // Hide the latter unless the user has an alternative plan for the active day type.
