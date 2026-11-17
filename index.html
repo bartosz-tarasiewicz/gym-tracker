@@ -435,4 +435,14 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
  .train-day-header h1{font-size:16px}
  .train-type-control{flex-basis:46%}
 }
+
+/* WebKit: the native date input has a large intrinsic width. Do not allow it
+   to dictate the flex row's minimum inline size on narrow iPhones. */
+.week-top,.week-actions,.week-date-picker{min-width:0;max-width:100%}
+.week-date-picker{width:0;flex:1 1 0;overflow:hidden}
+.week-date-picker input{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.week-actions{overflow:hidden}
+@media(min-width:541px){
+ .week-date-picker{width:126px;flex:0 0 126px}
+}
 </style></head><body><div class="shell"><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div class="top-status"><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.19 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
