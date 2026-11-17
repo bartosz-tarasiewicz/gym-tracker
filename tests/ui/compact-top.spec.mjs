@@ -79,12 +79,24 @@ test('date header and type switcher stay compact without overflow on small iPhon
    const week=document.querySelector('.week-panel').getBoundingClientRect();
    const card=document.querySelector('.train-day-summary').getBoundingClientRect();
    const select=document.querySelector('#workout-type').getBoundingClientRect();
+   const all=[...document.querySelectorAll('body *')];
+   const offenders=all.flatMap(el=>{
+    const rect=el.getBoundingClientRect(),style=getComputedStyle(el);
+    if(style.display==='none'||style.visibility==='hidden'||rect.width===0)return [];
+    const out=rect.right>innerWidth+.5||rect.left<-.5;
+    const spills=el.scrollWidth>el.clientWidth+2&&el.clientWidth>0;
+    if(!out&&!spills)return [];
+    return [{tag:el.tagName,id:el.id||'',className:typeof el.className==='string'?el.className.slice(0,64):'',
+      left:Math.round(rect.left),right:Math.round(rect.right),client:el.clientWidth,scroll:el.scrollWidth,out,spills}];
+   }).slice(0,16);
    return {horizontalOverflow:document.documentElement.scrollWidth>innerWidth,
-    weekRight:week.right,cardRight:card.right,selectRight:select.right,
-    headerHeight:card.height,
+    rootWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,
+    offenders,weekRight:week.right,cardRight:card.right,selectRight:select.right,
+    headerHeight:card.height,selectAppearance:getComputedStyle(document.querySelector('#workout-type')).appearance,
     tapHeights:controls.map(x=>x.getBoundingClientRect().height)};
   });
-  expect(geometry.horizontalOverflow,'horizontal overflow at '+width+'px').toBe(false);
+  expect(geometry.horizontalOverflow,'horizontal overflow at '+width+'px: '+JSON.stringify({root:geometry.rootWidth,body:geometry.bodyWidth,offenders:geometry.offenders})).toBe(false);
+  expect(geometry.selectAppearance,'native select should not use white WebKit styling').toBe('none');
   expect(geometry.weekRight).toBeLessThanOrEqual(width);
   expect(geometry.cardRight).toBeLessThanOrEqual(width);
   expect(geometry.selectRight).toBeLessThanOrEqual(width);
