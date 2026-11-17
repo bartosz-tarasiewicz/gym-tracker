@@ -1,3 +1,11 @@
+## v0.18 — inteligentna rozgrzewka i wskazówka następnej serii
+
+- Przy aktywnym ćwiczeniu widoczna jest wskazówka **„Teraz: Rozgrzewka R1”** albo **„Teraz: Seria robocza S2”**, wraz z planowaną wartością ciężaru i powtórzeń/czasu. Nie potwierdza serii i nie wysyła danych.
+- **Rozgrzewka jest osobną rozwijaną sekcją**. Na starcie jest otwarta, jeśli zostały rozgrzewki i nie rozpoczęto serii roboczych. Po wykonaniu wszystkich rozgrzewek albo rozpoczęciu serii roboczej **zamyka się automatycznie**, a kolejny wiersz roboczy zostaje podświetlony. Rozgrzewkę można otworzyć ponownie i poprawić wartości.
+- Zwijanie nie usuwa ani nie zalicza żadnej rozgrzewki. Użytkownik może ręcznie ją zwinąć i rozpocząć serie robocze, zgodnie z dotychczasowym traktowaniem rozgrzewki jako opcjonalnej.
+- Osobne warianty sprzętu, CORE, szybka korekta ciężaru, kosz dodatkowych serii, ręczny zapis do Azure i schemat bazy pozostają bez zmian. Stan rozwinięcia jest tylko stanem interfejsu.
+- Testy: `tests/ui/smart-warmup.spec.mjs` na Chromium/iPhone-WebKit i dotychczasowa regresja.
+
 ## v0.17 — kompaktowe serie i kosz w tym samym wierszu
 
 - **Dodatkowe serie robocze:** przycisk usunięcia jest teraz **ikoną kosza na końcu tego samego wiersza** co ciężar, powtórzenia i zaznaczenie wykonania. Ikona ma 44 × 44 px strefy dotyku i etykietę dla czytników ekranu. Serie przewidziane w planie nie mają kosza.
