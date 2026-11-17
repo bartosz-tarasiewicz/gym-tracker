@@ -1,5 +1,29 @@
 import {test,expect,date,reps,weight,done,seed,record,upload} from './fixtures.mjs';
 
+async function openExerciseOptions(p){
+ const details=p.locator('.exercise-options');
+ if(!await details.evaluate(el=>el.open))await p.locator('.exercise-options > summary').click();
+}
+async function openRestControls(p){
+ const details=p.locator('.rest-timer');
+ if(!await details.evaluate(el=>el.open))await p.locator('.rest-timer > summary').click();
+}
+
+test('mobile training focus: one active exercise, progressive disclosure and save control',async({app:p})=>{
+ await date(p,'2026-11-09');
+ await expect(p.locator('.exercise-tab')).toHaveCount(4);
+ await expect(p.locator('.active-exercise')).toHaveCount(1);
+ await expect(p.locator('.exercise-options')).not.toHaveAttribute('open','');
+ await expect(p.locator('.movement-img:visible')).toHaveCount(0);
+ await expect(p.locator('#save-training')).toBeVisible();
+ await expect(p.locator('.day-progress')).toContainText('serii wykonanych');
+ await openExerciseOptions(p);
+ await expect(p.locator('[data-machine="MG-PL13"]')).toBeVisible();
+ await p.locator('[data-item="1"]').click();
+ await expect(p.locator('.exercise-options')).not.toHaveAttribute('open','');
+ await expect(p.locator('.active-exercise .title')).toContainText('Wyciskanie na skosie');
+});
+
 test('calendar: weeks, arbitrary date, today, no writes from navigation',async({app:p,db})=>{
  await date(p,'2026-12-31');await p.locator('[data-week="7"]').click();await expect(p.locator('#week-date')).toHaveValue('2027-01-07');
  await p.locator('[data-week="-7"]').click();await expect(p.locator('#week-date')).toHaveValue('2026-12-31');
@@ -86,7 +110,7 @@ test('warmups and core: independent completion, seconds nudge and enabled state 
 });
 
 test('images: failed download offers instruction and keeps workout usable',async({app:p})=>{
- await p.route('**/assets/guides/**',route=>route.abort());await date(p,'2026-11-09');await p.locator('[data-machine="DUMBBELL"]').click();await p.locator('.exercise-media > summary').click();await p.locator('.movement-photos').scrollIntoViewIfNeeded();await expect(p.locator('.movement-photos figcaption').first()).toContainText('Zdjęcie niedostępne');await expect(p.locator('.detail')).toContainText('Jak wykonać');await weight(p).fill('64');await expect(weight(p)).toHaveValue('64');
+ await p.route('**/assets/guides/**',route=>route.abort());await date(p,'2026-11-09');await openExerciseOptions(p);await p.locator('[data-machine="DUMBBELL"]').click();await p.locator('.exercise-media > summary').click();await p.locator('.movement-photos').scrollIntoViewIfNeeded();await expect(p.locator('.movement-photos figcaption').first()).toContainText('Zdjęcie niedostępne');await expect(p.locator('.detail')).toContainText('Jak wykonać');await weight(p).fill('64');await expect(weight(p)).toHaveValue('64');
 });
 
 for(const type of ['0','1','2','5'])test('catalogue: every exercise and variant of workout '+type,async({app:p})=>{
@@ -95,7 +119,7 @@ for(const type of ['0','1','2','5'])test('catalogue: every exercise and variant 
  for(let i=0;i<n;i++){
   await p.locator('[data-item="'+i+'"]').click();
   const machines=await p.locator('[data-machine]').evaluateAll(xs=>xs.map(x=>x.dataset.machine));expect(machines.length).toBeGreaterThanOrEqual(2);
-  for(const m of machines){await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('[data-machine="'+m+'"]')).toHaveAttribute('aria-pressed','true');await expect(p.locator('.detail')).toContainText('Jak wykonać');
+  for(const m of machines){await openExerciseOptions(p);await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('[data-machine="'+m+'"]')).toHaveAttribute('aria-pressed','true');await expect(p.locator('.detail')).toContainText('Jak wykonać');
    await p.locator('.exercise-media > summary').click();for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}
   }
  }
@@ -132,7 +156,7 @@ test('catalogue core: every optional exercise, variants and units',async({app:p}
  for(let i=0;i<n;i++){
   await p.locator('[data-core="'+i+'"]').click();await expect(p.locator('#enable-core')).toBeVisible();
   const machines=await p.locator('[data-machine]').evaluateAll(xs=>xs.map(x=>x.dataset.machine));expect(machines.length).toBeGreaterThanOrEqual(2);
-  for(const m of machines){await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('.detail')).toContainText('Jak wykonać');await p.locator('.exercise-media > summary').click();for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}}
+  for(const m of machines){await openExerciseOptions(p);await p.locator('[data-machine="'+m+'"]').click();await expect(p.locator('.detail')).toContainText('Jak wykonać');await p.locator('.exercise-media > summary').click();for(const img of await p.locator('.movement-img').all()){await img.scrollIntoViewIfNeeded();await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);}}
  }
 });
 
@@ -150,7 +174,7 @@ test('import file picker survives background cloud refresh',async({app:p})=>{
 test('uniform exercise layout: instructions and sets stay visible, media opens on demand',async({app:p})=>{
  await date(p,'2026-11-09');
  for(const machine of ['MG-PL13','DUMBBELL']){
-  await p.locator('[data-machine="'+machine+'"]').click();
+  await openExerciseOptions(p);await p.locator('[data-machine="'+machine+'"]').click();
   await expect(p.locator('.movement-instruction')).toContainText('Oprzyj plecy');
   await expect(p.locator('.exercise-media')).not.toHaveAttribute('open','');
   await expect(p.locator('.movement-img:visible')).toHaveCount(0);
@@ -163,29 +187,29 @@ test('uniform exercise layout: instructions and sets stay visible, media opens o
   await p.locator('.exercise-media > summary').click();
   await expect(p.locator('.exercise-media')).not.toHaveAttribute('open','');
  }
- await p.locator('[data-machine="MG-PL13"]').click();await expect(weight(p)).toHaveValue('70');
+ await openExerciseOptions(p);await p.locator('[data-machine="MG-PL13"]').click();await expect(weight(p)).toHaveValue('70');
  await p.locator('[data-machine="DUMBBELL"]').click();await expect(weight(p)).toHaveValue('20');
 });
 
 test('machine settings stay separate by profile, exercise and variant and sync to a second device',async({app:p,db,browser})=>{
- await date(p,'2026-11-13');await p.locator('#machine-note').fill('Siedzisko 4');
+ await date(p,'2026-11-13');await openExerciseOptions(p);await p.locator('#machine-note').fill('Siedzisko 4');
  await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|MG-PL70']).toBe('Siedzisko 4');
  await p.locator('[data-machine="G7-S70"]').click();await expect(p.locator('#machine-note')).toHaveValue('');await p.locator('#machine-note').fill('Siedzisko 2');
  await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|G7-S70']).toBe('Siedzisko 2');
- await p.locator('[data-item="1"]').click();await expect(p.locator('#machine-note')).toHaveValue('');
- const c=await browser.newContext({viewport:{width:390,height:844}}),other=await c.newPage();try{await other.goto(db.base);await expect(other.locator('#active-profile')).toBeEnabled();await date(other,'2026-11-13');await expect(other.locator('#machine-note')).toHaveValue('Siedzisko 4');}finally{await c.close()}
- await p.locator('#add-profile').click();await p.locator('#profile-name').fill('Nowy');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('Nowy');await date(p,'2026-11-13');await expect(p.locator('#machine-note')).toHaveValue('');
+ await p.locator('[data-item="1"]').click();await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
+ const c=await browser.newContext({viewport:{width:390,height:844}}),other=await c.newPage();try{await other.goto(db.base);await expect(other.locator('#active-profile')).toBeEnabled();await date(other,'2026-11-13');await openExerciseOptions(other);await expect(other.locator('#machine-note')).toHaveValue('Siedzisko 4');}finally{await c.close()}
+ await p.locator('#add-profile').click();await p.locator('#profile-name').fill('Nowy');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('Nowy');await date(p,'2026-11-13');await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
 });
 
 test('previous results ignore empty newer sessions and copying never confirms work sets',async({app:p,db})=>{
  seed(db,'2026-11-13','60');const empty=record('2026-11-20','80');empty.exercises.legpress.variants['MG-PL70'].sets.forEach(s=>s.done=false);db.store.set('history:empty',{kind:'history',record:empty,etag:'"empty"'});
- await p.reload();await date(p,'2026-11-27');await expect(p.locator('.previous-results')).toContainText('2026-11-13');await expect(p.locator('.previous-results')).toContainText('60 kg × 12');
+ await p.reload();await date(p,'2026-11-27');await expect(p.locator('.previous-compact')).toContainText('2026-11-13');await expect(p.locator('.previous-compact')).toContainText('60 kg × 12');
  p.once('dialog',d=>d.dismiss());await p.locator('#copy-previous').click();await expect(weight(p)).not.toHaveValue('60');expect(await p.evaluate(()=>Object.values(state.sessions).some(s=>s.date==='2026-11-27'))).toBe(false);
  p.once('dialog',d=>d.accept());await p.locator('#copy-previous').click();await expect(weight(p)).toHaveValue('60');await expect(reps(p)).toHaveValue('12');await expect(done(p)).not.toHaveClass(/checked/);await p.reload();await expect(weight(p)).toHaveValue('60');await expect(done(p)).not.toHaveClass(/checked/);
 });
 
 test('rest timer is optional, starts after completion, survives rerenders and counts real elapsed time',async({app:p,db})=>{
- await date(p);await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-auto').check();await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.restTimer?.auto).toBe(true);await p.clock.install();await p.clock.pauseAt(new Date());
+ await date(p);await openRestControls(p);await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-auto').check();await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.restTimer?.auto).toBe(true);await p.clock.install();await p.clock.pauseAt(new Date());
  await done(p).click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');await p.clock.fastForward(15000);await p.evaluate(()=>updateRestTimer());await expect(p.locator('#rest-remaining')).toHaveText('0:45');await p.locator('[data-rest-adjust="15"]').click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');
  await p.locator('[data-item="1"]').click();await expect(p.locator('#rest-remaining')).toHaveText(/^(1:00|0:5[5-9])$/);await p.locator('#rest-skip').click();await expect(p.locator('#rest-remaining')).toHaveText('—');
 });
@@ -193,6 +217,6 @@ test('rest timer is optional, starts after completion, survives rerenders and co
 test('machine note edited during synchronization is sent after the first save',async({app:p,db})=>{
  await date(p);let release;const gate=new Promise(resolve=>release=resolve);let first=true,startedResolve;const started=new Promise(resolve=>startedResolve=resolve);
  await p.route('**/api/profile-settings?*',async route=>{if(route.request().method()==='PUT'&&first){first=false;startedResolve();await gate}await route.continue()});
- await p.locator('#machine-note').fill('pierwsza');await started;await p.locator('#machine-note').fill('ostateczna');await p.waitForTimeout(650);release();
+ await openExerciseOptions(p);await p.locator('#machine-note').fill('pierwsza');await started;await p.locator('#machine-note').fill('ostateczna');await p.waitForTimeout(650);release();
  await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|MG-PL70'],{timeout:10000}).toBe('ostateczna');
 });

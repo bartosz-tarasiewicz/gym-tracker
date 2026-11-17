@@ -1,3 +1,9 @@
+## Interfejs treningu v0.10 — tryb skupienia (mobile)
+
+Ekran **Trening** pokazuje od razu: wybraną datę i typ treningu, postęp serii, zwartą pionową listę ćwiczeń oraz formularz **jednego aktywnego ćwiczenia**. Lista ćwiczeń służy do szybkiego przechodzenia między nimi. Zamienniki sprzętu, zdjęcia i notatki maszyny są dostępne w rozwijanym panelu „Sprzęt, zamienniki i zdjęcia”. Timer nadal działa, a ustawienia czasu i automatycznego uruchamiania zostały schowane pod zwijanym nagłówkiem. Notatki treningu, cofanie lokalnych zmian i wersje chmurowe są w sekcji dodatkowej.
+
+Przycisk **Zapisz trening / Zapisz zmiany w Azure** pozostaje widoczny nad dolną nawigacją. Dane serii trafiają natychmiast do lokalnej kopii offline, natomiast **zapis do Azure nadal wymaga świadomego użycia przycisku**. Ten etap celowo nie zmienia polityki upsert, ETag, wielosesyjnych dat ani konfliktów między urządzeniami. Zmiana typu treningu nadal dotyczy wyłącznie wybranej daty; zmiana sprzętu zachowuje dane innych wariantów. Żadna migracja bazy nie jest potrzebna.
+
 ## Wybór wpisu po imporcie starszej bazy
 
 Gdy data zawiera starsze szkice utworzone samym przeglądaniem szablonów, ekran wybiera wpis z potwierdzonymi seriami roboczymi lub rozgrzewkowymi, zamiast pierwszego pustego szablonu. Niezapisane zmiany i jawnie wybrany wpis zachowują pierwszeństwo. Zapis wskazanego rekordu zachowuje jego ID i pozostałe rekordy z tej samej daty; nie scala ani nie usuwa ich automatycznie. Test lokalny można dodatkowo uruchomić z `GYM_TEST_EXPORT` wskazującym eksport JSON — dane użytkownika nie są dodawane do repozytorium.

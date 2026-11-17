@@ -22,6 +22,10 @@ const uploadFile=async(page,data,confirm=true)=>{
   buffer:Buffer.from(JSON.stringify(data))});
 };
 const log=label=>console.log('PASS:',label);
+async function reveal(page,selector){
+ const details=page.locator(selector);
+ if(await details.count()&&!(await details.evaluate(el=>el.open)))await page.locator(selector+' > summary').click();
+}
 let first,second;
 try{
  first=await context();const phone=await first.newPage();phone.on('pageerror',e=>errors.push(e.message));
@@ -56,8 +60,8 @@ try{
  log('Calendar initially loads existing Azure training');
  const undoWrites=operations.length;
  await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().fill('99');
- await phone.locator('#notes').fill('Przypadkowa zmiana');
- await phone.locator('#undo-training').click();
+ await reveal(phone,'.train-additional');await phone.locator('#notes').fill('Przypadkowa zmiana');
+ await reveal(phone,'.train-additional');await phone.locator('#undo-training').click();
  await phone.waitForFunction(()=>!window.GymCloud.isBusy());
  await phone.waitForTimeout(150);
  assert.equal(await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().inputValue(),'50');
@@ -65,14 +69,14 @@ try{
  assert.equal(operations.length,undoWrites,'Undo never writes or deletes Azure records');
  assert.equal(store.get(originalId).record.notes,'Old Azure note');
  phone.once('dialog',d=>void d.accept());await phone.locator('#workout-type').selectOption('0');
- await phone.locator('#undo-training').click();
+ await reveal(phone,'.train-additional');await phone.locator('#undo-training').click();
  await phone.waitForFunction(()=>!window.GymCloud.isBusy());
  await phone.waitForTimeout(150);
  assert.equal(await phone.locator('#workout-type').inputValue(),'5','Undo also restores original workout type');
  await phone.locator('#week-date').fill('2026-11-20');
  await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().fill('88');
  await phone.reload({waitUntil:'domcontentloaded'});
- await phone.locator('#undo-training').click();
+ await reveal(phone,'.train-additional');await phone.locator('#undo-training').click();
  await phone.waitForFunction(()=>!window.GymCloud.isBusy());
  await phone.waitForTimeout(150);
  assert.equal(await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().inputValue(),'50','Undo baseline survives offline form reload');
@@ -80,16 +84,16 @@ try{
  await phone.locator('#week-date').fill('2026-11-13');
  log('Undo restores historical values, notes and plans, survives reload and never writes Azure');
  await phone.locator('#week-date').fill('2026-11-23');
- await phone.locator('[data-item="2"]').click();
+ await phone.locator('[data-item="2"]').click();await reveal(phone,'.exercise-options');
  assert.match(await phone.locator('.movement-img').first().getAttribute('src'),/Dumbbell_Flyes/);
  await phone.locator('.exercise-media > summary').click();
  await phone.locator('.movement-img').first().scrollIntoViewIfNeeded();
  await phone.locator('.panel').filter({has:phone.locator('.movement-photos')}).screenshot({path:'exercise-preview.png'});
- await phone.locator('[data-item="0"]').click();
+ await phone.locator('[data-item="0"]').click();await reveal(phone,'.exercise-options');
  await phone.locator('[data-machine="DUMBBELL"]').click();
  assert.match(await phone.locator('.movement-img').first().getAttribute('src'),/Dumbbell_Bench_Press/);
  assert.equal(await phone.locator('img[src*="photos/DUMBBELL"]').count(),0);
- await phone.locator('#undo-training').click();
+ await reveal(phone,'.train-additional');await phone.locator('#undo-training').click();
  await phone.locator('#week-date').fill('2026-11-13');
  assert.equal(await phone.locator('#machine').count(),0,'Variant selection uses buttons only');
  assert.equal(await phone.locator('[data-machine][aria-pressed="true"]').count(),1);
@@ -180,7 +184,7 @@ try{
  await phone.locator('#workout-type').selectOption('-1');
  assert.match(await phone.locator('h1').first().innerText(),/Dzień wolny/);
  assert.equal(store.size,beforeRest,'Selecting rest without Save does not modify Azure');
- await phone.locator('#notes').fill('Regeneracja po długim tygodniu');
+ await reveal(phone,'.train-additional');await phone.locator('#notes').fill('Regeneracja po długim tygodniu');
  await phone.locator('#save-training').click();
  await waitFor(()=>[...store.values()].some(x=>x.record?.date==='2026-11-16'&&x.record.day===-1&&x.record.notes==='Regeneracja po długim tygodniu'),'saved rest day');
  const restId=[...store.keys()].find(id=>store.get(id).record.date==='2026-11-16');
@@ -238,7 +242,7 @@ try{
  await phone.locator('#week-date').fill('2026-11-15');
  assert.equal(await phone.locator('#workout-type').inputValue(),'-1','Sunday defaults to rest');
  await phone.locator('#workout-type').selectOption('-2');
- await phone.locator('#notes').fill('Basen — 45 minut');
+ await reveal(phone,'.train-additional');await phone.locator('#notes').fill('Basen — 45 minut');
  await phone.locator('#save-training').click();
  await waitFor(()=>[...store.values()].some(x=>x.record?.date==='2026-11-15'&&x.record.day===-2),'other activity on Sunday');
  log('GRIT and weekends support alternative workouts and note-only activities');
@@ -335,7 +339,7 @@ try{
  assert.equal(await phone.evaluate(()=>GymProfiles.preference('progress').metric),'reps');
  assert.equal(await phone.evaluate(()=>Object.values(state.sessions)[0].exercises.legpress.variants['MG-PL70'].sets[0].kg),'17');
  await phone.locator('[data-view="train"]').click();await phone.locator('#week-date').fill('2026-11-13');
- await phone.locator('[data-item="1"]').click();
+ await phone.locator('[data-item="1"]').click();await reveal(phone,'.exercise-options');
  assert.ok(await phone.locator('[data-machine="BAND-LEG-CURL"]').count());
  await phone.locator('[data-machine="BAND-LEG-CURL"]').click();
  assert.equal(await phone.locator('.movement-img').count(),0);
@@ -418,7 +422,7 @@ try{
  const meaningful=reportedRows.find(x=>x.record.day===5),savedId=meaningful.id;
  const untouched=JSON.stringify([...store].filter(([id])=>id!==savedId));
  const recordCount=store.size;
- await regression.locator('#notes').fill('Updated regression note');
+ await reveal(regression,'.train-additional');await regression.locator('#notes').fill('Updated regression note');
  await regression.locator('#save-training').click();
  await waitFor(()=>store.get(savedId).record.notes==='Updated regression note','save selected populated legacy draft');
  assert.equal(store.size,recordCount);assert.equal(JSON.stringify([...store].filter(([id])=>id!==savedId)),untouched);
