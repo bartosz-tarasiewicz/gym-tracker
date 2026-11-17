@@ -550,11 +550,13 @@ function setsHTML(list,type,item){
   const quick=selected?quickSetControls(type,j,item,s):'';
   // Keep planned sets intact; only extra work sets may be deleted.
   const remove=type==='work'&&j>=item.work.length
-   ?'<div class="extra-set-action"><button type="button" class="remove-set-btn" data-remove-set="'+j+'" aria-label="Usuń dodaną serię S'+(j+1)+'">✕ Usuń serię S'+(j+1)+'</button></div>':'';
-  return '<div class="set-row '+(s.done?'done':'')+(active?' is-next':'')+'" '+(active?'aria-current="step"':'')+' data-set-row="'+type+'-'+j+'"><button type="button" class="set-edit-toggle '+(selected?'selected':'')+'" data-quick-edit="'+type+'-'+j+'" aria-expanded="'+selected+'" aria-label="Szybka korekta serii '+head+'">'+head+'</button>'+
+   ?'<button type="button" class="remove-set-btn" data-remove-set="'+j+'" aria-label="Usuń dodaną serię S'+(j+1)+'" title="Usuń serię S'+(j+1)+'">'+
+    '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+
+    '<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v7m4-7v7"/></svg></button>':'';
+  return '<div class="set-row '+(s.done?'done':'')+(active?' is-next':'')+(remove?' has-remove':'')+'" '+(active?'aria-current="step"':'')+' data-set-row="'+type+'-'+j+'"><button type="button" class="set-edit-toggle '+(selected?'selected':'')+'" data-quick-edit="'+type+'-'+j+'" aria-expanded="'+selected+'" aria-label="Szybka korekta serii '+head+'">'+head+'</button>'+
    '<input aria-label="Ciężar '+type+' '+(j+1)+'" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="'+type+'" data-field="kg" data-set="'+j+'" value="'+esc(s.kg??'')+'">'+
    '<div class="nudge-wrap"><button type="button" data-nudge="-1" data-type="'+type+'" data-set="'+j+'" aria-label="Odejmij powtórzenie">−</button><input aria-label="'+esc(measure(item))+' '+type+' '+(j+1)+'" inputmode="numeric" type="number" min="0" step="1" placeholder="'+(item.mode?.startsWith('sec')?'s':'powt.')+'" data-type="'+type+'" data-field="reps" data-set="'+j+'" value="'+esc(s.reps??'')+'"><button type="button" data-nudge="1" data-type="'+type+'" data-set="'+j+'" aria-label="Dodaj powtórzenie">+</button></div>'+
-   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>'+quick+remove;
+   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button>'+remove+'</div>'+quick;
  }).join('');
 }
 function exerciseMediaHTML(item,machine){
