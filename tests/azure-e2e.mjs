@@ -48,6 +48,12 @@ try {
   pass('Published plan editor opens, edits and cancels without saving test data');
  }
  await page.locator('[data-day="2"]').click();
+ if(process.env.GYM_REQUIRE_LATEST_UI==='1'){
+  assert.equal(await page.locator('.rest-timer-bar #rest-quick-start').isVisible(),true);
+  assert.equal(await page.locator('[data-rir-quick="2"]').isVisible(),true);
+  assert.equal(await page.locator('.set-row.is-next').count(),1);
+  pass('Published v0.11 provides guided sets, one-tap RIR and quick rest timer');
+ }
  await page.locator('[data-item="1"]').click();
  await input('kg').fill('42.5');
  await input('reps').fill('13');
