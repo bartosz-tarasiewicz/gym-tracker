@@ -124,7 +124,7 @@ test('quick correction buttons remain 44px or larger, do not overflow at 320px',
   await p.setViewportSize({width,height:780});
   await openQuick(p);
   const result=await p.evaluate(()=>{
-   const buttons=[...document.querySelectorAll('.set-fast-edit .fast-adjust-btn')];
+   const buttons=[...document.querySelectorAll('.set-fast-edit .fast-adjust-btn, .set-row .set-edit-toggle')];
    return {overflow:document.documentElement.scrollWidth>innerWidth,
     buttons:buttons.map(x=>({w:x.getBoundingClientRect().width,h:x.getBoundingClientRect().height})),
     panel:getComputedStyle(document.querySelector('.set-fast-edit')).position};
