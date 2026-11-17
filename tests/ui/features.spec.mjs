@@ -2,11 +2,11 @@ import {test,expect,date,reps,weight,done,seed,record,upload} from './fixtures.m
 
 async function openExerciseOptions(p){
  const details=p.locator('.exercise-options');
- if(!await details.evaluate(el=>el.open))await details.locator('summary').click();
+ if(!await details.evaluate(el=>el.open))await p.locator('.exercise-options > summary').click();
 }
 async function openRestControls(p){
  const details=p.locator('.rest-timer');
- if(!await details.evaluate(el=>el.open))await details.locator('summary').click();
+ if(!await details.evaluate(el=>el.open))await p.locator('.rest-timer > summary').click();
 }
 
 test('mobile training focus: one active exercise, progressive disclosure and save control',async({app:p})=>{
