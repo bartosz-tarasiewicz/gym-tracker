@@ -517,18 +517,44 @@ function revealExercise(){
  const target=document.querySelector('.active-exercise');
  target?.scrollIntoView({block:'start',behavior:'auto'});
 }
+// Quick correction only changes UI selection; no workout record is created until editing.
+let quickSetEdit=null;
+function quickSetKey(item){return [state.selectedDate,state.activeDay,state.activeArea,item.id,exerciseLog(item).machine].join('|');}
+const quickKgSteps=[0.5,1,2.5,5];
+function quickKgStep(machine){
+ const saved=Number(GymProfiles.preference('quickWeightSteps')?.[machine]);
+ return quickKgSteps.includes(saved)?saved:(['stack','body','unknown','band'].includes(MACHINE[machine]?.type)?1:2.5);
+}
+function quickSetControls(type,index,item,row){
+ const machine=exerciseLog(item).machine,step=quickKgStep(machine);
+ const label=(type==='warm'?'R':'S')+(index+1);
+ const repsIncrement=item.mode?.startsWith('sec')?5:1;
+ const controls=(field,title,value,increment)=>{
+  const button=(dir,symbol,verb)=>'<button type="button" class="fast-adjust-btn" data-fast-field="'+field+'" data-fast-dir="'+dir+'" data-type="'+type+'" data-set="'+index+'" aria-label="'+verb+' '+title.toLowerCase()+' w serii '+label+' o '+increment+'">'+symbol+'</button>';
+  return '<div class="fast-adjust-group"><span class="fast-adjust-label">'+title+'</span><div class="fast-adjust-controls">'+
+   button(-1,'−','Zmniejsz')+'<output class="fast-adjust-value" data-fast-value="'+field+'">'+esc(value===''?'—':value)+'</output>'+
+   button(1,'+','Zwiększ')+'</div></div>';
+ };
+ const choices=quickKgSteps.map(n=>'<option value="'+n+'" '+(n===step?'selected':'')+'>'+String(n).replace('.',',')+' kg</option>').join('');
+ return '<div class="set-fast-edit" data-fast-row="'+type+'-'+index+'" role="group" aria-label="Szybka korekta serii '+label+'">'+
+  '<div class="fast-adjust-head"><strong>⚡ Szybka korekta '+label+'</strong><label>Skok ciężaru <select class="fast-kg-step" data-fast-step="'+esc(machine)+'" aria-label="Skok ciężaru">'+choices+'</select></label></div>'+
+  '<div class="fast-adjust-grid">'+controls('kg','Ciężar (kg)',String(row.kg??''),String(step).replace('.',','))+
+  controls('reps',esc(measure(item)),String(row.reps??''),String(repsIncrement))+'</div></div>';
+}
 function setsHTML(list,type,item){
  const next=nextPendingSet(currentVariant(item));
  return (list||[]).map((s,j)=>{
   const head=type==='warm'?'R'+(j+1):String(j+1);
   const active=next?.type===type&&next.index===j;
+  const selected=quickSetEdit?.key===quickSetKey(item)&&quickSetEdit.type===type&&quickSetEdit.index===j;
+  const quick=selected?quickSetControls(type,j,item,s):'';
   // Keep planned sets intact; only extra work sets may be deleted.
   const remove=type==='work'&&j>=item.work.length
    ?'<div class="extra-set-action"><button type="button" class="remove-set-btn" data-remove-set="'+j+'" aria-label="Usuń dodaną serię S'+(j+1)+'">✕ Usuń serię S'+(j+1)+'</button></div>':'';
-  return '<div class="set-row '+(s.done?'done':'')+(active?' is-next':'')+'" '+(active?'aria-current="step"':'')+' data-set-row="'+type+'-'+j+'"><strong>'+head+'</strong>'+
+  return '<div class="set-row '+(s.done?'done':'')+(active?' is-next':'')+'" '+(active?'aria-current="step"':'')+' data-set-row="'+type+'-'+j+'"><button type="button" class="set-edit-toggle '+(selected?'selected':'')+'" data-quick-edit="'+type+'-'+j+'" aria-expanded="'+selected+'" aria-label="Szybka korekta serii '+head+'">'+head+'</button>'+
    '<input aria-label="Ciężar '+type+' '+(j+1)+'" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="'+type+'" data-field="kg" data-set="'+j+'" value="'+esc(s.kg??'')+'">'+
    '<div class="nudge-wrap"><button type="button" data-nudge="-1" data-type="'+type+'" data-set="'+j+'" aria-label="Odejmij powtórzenie">−</button><input aria-label="'+esc(measure(item))+' '+type+' '+(j+1)+'" inputmode="numeric" type="number" min="0" step="1" placeholder="'+(item.mode?.startsWith('sec')?'s':'powt.')+'" data-type="'+type+'" data-field="reps" data-set="'+j+'" value="'+esc(s.reps??'')+'"><button type="button" data-nudge="1" data-type="'+type+'" data-set="'+j+'" aria-label="Dodaj powtórzenie">+</button></div>'+
-   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>'+remove;
+   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>'+quick+remove;
  }).join('');
 }
 function exerciseMediaHTML(item,machine){
