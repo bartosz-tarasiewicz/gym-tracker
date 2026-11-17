@@ -1,3 +1,11 @@
+## v0.11 — prowadzenie między seriami i mniej dotknięć
+
+- Najbliższa niewykonana seria jest wyróżniona. Po potwierdzeniu serii interfejs sam przesuwa widok do następnej, **bez automatycznego otwierania klawiatury**. Zrobione serie nadal można odznaczyć lub poprawić.
+- Rozgrzewki są opcjonalne: jeśli użytkownik rozpoczął serie robocze, tracker nie cofa go do pominiętych rozgrzewek. Po ostatniej serii roboczej pokazuje informację o zakończeniu ćwiczenia, pozostawiając czas na RIR i świadome przejście do następnego ćwiczenia.
+- RIR 0 / 1 / 2 / 3+ jest dostępne jako przyciski jednego dotknięcia. Pozostałe oceny zachowano w rozwijanym polu; oba sposoby korzystają z tego samego pola danych.
+- Przycisk **Start przerwy** jest dostępny bez rozwijania ustawień timera. Dotychczasowy automatyczny timer i regulacja czasu pozostają.
+- **Bez zmian w backendzie**: poprawki zapisują się lokalnie, a zapis do Azure nadal wymaga kliknięcia przycisku i respektuje istniejący rekord / ETag. Nie dodajemy żadnych nowych pól do formatu eksportu.
+
 ## Interfejs treningu v0.10 — tryb skupienia (mobile)
 
 Ekran **Trening** pokazuje od razu: wybraną datę i typ treningu, postęp serii, zwartą pionową listę ćwiczeń oraz formularz **jednego aktywnego ćwiczenia**. Lista ćwiczeń służy do szybkiego przechodzenia między nimi. Zamienniki sprzętu, zdjęcia i notatki maszyny są dostępne w rozwijanym panelu „Sprzęt, zamienniki i zdjęcia”. Timer nadal działa, a ustawienia czasu i automatycznego uruchamiania zostały schowane pod zwijanym nagłówkiem. Notatki treningu, cofanie lokalnych zmian i wersje chmurowe są w sekcji dodatkowej.
