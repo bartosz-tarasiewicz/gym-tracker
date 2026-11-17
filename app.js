@@ -976,6 +976,30 @@ document.addEventListener('click',async event=>{
  if(b.dataset.week!==undefined){selectDate(b.dataset.week==='today'?dateKey():GymWeek.shift(state.selectedDate,Number(b.dataset.week)));return}
  if(b.dataset.date!==undefined){selectDate(b.dataset.date);return}
  if(b.dataset.machine!==undefined){switchVariant(currentItem().item,b.dataset.machine);save();render();return}
+ if(b.dataset.quickEdit!==undefined){
+  const parts=b.dataset.quickEdit.split('-'),type=parts[0],index=Number(parts[1]);
+  if(!['warm','work'].includes(type)||parts.length!==2||!Number.isInteger(index)||index<0)return;
+  const {item}=currentItem(),variant=currentVariant(item),rows=type==='warm'?variant.warmups:variant.sets;
+  if(index>=rows.length)return;
+  const key=quickSetKey(item);
+  quickSetEdit=quickSetEdit?.key===key&&quickSetEdit.type===type&&quickSetEdit.index===index?null:{key,type,index};
+  render();return;
+ }
+ if(b.dataset.fastField!==undefined){
+  const field=b.dataset.fastField,type=b.dataset.type,index=Number(b.dataset.set),dir=Number(b.dataset.fastDir);
+  if(!['kg','reps'].includes(field)||!['work','warm'].includes(type)||!Number.isInteger(index)||index<0||![-1,1].includes(dir))return;
+  const {item}=currentItem(),key=quickSetKey(item);
+  if(quickSetEdit?.key!==key||quickSetEdit.type!==type||quickSetEdit.index!==index)return;
+  const list=currentVariant(item,true)[type==='warm'?'warmups':'sets'],row=list?.[index];
+  if(!row)return;
+  const increment=field==='kg'?quickKgStep(exerciseLog(item).machine):(item.mode?.startsWith('sec')?5:1);
+  row[field]=String(Math.max(0,Math.round(((Number(row[field])||0)+dir*increment)*100)/100));
+  const input=document.querySelector('.set-row[data-set-row="'+type+'-'+index+'"] input[data-field="'+field+'"]');
+  if(input)input.value=row[field];
+  const output=document.querySelector('.set-fast-edit[data-fast-row="'+type+'-'+index+'"] [data-fast-value="'+field+'"]');
+  if(output)output.textContent=row[field];
+  save();return;
+ }
  if(b.dataset.nudge!==undefined){const {item}=currentItem(),v=currentVariant(item,true),row=(b.dataset.type==='warm'?v.warmups:v.sets)[Number(b.dataset.set)];if(!row)return;const n=Number(row.reps)||0;row.reps=String(Math.max(0,n+Number(b.dataset.nudge)*(item.mode?.startsWith('sec')?5:1)));save();render();return}
   if(b.id&&b.id.startsWith('cloud-')){try{await GymCloud.action(b.id)}catch(e){console.warn('Cloud action:',e);toast('Błąd synchronizacji — lokalne dane zachowane')}render();return;}
  if(b.dataset.view){if(state.view==='plans'&&b.dataset.view!=='plans'&&!GymPlans.leave())return;if(state.view==='train'&&b.dataset.view!=='train'&&!abandonHistoryEdit())return;const previous=state.view;state.view=b.dataset.view;if(state.view==='train')state.activeDay=trainingTypeForDate(state.selectedDate);save(false);render();if(previous!==state.view&&window.GymCloud)void GymCloud.refreshAutomatically();return}
@@ -992,6 +1016,7 @@ document.addEventListener('click',async event=>{
   if((removed.done||String(removed.kg??'').trim()||String(removed.reps??'').trim())&&
     !confirm('Usunąć dodaną serię S'+(index+1)+'? Jej ciężar, powtórzenia i status wykonania zostaną usunięte z formularza.'))return;
   currentVariant(item,true).sets.splice(index,1);
+  quickSetEdit=null;
   save();render();toast('Usunięto serię S'+(index+1)+'. Zapisz w Azure, aby zatwierdzić zmianę.');
   return;
  }
@@ -1014,6 +1039,13 @@ document.addEventListener('change',async event=>{const el=event.target;
  if(el.id==='workout-plan'){changeWorkoutPlan(el.value);return;}
  if(window.GymProgress?.handleChange?.(el,render))return;
  if(el.id==='rest-duration'||el.id==='rest-auto'){const options=restOptions();if(el.id==='rest-duration')options.seconds=Number(el.value);else options.auto=el.checked;GymProfiles.preference('restTimer',options);const quick=document.getElementById('rest-quick-start');if(quick){quick.textContent='Start '+Number(options.seconds||90)+' s';quick.setAttribute('aria-label','Uruchom przerwę '+Number(options.seconds||90)+' sekund');}return;}
+ if(el.dataset.fastStep!==undefined){
+  const machine=exerciseLog(currentItem().item).machine,step=Number(el.value);
+  if(machine!==el.dataset.fastStep||!quickKgSteps.includes(step))return;
+  GymProfiles.preference('quickWeightSteps',{...(GymProfiles.preference('quickWeightSteps')||{}),[machine]:step});
+  document.querySelectorAll('.set-fast-edit [data-fast-field="kg"]').forEach(btn=>btn.setAttribute('aria-label',(Number(btn.dataset.fastDir)>0?'Zwiększ':'Zmniejsz')+' ciężar w serii '+(btn.dataset.type==='warm'?'R':'S')+(Number(btn.dataset.set)+1)+' o '+step));
+  return;
+ }
  if(el.id==='week-date'){selectDate(el.value);return}
  if(el.id==='workout-type'){changeTrainingType(el.value);return}
  if(el.id==='session-picker'){if(!abandonHistoryEdit()){render();return}state.selectedRecordId=el.value;save(false);render();return}
@@ -1028,7 +1060,11 @@ document.addEventListener('change',async event=>{const el=event.target;
 });
 document.addEventListener('input',event=>{const t=event.target;
  if(GymPlans.input(t))return;
- if(t.dataset.field){mutateSet(t.dataset.field,Number(t.dataset.set),t.dataset.type,t.value)}
+ if(t.dataset.field){
+  mutateSet(t.dataset.field,Number(t.dataset.set),t.dataset.type,t.value);
+  const fast=document.querySelector('.set-fast-edit[data-fast-row="'+t.dataset.type+'-'+t.dataset.set+'"] [data-fast-value="'+t.dataset.field+'"]');
+  if(fast)fast.textContent=t.value===''?'—':t.value;
+ }
  else if(t.id==='machine-note'){const {item}=currentItem(),machine=exerciseLog(item).machine,notes={...(GymProfiles.preference('machineNotes')||{})};if(t.value)notes[machineNoteKey(item,machine)]=t.value;else delete notes[machineNoteKey(item,machine)];GymProfiles.preference('machineNotes',notes);}
  else if(t.id==='notes'){activeSession(true).notes=t.value;save()}
 });
