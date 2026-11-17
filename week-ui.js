@@ -35,7 +35,7 @@ window.GymWeek=(()=>{
   }).join('');
   const weekEnd=shift(first,6);
   const heading=parse(first).toLocaleDateString('pl-PL',{day:'numeric',month:'short'})+' – '+parse(weekEnd).toLocaleDateString('pl-PL',{day:'numeric',month:'short',year:'numeric'});
-  return '<div class="panel week-panel"><div class="week-top"><div><div class="eyebrow">Wybierz dzień treningu</div><strong>'+esc(heading)+'</strong></div><div class="week-actions"><button type="button" data-week="-7" aria-label="Poprzedni tydzień">‹</button><button type="button" data-week="today">Dziś</button><button type="button" data-week="7" aria-label="Następny tydzień">›</button></div></div><div class="week-grid day-tabs">'+cells+'</div><div class="week-bottom"><span><span class="week-dot-legend">●</span> Zapisane serie · ↔ inny trening · ☾ wolne</span><label>Inna data <input type="date" id="week-date" value="'+esc(selected)+'" aria-label="Przejdź do daty"></label></div></div>';
+  return '<div class="panel week-panel"><div class="week-top"><div class="week-header-copy"><div class="eyebrow">Wybierz dzień treningu</div><strong>'+esc(heading)+'</strong></div><div class="week-actions"><button type="button" data-week="-7" aria-label="Poprzedni tydzień">‹</button><button type="button" data-week="today">Dziś</button><button type="button" data-week="7" aria-label="Następny tydzień">›</button><label class="week-date-picker" title="Wybierz datę"><input type="date" id="week-date" value="'+esc(selected)+'" aria-label="Przejdź do daty"></label></div></div><div class="week-grid day-tabs">'+cells+'</div><div class="week-bottom"><span><span class="week-dot-legend">●</span> Zapisane serie · ↔ inny trening · ☾ wolne</span></div></div>';
  }
  return {html,iso,shift,dayIndex};
 })();
