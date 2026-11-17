@@ -24,6 +24,62 @@ test('mobile training focus: one active exercise, progressive disclosure and sav
  await expect(p.locator('.active-exercise .title')).toContainText('Wyciskanie na skosie');
 });
 
+
+test('profiles are available only in Data and the Save button never covers the workout',async({app:p})=>{
+ await date(p,'2026-11-09');
+ await expect(p.locator('#profiles')).toHaveCount(0);
+ await expect(p.locator('#add-profile')).toHaveCount(0);
+ await expect(p.locator('.train-save-dock')).toHaveCount(0);
+ const save=p.locator('.train-save-section #save-training');
+ await expect(save).toBeVisible();
+ await expect(save).toHaveCount(1);
+ const layout=await p.evaluate(()=>{
+  const section=document.querySelector('.train-save-section');
+  const exercise=document.querySelector('.active-exercise');
+  return {position:getComputedStyle(section).position,sectionTop:section.getBoundingClientRect().top+scrollY,exerciseBottom:exercise.getBoundingClientRect().bottom+scrollY};
+ });
+ expect(layout.position).not.toBe('fixed');
+ expect(layout.position).not.toBe('sticky');
+ expect(layout.sectionTop).toBeGreaterThanOrEqual(layout.exerciseBottom);
+ await p.locator('[data-view="history"]').click();
+ await expect(p.locator('#profiles')).toHaveCount(0);
+ await p.locator('[data-view="plans"]').click();
+ await expect(p.locator('#profiles')).toHaveCount(0);
+ await p.locator('[data-view="settings"]').click();
+ await expect(p.locator('#active-profile')).toBeEnabled();
+ await expect(p.locator('#add-profile')).toBeVisible();
+ await p.locator('[data-view="train"]').click();
+ await expect(p.locator('#profiles')).toHaveCount(0);
+});
+
+test('non-strength training day uses a normal-flow save action',async({app:p})=>{
+ await date(p,'2026-11-12');
+ await expect(p.locator('.train-save-section #save-training')).toBeVisible();
+ await expect(p.locator('.train-save-dock')).toHaveCount(0);
+ expect(await p.locator('.train-save-section').evaluate(el=>getComputedStyle(el).position)).toBe('static');
+});
+
+test('switching profiles waits for a temporary cloud refresh and stays in Data',async({app:p})=>{
+ await p.locator('[data-view="settings"]').click();
+ await expect(p.locator('#active-profile')).toBeEnabled();
+ await p.locator('#add-profile').click();
+ await p.locator('#profile-name').fill('Profil testowy');
+ await p.locator('#profile-form [type="submit"]').click();
+ await expect(p.locator('#active-profile option:checked')).toHaveText('Profil testowy');
+ await expect(p.locator('#import-database')).toBeVisible();
+ await p.evaluate(()=>{
+  window.__busyForTest=true;
+  const original=GymCloud.isBusy.bind(GymCloud);
+  GymCloud.isBusy=()=>window.__busyForTest||original();
+ });
+ await p.locator('#active-profile').selectOption('default');
+ await expect(p.locator('#profiles')).toContainText('przełączę profil po jej zakończeniu');
+ await expect(p.locator('#active-profile')).toBeDisabled();
+ await p.evaluate(()=>{window.__busyForTest=false;});
+ await expect(p.locator('#active-profile option:checked')).toHaveText('Profil domyślny');
+ await expect(p.locator('#import-database')).toBeVisible();
+});
+
 test('calendar: weeks, arbitrary date, today, no writes from navigation',async({app:p,db})=>{
  await date(p,'2026-12-31');await p.locator('[data-week="7"]').click();await expect(p.locator('#week-date')).toHaveValue('2027-01-07');
  await p.locator('[data-week="-7"]').click();await expect(p.locator('#week-date')).toHaveValue('2026-12-31');
@@ -53,6 +109,9 @@ test('exercise navigation: previous/next boundaries and direct selection',async(
 });
 
 test('profiles: whitespace rejected, cancel clears form, HTML name rendered as text',async({app:p})=>{
+ await expect(p.locator('#profiles')).toHaveCount(0);
+ await p.locator('[data-view="settings"]').click();
+ await expect(p.locator('#active-profile')).toBeEnabled();
  await p.locator('#add-profile').click();await p.locator('#profile-name').fill('   ');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#profile-error')).toContainText('Wpisz nazwę');
  await p.locator('#cancel-profile').click();await expect(p.locator('#profile-form')).toHaveCount(0);await p.locator('#add-profile').click();await expect(p.locator('#profile-name')).toHaveValue('');
  await p.locator('#profile-name').fill('<b>Anna</b>');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('<b>Anna</b>');await expect(p.locator('#profiles b')).toHaveCount(0);
@@ -99,8 +158,8 @@ test('progress: checked work only, metrics, range, chart, read-only source',asyn
 });
 
 test('mobile layout: safe area, horizontal overflow and bottom navigation',async({app:p})=>{
- await p.evaluate(()=>document.documentElement.style.setProperty('--safe-top','59px'));expect((await p.locator('#profiles').boundingBox()).y).toBeGreaterThanOrEqual(59);
- for(const view of ['train','history','settings']){await p.locator('[data-view="'+view+'"]').click();expect(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(p.locator('.bottomnav')).toBeVisible();}
+ await p.evaluate(()=>document.documentElement.style.setProperty('--safe-top','59px'));expect((await p.locator('.top').boundingBox()).y).toBeGreaterThanOrEqual(59);
+ for(const view of ['train','history','settings']){await p.locator('[data-view="'+view+'"]').click();expect(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(p.locator('.bottomnav')).toBeVisible();await expect(p.locator('#profiles')).toHaveCount(view==='settings'?1:0);}
 });
 
 test('warmups and core: independent completion, seconds nudge and enabled state survive reload',async({app:p})=>{
@@ -197,8 +256,8 @@ test('machine settings stay separate by profile, exercise and variant and sync t
  await p.locator('[data-machine="G7-S70"]').click();await expect(p.locator('#machine-note')).toHaveValue('');await p.locator('#machine-note').fill('Siedzisko 2');
  await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.machineNotes?.['legpress|G7-S70']).toBe('Siedzisko 2');
  await p.locator('[data-item="1"]').click();await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
- const c=await browser.newContext({viewport:{width:390,height:844}}),other=await c.newPage();try{await other.goto(db.base);await expect(other.locator('#active-profile')).toBeEnabled();await date(other,'2026-11-13');await openExerciseOptions(other);await expect(other.locator('#machine-note')).toHaveValue('Siedzisko 4');}finally{await c.close()}
- await p.locator('#add-profile').click();await p.locator('#profile-name').fill('Nowy');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('Nowy');await date(p,'2026-11-13');await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
+ const c=await browser.newContext({viewport:{width:390,height:844}}),other=await c.newPage();try{await other.goto(db.base);await expect(other.locator('#week-date')).toBeVisible();await date(other,'2026-11-13');await openExerciseOptions(other);await expect(other.locator('#machine-note')).toHaveValue('Siedzisko 4');}finally{await c.close()}
+ await p.locator('[data-view="settings"]').click();await expect(p.locator('#active-profile')).toBeEnabled();await p.locator('#add-profile').click();await p.locator('#profile-name').fill('Nowy');await p.locator('#profile-form [type="submit"]').click();await expect(p.locator('#active-profile option:checked')).toHaveText('Nowy');await p.locator('[data-view="train"]').click();await date(p,'2026-11-13');await openExerciseOptions(p);await expect(p.locator('#machine-note')).toHaveValue('');
 });
 
 test('previous results ignore empty newer sessions and copying never confirms work sets',async({app:p,db})=>{

@@ -5,13 +5,13 @@ export const test=base.extend({
  db:async({},use)=>{const db=await startServer();try{await use(db)}finally{await new Promise(r=>{db.server.close(r);db.server.closeAllConnections()})}},
  app:async({page,db},use)=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(db.base);await expect(page.locator('#active-profile')).toBeEnabled();
+  await page.goto(db.base);await expect(page.locator('#week-date')).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>GymCloud.isBusy())).toBe(false);
   await use(page);expect(errors).toEqual([]);
  }
 });
 export async function date(page,value='2026-11-13'){
- await expect(page.locator('#active-profile')).toBeEnabled();
+ await expect(page.locator('#week-date')).toBeVisible();
  await expect.poll(()=>page.evaluate(()=>GymCloud.isBusy())).toBe(false);
  await page.locator('#week-date').fill(value);await page.locator('#week-date').dispatchEvent('change');await expect(page.locator('#week-date')).toHaveValue(value);
 }

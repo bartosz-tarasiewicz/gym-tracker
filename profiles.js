@@ -64,13 +64,21 @@ window.GymProfiles=(()=>{
  async function switchTo(id){
   if(!valid(id)||!profiles.some(p=>p.id===id)||id===active)return;
   if(!ready||changing)return;
-  if(window.GymCloud?.isBusy()||settingsBusy){notice='Trwa synchronizacja. Spróbuj przełączyć profil za chwilę.';render();return;}
   if(window.gymProfileCanLeave?.()===false){render();return;}
-  changing=true;render();
-  // Every tab keeps an immutable profile scope for its entire lifetime. Reload
-  // destroys old cloud callbacks before another profile can enter the UI.
-  try{await window.GymStorage.flush();sessionStorage.setItem(ACTIVE,id);location.reload();}
-  catch(e){changing=false;render();alert('Nie udało się przełączyć profilu. Dane zachowano.');}
+  changing=true;
+  const busy=()=>!!(window.GymCloud?.isBusy()||settingsBusy);
+  notice=busy()?'Trwa synchronizacja — przełączę profil po jej zakończeniu.':'';
+  render();
+  // One user action survives a brief profile-settings or cloud refresh.
+  // Never reload while callbacks scoped to the old profile are still running.
+  try{
+   for(let attempt=0;attempt<100&&busy();attempt++)await new Promise(resolve=>setTimeout(resolve,100));
+   if(busy()){changing=false;notice='Synchronizacja nadal trwa. Spróbuj ponownie za chwilę.';render();return;}
+   await window.GymStorage.flush();
+   sessionStorage.setItem(ACTIVE,id);
+   sessionStorage.setItem('gym-profile-return-view','settings');
+   location.reload();
+  }catch(e){changing=false;notice='Nie udało się przełączyć profilu. Dane zachowano.';render();alert(notice);}
  }
  document.addEventListener('change',e=>{if(e.target.id==='active-profile')void switchTo(e.target.value);});
  document.addEventListener('input',e=>{if(e.target.id==='profile-name')profileName=e.target.value;});

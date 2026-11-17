@@ -30,12 +30,15 @@ try {
  pass('Public Azure site loads at the supplied URL');
  if(process.env.GYM_REQUIRE_LATEST_UI==='1'){
   await page.evaluate(()=>{window.prompt=()=>null;});
+  assert.equal(await page.locator('#profiles').count(),0,'Profiles are hidden outside Data');
+  await page.locator('[data-view="settings"]').click();
+  await page.locator('#active-profile:not([disabled])').waitFor();
   await page.locator('#add-profile').click();
   await page.locator('#profile-name').fill('Test formularza');
   assert.equal(await page.locator('#profile-name').inputValue(),'Test formularza');
   await page.locator('#cancel-profile').click();
   assert.equal(await page.locator('#profile-form').count(),0);
-  pass('Add profile opens an inline form when native prompts are blocked');
+  pass('Profiles are available only in Data, with an inline add form');
   await page.locator('.navitem[data-view="plans"]').click();
   await page.locator('[data-plan-action="new"]').click();
   await page.locator('#plan-name').fill('Test edytora');
@@ -105,6 +108,8 @@ try {
  await page.locator('[data-view="train"]').click();
  assert.equal(await page.locator('.week-grid .week-day').count(),7,'Seven-day calendar is available on Azure');
  assert.equal(await page.locator('#save-training').count(),1,'One explicit Save action is displayed');
+ assert.equal(await page.locator('.train-save-dock').count(),0,'No fixed Save button overlays exercises');
+ assert.equal(await page.locator('.train-save-section #save-training').count(),1,'Save is available inside the workout flow');
  if(process.env.GYM_REQUIRE_LATEST_UI==='1')
   assert.equal(await page.locator('#workout-type').count(),1,'Per-date workout type selection exists after deployment');
  await page.locator('[data-view="history"]').click();
