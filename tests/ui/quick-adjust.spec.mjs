@@ -9,7 +9,7 @@ async function openQuick(p,type='work',index=0){
 const adjust=(p,field,dir)=>p.locator('.set-fast-edit [data-fast-field="'+field+'"][data-fast-dir="'+dir+'"]');
 async function openEquipmentOptions(p){
  const d=p.locator('.exercise-options');
- if(!(await d.evaluate(el=>el.open)))await d.locator('summary').click();
+ if(!(await d.evaluate(el=>el.open)))await p.locator('.exercise-options > summary').click();
 }
 
 test('one-hand correction updates only selected row, persists after reload, and never requires keyboard',async({app:p,db})=>{
