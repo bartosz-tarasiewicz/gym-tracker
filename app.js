@@ -206,7 +206,7 @@ function selectDate(date){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime()))return;
  if(date===state.selectedDate)return;
  if(!abandonHistoryEdit())return;
- state.selectedDate=date;state.selectedRecordId='';exerciseOptionsOpen=false;restControlsOpen=false;
+ state.selectedDate=date;state.selectedRecordId='';exerciseOptionsOpen=false;restControlsOpen=false;advancedOpen=false;
  state.activeDay=trainingTypeForDate(date,state);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
  save(false);render();
 }
@@ -577,6 +577,7 @@ function lastCompletedVariant(item,machine){
 function machineNoteKey(item,machine){return item.id+'|'+machine;}
 let exerciseOptionsOpen=false;
 let restControlsOpen=false;
+let advancedOpen=false;
 function trainHTML(){
  rememberDay();
  const calendar=GymWeek.html(state),d=state.activeDay;
@@ -597,7 +598,7 @@ function trainHTML(){
   return calendar+typeSelector+'<p class="hint">'+esc(details)+'</p>'+
    '<div class="panel training-notes"><label class="label" for="notes">Notatka do dnia</label>'+
    '<textarea class="notes" id="notes" placeholder="Opcjonalny opis dnia lub aktywności…">'+esc(note)+'</textarea>'+
-   '<details class="train-additional"><summary>Cofnij zmiany i historia wersji</summary>'+undoDayHTML()+versionsHTML()+'</details></div>'+
+   '<details class="train-additional" '+(advancedOpen?'open':'')+' ><summary>Cofnij zmiany i historia wersji</summary>'+undoDayHTML()+versionsHTML()+'</details></div>'+
    '<div class="train-save-dock"><button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień w Azure</button></div>';
  }
  const s=activeSession(),day=activePlan(),{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
@@ -636,7 +637,7 @@ function trainHTML(){
   (coreActive&&!enabled?'<p class="hint">Dodaj ćwiczenie do treningu, aby zapisywać serie.</p>':sets)+
   '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Poprzednie</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
  const isHistory=!!savedHistoryRecord();
- const notes='<div class="panel training-notes"><details class="train-additional"><summary>Notatki i historia zapisów</summary>'+
+ const notes='<div class="panel training-notes"><details class="train-additional" '+(advancedOpen?'open':'')+' ><summary>Notatki i historia zapisów</summary>'+
   '<label class="label" for="notes">Notatki do treningu</label><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, uwagi…">'+esc(s.notes||'')+'</textarea>'+
   undoDayHTML()+versionsHTML()+'</details></div>';
  const saveDock='<div class="train-save-dock"><button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany w Azure':'✓ Zapisz trening w Azure')+'</button></div>';
@@ -823,6 +824,7 @@ document.addEventListener('toggle',event=>{
  if(!event.target.isConnected)return;
  if(event.target.matches('.exercise-options'))exerciseOptionsOpen=event.target.open;
  if(event.target.matches('.rest-timer'))restControlsOpen=event.target.open;
+ if(event.target.matches('.train-additional'))advancedOpen=event.target.open;
 },true);
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
