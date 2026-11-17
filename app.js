@@ -522,10 +522,13 @@ function setsHTML(list,type,item){
  return (list||[]).map((s,j)=>{
   const head=type==='warm'?'R'+(j+1):String(j+1);
   const active=next?.type===type&&next.index===j;
+  // Keep planned sets intact; only extra work sets may be deleted.
+  const remove=type==='work'&&j>=item.work.length
+   ?'<div class="extra-set-action"><button type="button" class="remove-set-btn" data-remove-set="'+j+'" aria-label="Usuń dodaną serię S'+(j+1)+'">✕ Usuń serię S'+(j+1)+'</button></div>':'';
   return '<div class="set-row '+(s.done?'done':'')+(active?' is-next':'')+'" '+(active?'aria-current="step"':'')+' data-set-row="'+type+'-'+j+'"><strong>'+head+'</strong>'+
    '<input aria-label="Ciężar '+type+' '+(j+1)+'" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="'+type+'" data-field="kg" data-set="'+j+'" value="'+esc(s.kg??'')+'">'+
    '<div class="nudge-wrap"><button type="button" data-nudge="-1" data-type="'+type+'" data-set="'+j+'" aria-label="Odejmij powtórzenie">−</button><input aria-label="'+esc(measure(item))+' '+type+' '+(j+1)+'" inputmode="numeric" type="number" min="0" step="1" placeholder="'+(item.mode?.startsWith('sec')?'s':'powt.')+'" data-type="'+type+'" data-field="reps" data-set="'+j+'" value="'+esc(s.reps??'')+'"><button type="button" data-nudge="1" data-type="'+type+'" data-set="'+j+'" aria-label="Dodaj powtórzenie">+</button></div>'+
-   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>';
+   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>'+remove;
  }).join('');
 }
 function exerciseMediaHTML(item,machine){
@@ -947,6 +950,16 @@ document.addEventListener('click',async event=>{
  if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);exerciseOptionsOpen=false;save(false);render();revealExercise();return}
  if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(s.done&&restOptions().auto){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();}if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();revealNextSet();return}
  if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;exerciseOptionsOpen=false;save(false);render();revealExercise();return}
+ if(b.dataset.removeSet!==undefined){
+  const {item}=currentItem(),index=Number(b.dataset.removeSet),variant=currentVariant(item);
+  if(!Number.isInteger(index)||index<item.work.length||index>=variant.sets.length)return;
+  const removed=variant.sets[index];
+  if((removed.done||String(removed.kg??'').trim()||String(removed.reps??'').trim())&&
+    !confirm('Usunąć dodaną serię S'+(index+1)+'? Jej ciężar, powtórzenia i status wykonania zostaną usunięte z formularza.'))return;
+  currentVariant(item,true).sets.splice(index,1);
+  save();render();toast('Usunięto serię S'+(index+1)+'. Zapisz w Azure, aby zatwierdzić zmianę.');
+  return;
+ }
  if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item,true);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();revealNextSet();return}
  if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item,true);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession(true).coreEnabled[item.id]=true;save();render();revealNextSet();toast(`Potwierdzono ${n} serii`);return}
  if(b.dataset.rirQuick!==undefined){
