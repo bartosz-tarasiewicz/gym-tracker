@@ -1,3 +1,10 @@
+## v0.17 — kompaktowe serie i kosz w tym samym wierszu
+
+- **Dodatkowe serie robocze:** przycisk usunięcia jest teraz **ikoną kosza na końcu tego samego wiersza** co ciężar, powtórzenia i zaznaczenie wykonania. Ikona ma 44 × 44 px strefy dotyku i etykietę dla czytników ekranu. Serie przewidziane w planie nie mają kosza.
+- **Węższe pola:** zoptymalizowany układ kolumn i mniejszy odstęp między polami; mniejsza typografia wiersza, przy zachowaniu 16 px dla pól na iOS, aby Safari nie powiększało strony po ich zaznaczeniu.
+- **Zachowanie bez zmian:** puste dodatkowe serie usuwa się jednym dotknięciem; wypełnione lub wykonane wymagają potwierdzenia. Dodawanie serii, szybka korekta, RIR, rozgrzewki, warianty maszyn i ręczny zapis do Azure pozostają bez zmian.
+- **Testy:** `tests/ui/inline-trash.spec.mjs` sprawdza ikonę w wierszu, brak przepełnienia przy 320/375/390/430 px, brak kosza w seriach planowych i potwierdzanie usunięcia.
+
 ## v0.16 — szybka korekta serii jedną ręką
 
 - Dotknij numeru serii **S1/S2** albo rozgrzewki **R1/R2**. Pod wybraną serią rozwinie się podręczny edytor z dużymi przyciskami **− / +** dla ciężaru i powtórzeń (lub czasu). Przycisk numeru ponownie zwija edytor. Nadal można wpisać dokładną wartość bezpośrednio w dotychczasowe pola.

@@ -212,10 +212,6 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
 @media(max-width:360px){.quick-fill-offer{gap:6px;padding:8px}.quick-fill-offer .btn{min-width:60px;padding:7px}}
 
 /* v0.14: reversible extra work sets without squeezing the iPhone set grid. */
-.extra-set-action{display:flex;justify-content:flex-end;margin:-1px 0 8px}
-.extra-set-action .remove-set-btn{min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid #704a51;background:#35272f;color:#f8c6c4;font-size:12px;font-weight:700}
-.extra-set-action .remove-set-btn:hover{background:#463039}
-.extra-set-action .remove-set-btn:focus-visible{outline:2px solid #f8c6c4;outline-offset:2px}
 
 /* v0.15 — mobile focus layout: day > exercise queue > active exercise > sets. */
 .week-panel{padding:10px 11px;margin:8px 0 7px;border-radius:16px}
@@ -311,4 +307,42 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
  .fast-adjust-grid{grid-template-columns:minmax(0,1fr);gap:10px}
  .fast-adjust-controls{grid-template-columns:44px minmax(0,1fr) 44px}
 }
-</style></head><body><div class="shell"><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div style="text-align:right"><div id="today" class="chip"></div><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.16 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
+
+/* v0.17 — one-line additional sets: the trash icon is the fifth cell.
+   Planned work sets retain four cells and their existing controls. */
+.active-exercise .set-row:not(.has-remove),.active-exercise .set-head{
+ grid-template-columns:44px minmax(45px,.8fr) minmax(80px,1.55fr) 44px;gap:4px
+}
+.active-exercise .set-row.has-remove{
+ grid-template-columns:44px minmax(40px,.8fr) minmax(70px,1.55fr) 44px 44px;gap:3px
+}
+.active-exercise .set-row input{min-height:44px;font-size:14px;padding:6px 2px;border-radius:8px}
+.active-exercise .set-row .nudge-wrap{gap:1px}
+.active-exercise .set-row .nudge-wrap input{padding-left:0;padding-right:0}
+.active-exercise .set-row .nudge-wrap button{flex:0 0 21px;min-width:21px;height:44px;font-size:14px;border-radius:7px}
+.active-exercise .set-row>.set-edit-toggle{font-size:11px}
+.active-exercise .done-button{height:44px;min-height:44px;font-size:18px}
+.active-exercise .set-row.has-remove>.remove-set-btn{
+ display:flex;align-items:center;justify-content:center;
+ width:44px;height:44px;min-height:44px;padding:0;
+ border:1px solid #704a51;border-radius:9px;
+ background:#35272f;color:#f8c6c4;touch-action:manipulation
+}
+.active-exercise .set-row.has-remove>.remove-set-btn:hover{background:#493039}
+.active-exercise .set-row.has-remove>.remove-set-btn:focus-visible{outline:2px solid #ffc5c5;outline-offset:2px}
+.active-exercise .set-row.has-remove>.remove-set-btn svg{display:block;flex:0 0 19px}
+@media(max-width:380px){
+ .active-exercise .set-row:not(.has-remove),.active-exercise .set-head{
+  grid-template-columns:44px minmax(43px,.8fr) minmax(74px,1.55fr) 44px;gap:3px
+ }
+ .active-exercise .set-row.has-remove{
+  grid-template-columns:44px minmax(37px,.8fr) minmax(62px,1.55fr) 44px 44px;gap:2px
+ }
+ .active-exercise .set-row input{padding-left:1px;padding-right:1px}
+ .active-exercise .set-row .nudge-wrap button{flex-basis:19px;min-width:19px}
+}
+/* iOS Safari zooms the entire page when a focused numeric field is under 16px. */
+@supports(-webkit-touch-callout:none){
+ .active-exercise .set-row input{font-size:16px}
+}
+</style></head><body><div class="shell"><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div style="text-align:right"><div id="today" class="chip"></div><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.17 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
