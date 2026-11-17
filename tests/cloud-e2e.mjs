@@ -26,6 +26,10 @@ async function reveal(page,selector){
  const details=page.locator(selector);
  if(await details.count()&&!(await details.evaluate(el=>el.open)))await page.locator(selector+' > summary').click();
 }
+async function chooseExercise(page,index){
+ await reveal(page,'.exercise-queue');
+ await page.locator('[data-item="'+index+'"]').click();
+}
 let first,second;
 try{
  first=await context();const phone=await first.newPage();phone.on('pageerror',e=>errors.push(e.message));
@@ -84,12 +88,12 @@ try{
  await phone.locator('#week-date').fill('2026-11-13');
  log('Undo restores historical values, notes and plans, survives reload and never writes Azure');
  await phone.locator('#week-date').fill('2026-11-23');
- await phone.locator('[data-item="2"]').click();await reveal(phone,'.exercise-options');
+ await chooseExercise(phone,2);await reveal(phone,'.exercise-options');
  assert.match(await phone.locator('.movement-img').first().getAttribute('src'),/Dumbbell_Flyes/);
  await phone.locator('.exercise-media > summary').click();
  await phone.locator('.movement-img').first().scrollIntoViewIfNeeded();
  await phone.locator('.panel').filter({has:phone.locator('.movement-photos')}).screenshot({path:'exercise-preview.png'});
- await phone.locator('[data-item="0"]').click();await reveal(phone,'.exercise-options');
+ await chooseExercise(phone,0);await reveal(phone,'.exercise-options');
  await phone.locator('[data-machine="DUMBBELL"]').click();
  assert.match(await phone.locator('.movement-img').first().getAttribute('src'),/Dumbbell_Bench_Press/);
  assert.equal(await phone.locator('img[src*="photos/DUMBBELL"]').count(),0);
@@ -341,7 +345,7 @@ try{
  assert.equal(await phone.evaluate(()=>GymProfiles.preference('progress').metric),'reps');
  assert.equal(await phone.evaluate(()=>Object.values(state.sessions)[0].exercises.legpress.variants['MG-PL70'].sets[0].kg),'17');
  await phone.locator('[data-view="train"]').click();await phone.locator('#week-date').fill('2026-11-13');
- await phone.locator('[data-item="1"]').click();await reveal(phone,'.exercise-options');
+ await chooseExercise(phone,1);await reveal(phone,'.exercise-options');
  assert.ok(await phone.locator('[data-machine="BAND-LEG-CURL"]').count());
  await phone.locator('[data-machine="BAND-LEG-CURL"]').click();
  assert.equal(await phone.locator('.movement-img').count(),0);
