@@ -192,7 +192,7 @@ function changeWorkoutPlan(id){
 function planSelector(){
  const current=activePlan(),choices=[GymPlans.builtIn(state.activeDay),...GymPlans.library().plans.filter(p=>p.dayType===state.activeDay)];
  if(!choices.some(p=>p.id===current.id))choices.push(current);
- return '<div class="panel"><label class="label" for="workout-plan">Plan dla tego treningu</label><select class="equipment" id="workout-plan">'+choices.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===current.id?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select><p class="hint">Rozpoczęty trening zachowuje swoją wersję planu.</p><button class="btn secondary" data-view="plans">Moje plany · edytuj</button></div>';
+ return '<div class="plan-variant-controls"><label class="label" for="workout-plan">Zestaw ćwiczeń dla tego rodzaju treningu</label><select class="equipment" id="workout-plan">'+choices.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===current.id?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select><p class="hint">Zmiana zestawu nie zmienia rodzaju treningu ani planu innych dni. Dotychczasowe wyniki zachowujemy.</p><button type="button" class="btn secondary small" data-view="plans">Edytuj własne plany</button></div>';
 }
 function normalize(data){if(!data||typeof data!=='object'||!Array.isArray(data.history)||!data.sessions||typeof data.sessions!=='object'||Array.isArray(data.sessions))return initial();
  const s={...initial(),...data};s.unsavedDates=Array.isArray(s.unsavedDates)?s.unsavedDates.filter(x=>/^\d{4}-\d{2}-\d{2}\|(?:[01235]|-1|-2)$/.test(x)):[];if(Number(s.version)<2){
@@ -493,7 +493,7 @@ function toast(str){const t=document.getElementById('toast');t.textContent=str;t
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:activePlan().items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
-function render(force=false){renderSaveStatus();if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){window.GymProfiles?.render();renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();window.GymProfiles?.render();updateRestTimer()}
+function render(force=false){renderSaveStatus();if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){window.GymProfiles?.render();renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();window.GymProfiles?.render();updateRestTimer()}
 // Warmups are optional once a work set has been started. Never drag the user
 // back to an unfinished warmup while logging working sets.
 function nextPendingSet(variant){
@@ -711,12 +711,20 @@ function trainHTML(){
  const selectedOptions=TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+(x===standard?' (domyślnie)':'')+'</option>').join('');
  const dayProgress=[-1,3,-2].includes(d)?'':(()=>{
   const progress=summary(),percent=progress.planned?Math.round(progress.done/progress.planned*100):0;
-  return '<div class="day-progress"><div class="flex"><span>'+progress.done+' / '+progress.planned+' serii wykonanych</span><strong>'+percent+'%</strong></div><div class="meter"><div style="width:'+percent+'%"></div></div></div>';
+  return '<div class="day-progress"><span>'+progress.done+' / '+progress.planned+' serii</span><div class="meter"><div style="width:'+percent+'%"></div></div><strong>'+percent+'%</strong></div>';
  })();
- const typeSelector='<section class="panel train-day-summary"><div class="train-day-header"><div class="day-title"><div class="eyebrow">'+esc(state.selectedDate)+'</div>'+
-  '<h1>'+esc([-1,3,-2].includes(d)?trainingName(d):activePlan().name)+'</h1></div>'+
+ // Workout type changes the activity on this date; plan variants change only the exercise list.
+ // Hide the latter unless the user has an alternative plan for the active day type.
+ const supportsPlans=[0,1,2,4,5].includes(d);
+ const currentPlan=supportsPlans?activePlan():null;
+ const hasVariants=supportsPlans&&(GymPlans.library().plans.some(p=>p.dayType===d)||
+   currentPlan?.id!==GymPlans.builtIn(d)?.id);
+ const variantControl=hasVariants?
+  '<details class="train-plan-choices"><summary>Zmień zestaw ćwiczeń</summary>'+planSelector()+'</details>':'';
+ const typeSelector='<section class="panel train-day-summary"><div class="train-day-header"><div class="day-title">'+
+  '<h1>'+esc([-1,3,-2].includes(d)?trainingName(d):currentPlan.name)+'</h1></div>'+
   '<label class="train-type-control"><span>Zmień trening</span><select id="workout-type" aria-label="Rodzaj treningu">'+selectedOptions+'</select></label></div>'+
-  dayProgress+'</section>';
+  dayProgress+variantControl+'</section>';
  if([-1,3,-2].includes(d)){
   const note=storedDay()?.notes||'';
   const details=d===-1?'Dzień bez treningu — regeneracja.':d===3?
@@ -790,9 +798,7 @@ function trainHTML(){
   '<label class="label" for="notes">Notatki do treningu</label><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, uwagi…">'+esc(s.notes||'')+'</textarea>'+
   undoDayHTML()+versionsHTML()+'</details></div>';
  const saveSection='<section class="panel train-save-section" aria-label="Zapis treningu"><button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany w Azure':'✓ Zapisz trening w Azure')+'</button><p class="hint">Zmiany są lokalne, dopóki nie zapiszesz ich w Azure.</p></section>';
- return calendar+typeSelector+switcher+
-  '<details class="train-plan-choices"><summary>Plan na ten dzień · '+esc(day.name)+'</summary>'+planSelector()+'</details>'+
-  chooseArea+chooser+exercise+notes+saveSection;
+ return calendar+typeSelector+switcher+chooseArea+chooser+exercise+notes+saveSection;
 }
 let versionHistory=null;
 function selectedCloudId(){const record=storedDay();if(!record)return '';if(record.syncId)return record.syncId;const entry=Object.entries(state.sessions).find(([,r])=>r===record);return entry?'draft:'+entry[0]:'';}
