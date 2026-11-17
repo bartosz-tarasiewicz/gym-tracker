@@ -1,3 +1,10 @@
+## v0.14 — usuwanie dodanych serii
+
+- Pod każdą dodatkową serią roboczą (poza seriami zapisanymi w planie) widoczny jest przycisk **✕ Usuń serię S…**. Umożliwia usuwanie także wcześniejszej dodatkowej serii; pozostałe serie zostają automatycznie przenumerowane.
+- Pustą, niezaliczoną serię usuwa jedno dotknięcie. Dla serii z ciężarem, powtórzeniami lub zaznaczonych jako wykonane pojawia się potwierdzenie przed usunięciem.
+- Usuwanie dotyczy tylko bieżącego ćwiczenia i bieżącego wariantu maszyny, zachowuje rozgrzewki oraz planowe serie. Działa po odświeżeniu PWA, a w Azure zmienia rekord dopiero po świadomym kliknięciu **Zapisz**.
+- Testy regresyjne: `tests/ui/remove-extra-sets.spec.mjs`.
+
 ## v0.13 — zarządzanie profilami w Danych i zapis bez nakładki
 
 - W zakładce **Dane** znajduje się jedyny selektor profilu i formularz dodawania użytkownika. Zakładki Trening, Progres i Plany są wolne od przełącznika. Profil nadal określa zakres historii, planów i bazy Azure.
