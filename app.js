@@ -493,7 +493,7 @@ function toast(str){const t=document.getElementById('toast');t.textContent=str;t
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:activePlan().items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
-function render(force=false){renderSaveStatus();if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;window.GymProfiles?.render();document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();updateRestTimer()}
+function render(force=false){renderSaveStatus();if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){window.GymProfiles?.render();renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();window.GymProfiles?.render();updateRestTimer()}
 // Warmups are optional once a work set has been started. Never drag the user
 // back to an unfinished warmup while logging working sets.
 function nextPendingSet(variant){
@@ -656,7 +656,7 @@ function trainHTML(){
    '<div class="panel training-notes"><label class="label" for="notes">Notatka do dnia</label>'+
    '<textarea class="notes" id="notes" placeholder="Opcjonalny opis dnia lub aktywności…">'+esc(note)+'</textarea>'+
    '<details class="train-additional" '+(advancedOpen?'open':'')+' ><summary>Cofnij zmiany i historia wersji</summary>'+undoDayHTML()+versionsHTML()+'</details></div>'+
-   '<div class="train-save-dock"><button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień w Azure</button></div>';
+   '<section class="panel train-save-section" aria-label="Zapis dnia"><button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień w Azure</button><p class="hint">Zapisz dzień w bazie, gdy skończysz edycję.</p></section>';
  }
  const s=activeSession(),day=activePlan(),{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
  const old=selectedDayReports(),saved=storedDay(),coreActive=state.activeArea==='core',enabled=isCoreEnabled(item);
@@ -709,10 +709,10 @@ function trainHTML(){
  const notes='<div class="panel training-notes"><details class="train-additional" '+(advancedOpen?'open':'')+' ><summary>Notatki i historia zapisów</summary>'+
   '<label class="label" for="notes">Notatki do treningu</label><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, uwagi…">'+esc(s.notes||'')+'</textarea>'+
   undoDayHTML()+versionsHTML()+'</details></div>';
- const saveDock='<div class="train-save-dock"><button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany w Azure':'✓ Zapisz trening w Azure')+'</button></div>';
+ const saveSection='<section class="panel train-save-section" aria-label="Zapis treningu"><button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany w Azure':'✓ Zapisz trening w Azure')+'</button><p class="hint">Zmiany są lokalne, dopóki nie zapiszesz ich w Azure.</p></section>';
  return calendar+typeSelector+switcher+
   '<details class="train-plan-choices"><summary>Plan na ten dzień · '+esc(day.name)+'</summary>'+planSelector()+'</details>'+
-  chooseArea+chooser+exercise+notes+saveDock;
+  chooseArea+chooser+exercise+notes+saveSection;
 }
 let versionHistory=null;
 function selectedCloudId(){const record=storedDay();if(!record)return '';if(record.syncId)return record.syncId;const entry=Object.entries(state.sessions).find(([,r])=>r===record);return entry?'draft:'+entry[0]:'';}
@@ -740,7 +740,8 @@ function historyHTML(){return GymProgress.html(state,{PLAN,CORE,MACHINE,allLogge
 function renderSaveStatus(){const el=document.getElementById('cloud-save-status');if(!el)return;const dirty=historyEditChanged()||(state.unsavedDates||[]).some(k=>k.startsWith(state.selectedDate+'|'));const cloud=window.GymCloud?.getStatus();el.textContent=savingWorkout?'Azure: zapisuję…':dirty?'Zmiany lokalne · wybierz Zapisz':cloud==='synced'?'Azure: aktualne dane':cloud==='syncing'?'Azure: synchronizacja…':cloud==='conflict'?'Azure: sprawdź konflikt w Danych':'Azure: brak potwierdzenia połączenia';el.classList.toggle('warn',dirty||cloud==='conflict');}
 function renderCloudPanel(){const panel=document.getElementById('cloud-panel');if(panel)panel.innerHTML=window.GymCloud?.html?.()||'';}
 function settingsHTML(){
- return '<section class="hero"><div class="eyebrow">Dane</div><h1>Import i eksport</h1>'+
+ return '<section id="profiles" class="panel" aria-label="Profile użytkowników"></section>'+
+  '<section class="hero"><div class="eyebrow">Dane</div><h1>Import i eksport</h1>'+
   '<p class="muted">Dane treningów przechowujemy w Azure. Poniższe operacje dotyczą wyłącznie bazy aktywnego profilu.</p></section>'+
   '<div class="panel"><h2>Import danych</h2>'+
   '<p class="muted">Treningi z pliku <strong>nadpiszą treningi o tych samych datach</strong>. Brakujące zostaną dodane. Daty, których nie ma w pliku, pozostaną bez zmian.</p>'+
