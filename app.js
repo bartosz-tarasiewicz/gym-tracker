@@ -588,7 +588,7 @@ function trainHTML(){
   return '<div class="day-progress"><div class="flex"><span>'+progress.done+' / '+progress.planned+' serii wykonanych</span><strong>'+percent+'%</strong></div><div class="meter"><div style="width:'+percent+'%"></div></div></div>';
  })();
  const typeSelector='<section class="panel train-day-summary"><div class="train-day-header"><div class="day-title"><div class="eyebrow">'+esc(state.selectedDate)+'</div>'+
-  '<h1>'+esc(trainingName(d))+'</h1></div>'+
+  '<h1>'+esc([-1,3,-2].includes(d)?trainingName(d):activePlan().name)+'</h1></div>'+
   '<label class="train-type-control"><span>Zmień trening</span><select id="workout-type" aria-label="Rodzaj treningu">'+selectedOptions+'</select></label></div>'+
   dayProgress+'</section>';
  if([-1,3,-2].includes(d)){
