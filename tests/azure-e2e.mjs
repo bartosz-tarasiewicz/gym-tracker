@@ -62,7 +62,7 @@ try {
  assert.equal(await input('reps').inputValue(),'13');
  assert.match(await done().getAttribute('class'),/checked/);
  pass('Weight, reps and completion survive browser reload');
- await page.locator('[data-machine="DUMBBELL"]').click();
+ await page.locator('.exercise-options > summary').click();await page.locator('[data-machine="DUMBBELL"]').click();
  await input('kg').fill('15');
  await input('reps').fill('11');
  await done().click();
