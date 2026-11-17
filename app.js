@@ -206,7 +206,7 @@ function selectDate(date){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime()))return;
  if(date===state.selectedDate)return;
  if(!abandonHistoryEdit())return;
- state.selectedDate=date;state.selectedRecordId='';exerciseOptionsOpen=false;restControlsOpen=false;advancedOpen=false;
+ state.selectedDate=date;state.selectedRecordId='';exerciseOptionsOpen=false;restControlsOpen=false;advancedOpen=false;exerciseQueueOpen=false;
  state.activeDay=trainingTypeForDate(date,state);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
  save(false);render();
 }
@@ -259,7 +259,7 @@ function changeTrainingType(next){
  state.sessions[date+'-'+next]=draft;
  state.unsavedDates=(state.unsavedDates||[]).filter(x=>!x.startsWith(date+'|'));
  state.unsavedDates.push(date+'|'+next);
- state.activeDay=next;state.activeArea='main';state.activeExercise=0;state.activeCore=0;
+ state.activeDay=next;state.activeArea='main';state.activeExercise=0;state.activeCore=0;exerciseQueueOpen=false;
  state.selectedRecordId='';
  save(false);render();
  toast('Wybrano: '+trainingName(next)+'. Kliknij Zapisz, aby zatwierdzić.');
@@ -510,7 +510,7 @@ function revealNextSet(){
  if(!target)return;
  const bounds=target.getBoundingClientRect();
  // Keep the next touch target out of the sticky header and the save dock.
- if(bounds.top<104||bounds.bottom>window.innerHeight-165)
+ if(bounds.top<104||bounds.bottom>window.innerHeight-98)
   target.scrollIntoView({block:'center',behavior:'auto'});
 }
 function revealExercise(){
@@ -638,6 +638,7 @@ function machineNoteKey(item,machine){return item.id+'|'+machine;}
 let exerciseOptionsOpen=false;
 let restControlsOpen=false;
 let advancedOpen=false;
+let exerciseQueueOpen=false;
 function trainHTML(){
  rememberDay();
  const calendar=GymWeek.html(state),d=state.activeDay;
@@ -680,8 +681,13 @@ function trainHTML(){
  const switcher=old.length>1?'<div class="panel"><label class="label" for="session-picker">Kilka treningów tego dnia — wybierz do edycji</label><select class="equipment" id="session-picker">'+old.map((h,i)=>'<option value="'+esc(h.syncId||'')+'" '+(s===h?'selected':'')+'>Sesja '+(i+1)+' · '+esc(h.started?.slice(11,16)||h.date)+'</option>').join('')+'</select></div>':'';
  const todayBlock='<section class="hero compact-hero"><div class="eyebrow">'+esc(state.selectedDate)+' · '+(saved?'Istniejący zapis':'Nowy trening')+'</div><h1>'+esc(day.name)+'</h1><p class="muted">'+(savedHistoryRecord()?'Popraw wyniki i wybierz „Zapisz zmiany”. Zastąpisz istniejący wpis bez duplikatu.':saved?'Rozpoczęte serie zapisują się automatycznie.':'Wartości startowe są podpowiedzią. Dopiero wpisana zmiana lub potwierdzona seria utworzy zapis.')+'</p></section>';
  const overview='<div class="panel workout-overview"><div class="flex"><div><div class="eyebrow">Wykonane serie</div><div class="title">'+sum.done+'<span class="muted"> / '+sum.planned+'</span></div></div><span class="chip">'+esc(state.selectedDate)+'</span></div><div class="meter"><div style="width:'+(sum.planned?Math.round(100*sum.done/sum.planned):0)+'%"></div></div><p class="hint">Główne: '+sum.mainDone+' · CORE: '+sum.coreDone+'</p></div>';
- const chooseArea='<div class="inline-actions"><button class="btn '+(coreActive?'secondary':'')+'" data-area="main">🏋️ Trening</button><button class="btn '+(!coreActive?'secondary':'')+'" data-area="core">🧱 CORE BONUS</button></div>';
- const chooser=coreActive?'<div class="panel"><div class="eyebrow">Wybierz ćwiczenie CORE</div><p class="hint">Ćwiczenia opcjonalne. Nieaktywne nie są liczone do planu.</p><div class="core-chooser">'+coreTabs+'</div></div>':'<div class="exercise-strip">'+tabs+'</div>';
+ const chooseArea='<div class="train-area-switch" role="group" aria-label="Obszar treningu"><button class="btn '+(coreActive?'secondary':'')+'" data-area="main" aria-pressed="'+!coreActive+'">🏋️ Trening</button><button class="btn '+(!coreActive?'secondary':'')+'" data-area="core" aria-pressed="'+coreActive+'">🧱 CORE BONUS</button></div>';
+ const completeExercises=day.items.filter(e=>counted(e)>=e.work.length).length;
+ const queueDots=day.items.map((e,i)=>'<span class="queue-dot '+(counted(e)>=e.work.length?'complete':'')+(i===state.activeExercise?' selected':'')+'"></span>').join('');
+ const queueSummary='<summary><span class="queue-summary-text"><strong>Lista ćwiczeń</strong><small>'+completeExercises+' z '+day.items.length+' ukończonych · wybrane '+(state.activeExercise+1)+'/'+day.items.length+'</small></span>'+
+  '<span class="queue-dots" aria-hidden="true">'+queueDots+'</span><span class="queue-chevron" aria-hidden="true">⌄</span></summary>';
+ const chooser=coreActive?'<div class="panel core-choice-panel"><div class="eyebrow">Wybierz ćwiczenie CORE</div><p class="hint">Ćwiczenia opcjonalne. Nieaktywne nie są liczone do planu.</p><div class="core-chooser">'+coreTabs+'</div></div>':
+  '<details class="exercise-queue" '+(exerciseQueueOpen?'open':'')+'>'+queueSummary+'<div class="exercise-strip">'+tabs+'</div></details>';
  const photoSection=exerciseMediaHTML(item,log.machine);
  const selectedVariants='<div class="label" id="machine-label">Maszyna / hantle / zamiennik</div><div class="machine-options" role="group" aria-labelledby="machine-label">'+choices+'</div>';
  const quickFill=quickFillSuggestion(item,v);
@@ -701,8 +707,8 @@ function trainHTML(){
   '</div><select id="rir" class="rir-select" aria-label="RIR lub inna ocena"><option value="">Inna ocena…</option>'+
   ['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>'<option value="'+x+'" '+(v.rir===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div>'+
   completionHTML;
- const exercise='<div class="panel active-exercise"><div class="exercise-head"><div><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><h2 class="title">'+esc(item.title)+'</h2>'+
-  '<p class="active-machine">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p></div></div>'+
+ const exercise='<div class="panel active-exercise"><div class="exercise-head"><div class="exercise-identity"><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><h2 class="title">'+esc(item.title)+'</h2>'+
+  '<p class="active-machine">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p></div><span class="exercise-set-progress">'+(v.sets||[]).filter(x=>x.done).length+' / '+(v.sets||[]).length+' serii</span></div>'+
   (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
   '<details class="exercise-options" '+(exerciseOptionsOpen?'open':'')+'><summary>Sprzęt, zamienniki i zdjęcia</summary><div class="exercise-option-content">'+
   selectedVariants+photoSection+machineNote+'</div></details>'+
@@ -899,6 +905,9 @@ document.addEventListener('toggle',event=>{
  if(event.target.matches('.rest-timer'))restControlsOpen=event.target.open;
  if(event.target.matches('.train-additional'))advancedOpen=event.target.open;
 },true);
+document.addEventListener('toggle',event=>{
+ if(event.target?.classList?.contains('exercise-queue'))exerciseQueueOpen=event.target.open;
+},true);
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
  if(GymPlans.click(b))return;
@@ -946,7 +955,7 @@ document.addEventListener('click',async event=>{
  if(b.dataset.view){if(state.view==='plans'&&b.dataset.view!=='plans'&&!GymPlans.leave())return;if(state.view==='train'&&b.dataset.view!=='train'&&!abandonHistoryEdit())return;const previous=state.view;state.view=b.dataset.view;if(state.view==='train')state.activeDay=trainingTypeForDate(state.selectedDate);save(false);render();if(previous!==state.view&&window.GymCloud)void GymCloud.refreshAutomatically();return}
  if(b.dataset.day!==undefined){const date=b.dataset.date;if(date)selectDate(date);return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
- if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);exerciseOptionsOpen=false;save(false);render();revealExercise();return}
+ if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);exerciseOptionsOpen=false;exerciseQueueOpen=false;save(false);render();revealExercise();return}
  if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);exerciseOptionsOpen=false;save(false);render();revealExercise();return}
  if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(s.done&&restOptions().auto){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();}if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();revealNextSet();return}
  if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;exerciseOptionsOpen=false;save(false);render();revealExercise();return}
