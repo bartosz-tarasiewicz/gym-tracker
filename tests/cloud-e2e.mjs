@@ -24,7 +24,7 @@ const uploadFile=async(page,data,confirm=true)=>{
 const log=label=>console.log('PASS:',label);
 async function reveal(page,selector){
  const details=page.locator(selector);
- if(await details.count()&&!(await details.evaluate(el=>el.open)))await details.locator('summary').click();
+ if(await details.count()&&!(await details.evaluate(el=>el.open)))await page.locator(selector+' > summary').click();
 }
 let first,second;
 try{
