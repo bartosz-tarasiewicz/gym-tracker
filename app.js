@@ -505,6 +505,43 @@ function nextPendingSet(variant){
  const i=work.findIndex(row=>!row.done);
  return i===-1?null:{type:'work',index:i};
 }
+let warmupManual=null;
+function warmupOpenFor(item,variant){
+ const warm=variant.warmups||[],work=variant.sets||[];
+ if(!warm.length)return false;
+ if(warmupManual?.key===quickSetKey(item))return warmupManual.open;
+ return warm.some(x=>!x.done)&&!work.some(x=>x.done);
+}
+function nextGuidedSet(item,variant){
+ const candidate=nextPendingSet(variant);
+ if(candidate?.type==='warm'&&!warmupOpenFor(item,variant)){
+  const i=(variant.sets||[]).findIndex(x=>!x.done);
+  return i<0?null:{type:'work',index:i};
+ }
+ return candidate;
+}
+function nextSetGuideHTML(item,variant){
+ const next=nextGuidedSet(item,variant);
+ if(!next)return '<strong>✓ Serie robocze zakończone</strong><span>Możesz przejść do następnego ćwiczenia.</span>';
+ const row=(next.type==='warm'?variant.warmups:variant.sets)[next.index];
+ const label=next.type==='warm'?'Rozgrzewka R':'Seria robocza S';
+ const detail=String(row?.reps??'').trim();
+ const kg=String(row?.kg??'').trim();
+ return '<strong>Teraz: '+label+(next.index+1)+'</strong><span>'+
+  (detail?esc((kg?kg+' kg · ':'')+detail+' '+measure(item)):'Wpisz wynik i zaznacz ✓')+'</span>';
+}
+function refreshGuidedSet(){
+ if(state.view!=='train'||!document.querySelector('.active-exercise'))return;
+ const {item}=currentItem(),variant=currentVariant(item),next=nextGuidedSet(item,variant);
+ document.querySelectorAll('.active-exercise .set-row').forEach(el=>{
+  const selected=el.dataset.setRow===(next?next.type+'-'+next.index:'');
+  el.classList.toggle('is-next',selected);
+  if(selected)el.setAttribute('aria-current','step');
+  else el.removeAttribute('aria-current');
+ });
+ const guide=document.querySelector('.next-set-guide');
+ if(guide)guide.innerHTML=nextSetGuideHTML(item,variant);
+}
 function revealNextSet(){
  const target=document.querySelector('.set-row.is-next')||document.querySelector('.exercise-finish');
  if(!target)return;
@@ -542,7 +579,7 @@ function quickSetControls(type,index,item,row){
   controls('reps',esc(measure(item)),String(row.reps??''),String(repsIncrement))+'</div></div>';
 }
 function setsHTML(list,type,item){
- const next=nextPendingSet(currentVariant(item));
+ const next=nextGuidedSet(item,currentVariant(item));
  return (list||[]).map((s,j)=>{
   const head=(type==='warm'?'R':'S')+(j+1);
   const active=next?.type===type&&next.index===j;
