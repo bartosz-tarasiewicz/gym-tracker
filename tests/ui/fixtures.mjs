@@ -15,6 +15,12 @@ export async function date(page,value='2026-11-13'){
  await expect.poll(()=>page.evaluate(()=>GymCloud.isBusy())).toBe(false);
  await page.locator('#week-date').fill(value);await page.locator('#week-date').dispatchEvent('change');await expect(page.locator('#week-date')).toHaveValue(value);
 }
+export async function chooseExercise(page,index){
+ const queue=page.locator('.exercise-queue');
+ await expect(queue).toBeVisible();
+ if(!(await queue.evaluate(el=>el.open)))await queue.locator('summary').click();
+ await page.locator('[data-item="'+index+'"]').click();
+}
 export const reps=p=>p.locator('input[data-type="work"][data-field="reps"]').first();
 export const weight=p=>p.locator('input[data-type="work"][data-field="kg"]').first();
 export const done=p=>p.locator('.done-button[data-type="work"]').first();
