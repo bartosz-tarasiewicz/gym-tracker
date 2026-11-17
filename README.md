@@ -1,3 +1,10 @@
+## v0.13 — zarządzanie profilami w Danych i zapis bez nakładki
+
+- W zakładce **Dane** znajduje się jedyny selektor profilu i formularz dodawania użytkownika. Zakładki Trening, Progres i Plany są wolne od przełącznika. Profil nadal określa zakres historii, planów i bazy Azure.
+- Przycisk **Zapisz trening / dzień w Azure** jest teraz zwykłą sekcją na końcu zawartości Treningu, a nie przyklejoną do dolnej krawędzi ekranu nakładką zasłaniającą serie.
+- Bez zmian w procesie zapisu: modyfikacje lokalne wymagają świadomego zapisu w Azure, istniejące rekordy są nadpisywane, a konflikt ETag pozostaje obsługiwany.
+- Testy UI, mobilne i chmurowe zostały dostosowane do nawigowania do zakładki Dane przed pracą z profilami; regresja weryfikuje brak fixed/sticky Save na treningu.
+
 ## v0.12 — szybkie uzupełnianie serii i przeskakiwanie gotowych ćwiczeń
 
 - Przycisk **Wstaw** pokazuje się tylko, gdy wartości następnej *niewykonanej serii roboczej* różnią się od ostatniej ukończonej serii tego ćwiczenia i wariantu sprzętu. Gdy w bieżącym ćwiczeniu brak ukończonej serii, podpowiada wartości z ostatniego ukończonego treningu tego ćwiczenia i tego samego wariantu.
