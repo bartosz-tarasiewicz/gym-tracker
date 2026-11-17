@@ -505,6 +505,43 @@ function nextPendingSet(variant){
  const i=work.findIndex(row=>!row.done);
  return i===-1?null:{type:'work',index:i};
 }
+let warmupManual=null;
+function warmupOpenFor(item,variant){
+ const warm=variant.warmups||[],work=variant.sets||[];
+ if(!warm.length)return false;
+ if(warmupManual?.key===quickSetKey(item))return warmupManual.open;
+ return warm.some(x=>!x.done)&&!work.some(x=>x.done);
+}
+function nextGuidedSet(item,variant){
+ const candidate=nextPendingSet(variant);
+ if(candidate?.type==='warm'&&!warmupOpenFor(item,variant)){
+  const i=(variant.sets||[]).findIndex(x=>!x.done);
+  return i<0?null:{type:'work',index:i};
+ }
+ return candidate;
+}
+function nextSetGuideHTML(item,variant){
+ const next=nextGuidedSet(item,variant);
+ if(!next)return '<strong>✓ Serie robocze zakończone</strong><span>Możesz przejść do następnego ćwiczenia.</span>';
+ const row=(next.type==='warm'?variant.warmups:variant.sets)[next.index];
+ const label=next.type==='warm'?'Rozgrzewka R':'Seria robocza S';
+ const detail=String(row?.reps??'').trim();
+ const kg=String(row?.kg??'').trim();
+ return '<strong>Teraz: '+label+(next.index+1)+'</strong><span>'+
+  (detail?esc((kg?kg+' kg · ':'')+detail+' '+measure(item)):'Wpisz wynik i zaznacz ✓')+'</span>';
+}
+function refreshGuidedSet(){
+ if(state.view!=='train'||!document.querySelector('.active-exercise'))return;
+ const {item}=currentItem(),variant=currentVariant(item),next=nextGuidedSet(item,variant);
+ document.querySelectorAll('.active-exercise .set-row').forEach(el=>{
+  const selected=el.dataset.setRow===(next?next.type+'-'+next.index:'');
+  el.classList.toggle('is-next',selected);
+  if(selected)el.setAttribute('aria-current','step');
+  else el.removeAttribute('aria-current');
+ });
+ const guide=document.querySelector('.next-set-guide');
+ if(guide)guide.innerHTML=nextSetGuideHTML(item,variant);
+}
 function revealNextSet(){
  const target=document.querySelector('.set-row.is-next')||document.querySelector('.exercise-finish');
  if(!target)return;
@@ -542,7 +579,7 @@ function quickSetControls(type,index,item,row){
   controls('reps',esc(measure(item)),String(row.reps??''),String(repsIncrement))+'</div></div>';
 }
 function setsHTML(list,type,item){
- const next=nextPendingSet(currentVariant(item));
+ const next=nextGuidedSet(item,currentVariant(item));
  return (list||[]).map((s,j)=>{
   const head=(type==='warm'?'R':'S')+(j+1);
   const active=next?.type===type&&next.index===j;
@@ -726,8 +763,14 @@ function trainHTML(){
   (nextWork?'<button type="button" class="btn full next-unfinished" data-next-unfinished="'+nextWork.index+'">Dalej: '+esc(nextWork.title)+' →</button>':
    (!coreActive?'<p>Wszystkie główne ćwiczenia ukończone. Zapisz trening w Azure.</p>':''))+'</div>':'';
 
+ const warmDone=(v.warmups||[]).filter(x=>x.done).length,showWarmups=warmupOpenFor(item,v);
+ const warmupBlock=v.warmups?.length?'<details class="warmup-block" '+(showWarmups?'open':'')+'>'+
+  '<summary><span><strong>Rozgrzewka</strong><small>'+warmDone+' / '+v.warmups.length+' ukończonych · opcjonalna</small></span>'+
+  '<span class="warmup-chevron" aria-hidden="true">⌄</span></summary>'+
+  '<div class="warmup-body"><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+
+  setsHTML(v.warmups,'warm',item)+'</div></details>':'';
  const sets=restTimerHTML()+'<p class="ex-note">Jednostka: <strong>'+esc(unit(log.machine))+'</strong> · '+esc(measure(item))+'. Każdy wariant sprzętu ma osobne wyniki.</p>'+preview+
-  (v.warmups?.length?'<div class="section-header"><strong>Rozgrzewka</strong><span class="smallcaps">Poza licznikiem serii</span></div><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.warmups,'warm',item):'')+
+  '<div class="next-set-guide" role="status" aria-live="polite">'+nextSetGuideHTML(item,v)+'</div>'+warmupBlock+
   '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div><p class="fast-adjust-help">Dotknij numeru serii (S1, S2…) i zmieniaj ciężar lub powtórzenia bez klawiatury.</p>'+quickFillHTML+'<div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
   '<div class="inline-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><button type="button" class="btn secondary small" id="markall">✓ Potwierdź wszystkie wpisane</button></div>'+
   '<div class="rir-quick-row"><span class="rir-short-label">RIR</span><div class="rir-shortcuts" role="group" aria-label="Szybki wybór RIR">'+
@@ -932,6 +975,10 @@ document.addEventListener('toggle',event=>{
  if(event.target.matches('.exercise-options'))exerciseOptionsOpen=event.target.open;
  if(event.target.matches('.rest-timer'))restControlsOpen=event.target.open;
  if(event.target.matches('.train-additional'))advancedOpen=event.target.open;
+ if(event.target.matches('.warmup-block')){
+  warmupManual={key:quickSetKey(currentItem().item),open:event.target.open};
+  refreshGuidedSet();
+ }
 },true);
 document.addEventListener('toggle',event=>{
  if(event.target?.classList?.contains('exercise-queue'))exerciseQueueOpen=event.target.open;
@@ -1009,7 +1056,9 @@ document.addEventListener('click',async event=>{
  if(b.dataset.area){changeArea(b.dataset.area);return}
  if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);exerciseOptionsOpen=false;exerciseQueueOpen=false;save(false);render();revealExercise();return}
  if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);exerciseOptionsOpen=false;save(false);render();revealExercise();return}
- if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(s.done&&restOptions().auto){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();}if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();revealNextSet();return}
+ if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(s.done&&restOptions().auto){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();}
+  if(s.done&&(b.dataset.type==='work'||(b.dataset.type==='warm'&&v.warmups.every(x=>x.done))))warmupManual=null;
+  if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();revealNextSet();return}
  if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;exerciseOptionsOpen=false;save(false);render();revealExercise();return}
  if(b.dataset.removeSet!==undefined){
   const {item}=currentItem(),index=Number(b.dataset.removeSet),variant=currentVariant(item);
