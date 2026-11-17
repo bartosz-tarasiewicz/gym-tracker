@@ -206,7 +206,7 @@ function selectDate(date){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime()))return;
  if(date===state.selectedDate)return;
  if(!abandonHistoryEdit())return;
- state.selectedDate=date;state.selectedRecordId='';
+ state.selectedDate=date;state.selectedRecordId='';exerciseOptionsOpen=false;restControlsOpen=false;
  state.activeDay=trainingTypeForDate(date,state);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
  save(false);render();
 }
@@ -566,40 +566,45 @@ function lastCompletedVariant(item,machine){
  return null;
 }
 function machineNoteKey(item,machine){return item.id+'|'+machine;}
+let exerciseOptionsOpen=false;
+let restControlsOpen=false;
 function trainHTML(){
  rememberDay();
  const calendar=GymWeek.html(state),d=state.activeDay;
  const standard=GymPlans.scheduled(state.selectedDate)?.dayType??GymWeek.dayIndex(state.selectedDate);
- const typeSelector='<div class="panel workout-type-panel">'+
-  '<label class="label" for="workout-type">Rodzaj treningu w wybranym dniu</label>'+
-  '<select class="equipment" id="workout-type" aria-label="Rodzaj treningu">'+
-   TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+(x===standard?' (domyślnie)':'')+'</option>').join('')+
-  '</select><p class="hint">Zmiana dotyczy wyłącznie '+esc(state.selectedDate)+
-  '. Stały plan tygodniowy pozostaje bez zmian.</p></div>';
+ const selectedOptions=TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+(x===standard?' (domyślnie)':'')+'</option>').join('');
+ const dayProgress=[-1,3,-2].includes(d)?'':(()=>{
+  const progress=summary(),percent=progress.planned?Math.round(progress.done/progress.planned*100):0;
+  return '<div class="day-progress"><div class="flex"><span>'+progress.done+' / '+progress.planned+' serii wykonanych</span><strong>'+percent+'%</strong></div><div class="meter"><div style="width:'+percent+'%"></div></div></div>';
+ })();
+ const typeSelector='<section class="panel train-day-summary"><div class="train-day-header"><div class="day-title"><div class="eyebrow">'+esc(state.selectedDate)+'</div>'+
+  '<h1>'+esc(trainingName(d))+'</h1></div>'+
+  '<label class="train-type-control"><span>Zmień trening</span><select id="workout-type" aria-label="Rodzaj treningu">'+selectedOptions+'</select></label></div>'+
+  dayProgress+'</section>';
  if([-1,3,-2].includes(d)){
   const note=storedDay()?.notes||'';
   const details=d===-1?'Dzień bez treningu — regeneracja.':d===3?
    'Les Mills GRIT Strength — bez liczenia serii.':'Zapisz dowolną inną aktywność w notatkach.';
-  return calendar+typeSelector+'<section class="hero compact-hero"><div class="eyebrow">'+
-   esc(state.selectedDate)+'</div><h1>'+esc(trainingName(d))+'</h1><p class="muted">'+
-   esc(details)+'</p></section>'+
-   '<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div>'+
-   '<textarea class="notes" id="notes" placeholder="Opcjonalny opis dnia lub aktywności…">'+
-   esc(note)+'</textarea>'+
-   '<button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień</button>'+undoDayHTML()+versionsHTML()+
-   '<p class="hint">Zapis w Azure dotyczy tylko tej daty. Możesz później zmienić rodzaj treningu.</p></div>';
+  return calendar+typeSelector+'<p class="hint">'+esc(details)+'</p>'+
+   '<div class="panel training-notes"><label class="label" for="notes">Notatka do dnia</label>'+
+   '<textarea class="notes" id="notes" placeholder="Opcjonalny opis dnia lub aktywności…">'+esc(note)+'</textarea>'+
+   '<details class="train-additional"><summary>Cofnij zmiany i historia wersji</summary>'+undoDayHTML()+versionsHTML()+'</details></div>'+
+   '<div class="train-save-dock"><button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień w Azure</button></div>';
  }
  const s=activeSession(),day=activePlan(),{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
  const old=selectedDayReports(),saved=storedDay(),coreActive=state.activeArea==='core',enabled=isCoreEnabled(item);
  const tabs=day.items.map((e,i)=>{
   const done=counted(e);
-  return '<button type="button" class="exercise-tab '+(!coreActive&&i===index?'active':'')+'" data-item="'+i+'"><span>'+(done?'✓ ':'' )+(i+1)+'. '+esc(e.title)+'</span>'+(done?'<small>'+done+' serii</small>':'')+'</button>';
+  return '<button type="button" class="exercise-tab '+(!coreActive&&i===index?'active':'')+'" data-item="'+i+'" aria-current="'+(!coreActive&&i===index?'step':'false')+'">'+
+   '<span class="exercise-list-number">'+(done>=e.work.length&&done?'✓':i+1)+'</span>'+
+   '<span class="exercise-list-name">'+esc(e.title)+'</span><small>'+done+' / '+e.work.length+'</small>'+
+   '<span class="exercise-list-chevron" aria-hidden="true">'+(!coreActive&&i===index?'▾':'›')+'</span></button>';
  }).join('');
  const coreTabs=CORE.map((e,i)=>'<button type="button" class="core-choice '+(coreActive&&index===i?'active':'')+'" data-core="'+i+'">'+(isCoreEnabled(e)?'✓ ':'＋ ')+esc(e.title)+'</button>').join('');
  const choices=availableMachineOptions(item).map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" aria-pressed="'+(log.machine===k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k))+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
  const previous=lastCompletedVariant(item,log.machine),oldRows=previous?.rows||[];
- const preview=oldRows.length?'<div class="previous-results"><strong>Poprzednio · '+esc(previous.record.date)+'</strong><span>'+oldRows.map((x,i)=>'Seria '+(i+1)+': '+esc(x.kg||'0')+' kg × '+esc(x.reps)).join(' · ')+'</span><button type="button" class="btn secondary small" id="copy-previous">Wpisz poprzednie wyniki</button><small>Kopiowanie nie potwierdza serii.</small></div>':
-  '<p class="hint">Wpisane liczby są propozycją. Nie są zaliczone, dopóki nie potwierdzisz serii.</p>';
+ const preview=oldRows.length?'<div class="previous-compact"><div><strong>Poprzednio · '+esc(previous.record.date)+'</strong><span>'+oldRows.slice(0,4).map(x=>esc(x.kg||'0')+' kg × '+esc(x.reps)).join(' · ')+(oldRows.length>4?' …':'')+'</span></div><button type="button" class="btn secondary small" id="copy-previous">Użyj</button></div>':
+  '<p class="hint">Wartości są podpowiedzią — zaznacz ✓, aby zaliczyć serię.</p>';
  const machineNotes=window.GymProfiles?.preference('machineNotes')||{};
  const machineNote='<label class="label" for="machine-note">Ustawienia maszyny / notatka do wariantu</label><textarea id="machine-note" class="notes" maxlength="150" placeholder="Np. wysokość siedziska, ustawienie uchwytów">'+esc(machineNotes[machineNoteKey(item,log.machine)]||'')+'</textarea><p class="hint">Zapamiętywane dla tego profilu, ćwiczenia i wariantu.</p>';
  const switcher=old.length>1?'<div class="panel"><label class="label" for="session-picker">Kilka treningów tego dnia — wybierz do edycji</label><select class="equipment" id="session-picker">'+old.map((h,i)=>'<option value="'+esc(h.syncId||'')+'" '+(s===h?'selected':'')+'>Sesja '+(i+1)+' · '+esc(h.started?.slice(11,16)||h.date)+'</option>').join('')+'</select></div>':'';
@@ -614,16 +619,21 @@ function trainHTML(){
   '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div><div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
   '<div class="inline-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><button type="button" class="btn secondary small" id="markall">✓ Potwierdź wszystkie wpisane</button></div>'+
   '<div class="label">RIR ostatniej serii / ocena</div><select id="rir" class="rir-select"><option value="">— nie podano —</option>'+['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>'<option value="'+x+'" '+(v.rir===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select>';
- const exercise='<div class="panel"><div class="exercise-head"><div><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><div class="title">'+esc(item.title)+'</div></div></div>'+
+ const exercise='<div class="panel active-exercise"><div class="exercise-head"><div><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><h2 class="title">'+esc(item.title)+'</h2>'+
+  '<p class="active-machine">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p></div></div>'+
   (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
-  selectedVariants+photoSection+machineNote+(coreActive&&!enabled?'<p class="hint">Zaznacz „Dodaj do treningu”, by wpisywać serie. Zdjęcie i warianty są widoczne bez włączania ćwiczenia.</p>':sets)+
-  '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Wstecz</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
+  '<details class="exercise-options" '+(exerciseOptionsOpen?'open':'')+'><summary>Sprzęt, zamienniki i zdjęcia</summary><div class="exercise-option-content">'+
+  selectedVariants+photoSection+machineNote+'</div></details>'+
+  (coreActive&&!enabled?'<p class="hint">Dodaj ćwiczenie do treningu, aby zapisywać serie.</p>':sets)+
+  '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Poprzednie</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
  const isHistory=!!savedHistoryRecord();
- const notes='<div class="panel"><div class="eyebrow">Notatki · '+esc(state.selectedDate)+'</div><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, ból, uwagi…">'+esc(s.notes||'')+'</textarea>'+
-  '<button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany':'✓ Zapisz trening')+'</button>'+undoDayHTML()+versionsHTML()+
-
-  '<p class="hint">Kliknij Zapisz, aby '+(saved?'zaktualizować istniejący':'utworzyć nowy')+' trening w Azure. Zmiany przed zapisem pozostają na tym urządzeniu.</p></div>';
- return calendar+typeSelector+planSelector()+todayBlock+switcher+overview+chooseArea+chooser+exercise+notes;
+ const notes='<div class="panel training-notes"><details class="train-additional"><summary>Notatki i historia zapisów</summary>'+
+  '<label class="label" for="notes">Notatki do treningu</label><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, uwagi…">'+esc(s.notes||'')+'</textarea>'+
+  undoDayHTML()+versionsHTML()+'</details></div>';
+ const saveDock='<div class="train-save-dock"><button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany w Azure':'✓ Zapisz trening w Azure')+'</button></div>';
+ return calendar+typeSelector+switcher+
+  '<details class="train-plan-choices"><summary>Plan na ten dzień · '+esc(day.name)+'</summary>'+planSelector()+'</details>'+
+  chooseArea+chooser+exercise+notes+saveDock;
 }
 let versionHistory=null;
 function selectedCloudId(){const record=storedDay();if(!record)return '';if(record.syncId)return record.syncId;const entry=Object.entries(state.sessions).find(([,r])=>r===record);return entry?'draft:'+entry[0]:'';}
@@ -799,7 +809,12 @@ async function exportDatabaseFile(format){
 
 function download(name,content,mime){const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000)}
 function mutateSet(field,j,type,value){const {item}=currentItem(),v=currentVariant(item,true);const arr=type==='warm'?v.warmups:v.sets;arr[j][field]=value;save()}
-function changeArea(area){state.activeArea=area;save(false);render()}
+function changeArea(area){state.activeArea=area;exerciseOptionsOpen=false;save(false);render()}
+document.addEventListener('toggle',event=>{
+ if(!event.target.isConnected)return;
+ if(event.target.matches('.exercise-options'))exerciseOptionsOpen=event.target.open;
+ if(event.target.matches('.rest-timer'))restControlsOpen=event.target.open;
+},true);
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
  if(GymPlans.click(b))return;
@@ -828,10 +843,10 @@ document.addEventListener('click',async event=>{
  if(b.dataset.view){if(state.view==='plans'&&b.dataset.view!=='plans'&&!GymPlans.leave())return;if(state.view==='train'&&b.dataset.view!=='train'&&!abandonHistoryEdit())return;const previous=state.view;state.view=b.dataset.view;if(state.view==='train')state.activeDay=trainingTypeForDate(state.selectedDate);save(false);render();if(previous!==state.view&&window.GymCloud)void GymCloud.refreshAutomatically();return}
  if(b.dataset.day!==undefined){const date=b.dataset.date;if(date)selectDate(date);return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
- if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);save(false);render();return}
- if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);save(false);render();return}
+ if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);exerciseOptionsOpen=false;save(false);render();return}
+ if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);exerciseOptionsOpen=false;save(false);render();return}
  if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(s.done&&restOptions().auto){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();}if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();return}
- if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;save(false);render();return}
+ if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;exerciseOptionsOpen=false;save(false);render();return}
  if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item,true);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
  if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item,true);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession(true).coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
  if(b.id==='export'){await exportDatabaseFile('json');return}
