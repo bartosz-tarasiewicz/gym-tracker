@@ -32,13 +32,13 @@ try{
  await phone.goto(base,{waitUntil:'domcontentloaded'});
  // Chromium does not emulate iOS safe-area env values; inject the measured inset.
  await phone.evaluate(()=>document.documentElement.style.setProperty('--safe-top','59px'));
- assert.ok((await phone.locator('#profiles').boundingBox()).y>=59,'Profile panel clears iPhone status bar');
+ assert.ok((await phone.locator('.top').boundingBox()).y>=59,'Sticky header clears iPhone status bar');
  await phone.evaluate(()=>window.scrollTo(0,500));
  assert.ok((await phone.locator('.top').boundingBox()).y>=59,'Sticky header clears status bar after scrolling');
  assert.equal(await phone.evaluate(()=>getComputedStyle(document.body,'::before').height),'59px');
  await phone.evaluate(()=>{window.scrollTo(0,0);document.documentElement.style.removeProperty('--safe-top')});
- assert.ok((await phone.locator('#profiles').boundingBox()).y<30,'No extra inset in normal browser');
- log('Mobile safe area: profile and sticky header stay below status bar');
+ assert.ok((await phone.locator('.top').boundingBox()).y<30,'No extra inset in normal browser');
+ log('Mobile safe area: sticky header stays below status bar');
  await phone.locator('[data-view="settings"]').click();
  assert.equal(await phone.locator('#import-database').count(),1);
  assert.equal(await phone.locator('#export').count(),1);
@@ -302,6 +302,7 @@ try{
 
  // Profile switch reloads its entire runtime, including unsubmitted drafts,
  // per-date plans and preferences. A second tab keeps its original scope.
+ await phone.locator('[data-view="settings"]').click();
  await phone.locator('#active-profile:not([disabled])').waitFor();
  const legacyBefore=JSON.stringify([...store]);
  // Embedded browsers may suppress native prompt dialogs entirely.
@@ -317,6 +318,7 @@ try{
  const anna=await phone.evaluate(()=>GymProfiles.id());
  assert.equal(await phone.evaluate(()=>state.history.length+Object.keys(state.sessions).length),0);
  assert.equal(await pc.evaluate(()=>GymProfiles.id()),'default','other tab retains default scope');
+ await phone.locator('[data-view="train"]').click();
  await phone.locator('#week-date').fill('2026-11-13');
  await phone.locator('#workout-type').selectOption('5');
  await phone.locator('.set-row input[data-type="work"][data-field="kg"]').first().fill('17');
@@ -352,6 +354,7 @@ try{
  await phone.waitForTimeout(100);
  assert.equal(JSON.stringify([...store]),legacyBefore,'profile import never touches default dates');
  await pc.reload({waitUntil:'domcontentloaded'});
+ await pc.locator('[data-view="settings"]').click();
  await pc.locator('#active-profile option[value="'+anna+'"]').waitFor({state:'attached'});
  await pc.locator('#active-profile:not([disabled])').selectOption(anna);
  await pc.waitForFunction(()=>window.GymProfiles?.id().startsWith('p-')&&document.querySelector('#active-profile')?.disabled===false);
