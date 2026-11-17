@@ -287,8 +287,8 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
 @media(prefers-reduced-motion:reduce){.queue-chevron{transition:none}}
 
 /* v0.16: single-hand quick correction without an iOS keyboard or a floating overlay. */
-.active-exercise .set-row,.active-exercise .set-head{grid-template-columns:38px minmax(0,1fr) minmax(0,1.65fr) 44px}
-.active-exercise .set-row>.set-edit-toggle{width:38px;min-height:44px;border:1px solid #466558;border-radius:9px;background:#274037;color:#bde6d1;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;padding:1px}
+.active-exercise .set-row,.active-exercise .set-head{grid-template-columns:44px minmax(0,1fr) minmax(0,1.65fr) 44px}
+.active-exercise .set-row>.set-edit-toggle{width:44px;min-height:44px;border:1px solid #466558;border-radius:9px;background:#274037;color:#bde6d1;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;padding:1px}
 .active-exercise .set-row>.set-edit-toggle::after{content:"✎";font-size:11px;font-weight:500;line-height:1;color:#a9cabd}
 .active-exercise .set-row>.set-edit-toggle.selected{border-color:#8df0c0;background:#316e54;color:#f0fff7}
 .active-exercise .set-row>.set-edit-toggle:focus-visible,.fast-adjust-btn:focus-visible,.fast-kg-step:focus-visible{outline:3px solid #8cf1bc;outline-offset:2px}
@@ -306,7 +306,7 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
 .fast-adjust-btn:active{background:#52896d}
 .fast-adjust-value{display:flex;align-items:center;justify-content:center;min-width:0;border:1px solid #3e675a;border-radius:9px;background:#122b2c;font-size:18px;font-weight:800;color:#f3fff8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:380px){
- .active-exercise .set-row,.active-exercise .set-head{grid-template-columns:38px minmax(0,1fr) minmax(0,1.65fr) 44px;gap:3px}
+ .active-exercise .set-row,.active-exercise .set-head{grid-template-columns:44px minmax(0,1fr) minmax(0,1.65fr) 44px;gap:3px}
  .active-exercise .set-row input{font-size:16px}
  .fast-adjust-grid{grid-template-columns:minmax(0,1fr);gap:10px}
  .fast-adjust-controls{grid-template-columns:44px minmax(0,1fr) 44px}
