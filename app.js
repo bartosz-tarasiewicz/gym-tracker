@@ -501,7 +501,7 @@ function setsHTML(list,type,item){
   return '<div class="set-row '+(s.done?'done':'')+'"><strong>'+head+'</strong>'+
    '<input aria-label="Ciężar '+type+' '+(j+1)+'" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="'+type+'" data-field="kg" data-set="'+j+'" value="'+esc(s.kg??'')+'">'+
    '<div class="nudge-wrap"><button type="button" data-nudge="-1" data-type="'+type+'" data-set="'+j+'" aria-label="Odejmij powtórzenie">−</button><input aria-label="'+esc(measure(item))+' '+type+' '+(j+1)+'" inputmode="numeric" type="number" min="0" step="1" placeholder="'+(item.mode?.startsWith('sec')?'s':'powt.')+'" data-type="'+type+'" data-field="reps" data-set="'+j+'" value="'+esc(s.reps??'')+'"><button type="button" data-nudge="1" data-type="'+type+'" data-set="'+j+'" aria-label="Dodaj powtórzenie">+</button></div>'+
-   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>'+(previous?.rows[j]?'<div class="previous-set">Poprzednio ('+esc(previous.record.date)+'): '+esc(previous.rows[j].kg||'0')+' kg × '+esc(previous.rows[j].reps)+' '+esc(measure(item))+'</div>':'');
+   '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>';
  }).join('');
 }
 function exerciseMediaHTML(item,machine){
@@ -557,7 +557,16 @@ const restKey='gym-rest-timer'+GymProfiles.suffix();
 try{restUntil=Number(sessionStorage.getItem(restKey))||0;}catch{}
 function persistRestTimer(){try{sessionStorage.setItem(restKey,String(restUntil));}catch{}}
 function restOptions(){return GymProfiles.preference('restTimer')||{seconds:90,auto:false};}
-function restTimerHTML(){const options=restOptions();return '<div class="rest-timer"><strong>Przerwa <span id="rest-remaining">—</span></strong><label> Czas <select id="rest-duration" aria-label="Czas przerwy">'+[30,60,90,120,180,240].map(n=>'<option value="'+n+'" '+(n===Number(options.seconds)?'selected':'')+'>'+n+' s</option>').join('')+'</select></label><label><input type="checkbox" id="rest-auto" '+(options.auto?'checked':'')+'> Auto</label><div class="inline-actions"><button type="button" class="btn secondary small" id="rest-start">Start</button><button type="button" class="btn secondary small" data-rest-adjust="-15">−15 s</button><button type="button" class="btn secondary small" data-rest-adjust="15">+15 s</button><button type="button" class="btn secondary small" id="rest-skip">Pomiń</button></div></div>';}
+function restTimerHTML(){
+ const options=restOptions();
+ return '<details class="rest-timer" '+(restControlsOpen?'open':'')+'><summary>⏱ Przerwa <strong id="rest-remaining">—</strong><span class="rest-hint">Timer i ustawienia</span></summary>'+
+  '<div class="rest-controls"><label>Czas <select id="rest-duration" aria-label="Czas przerwy">'+[30,60,90,120,180,240].map(n=>'<option value="'+n+'" '+(n===Number(options.seconds)?'selected':'')+'>'+n+' s</option>').join('')+'</select></label>'+
+  '<label><input type="checkbox" id="rest-auto" '+(options.auto?'checked':'')+'> Auto po serii</label>'+
+  '<div class="inline-actions"><button type="button" class="btn secondary small" id="rest-start">Start</button>'+
+  '<button type="button" class="btn secondary small" data-rest-adjust="-15">−15 s</button>'+
+  '<button type="button" class="btn secondary small" data-rest-adjust="15">+15 s</button>'+
+  '<button type="button" class="btn secondary small" id="rest-skip">Pomiń</button></div></div></details>';
+}
 function updateRestTimer(){const label=document.getElementById('rest-remaining');if(!label)return;const left=restUntil?Math.max(0,Math.ceil((restUntil-Date.now())/1000)):0;label.textContent=restUntil?Math.floor(left/60)+':'+String(left%60).padStart(2,'0'):'—';if(restUntil&&left===0&&!restAlerted){restAlerted=true;toast('Koniec przerwy');}}
 setInterval(updateRestTimer,1000);
 function lastCompletedVariant(item,machine){
