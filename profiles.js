@@ -69,7 +69,7 @@ window.GymProfiles=(()=>{
   changing=true;render();
   // Every tab keeps an immutable profile scope for its entire lifetime. Reload
   // destroys old cloud callbacks before another profile can enter the UI.
-  try{await window.GymStorage.flush();sessionStorage.setItem(ACTIVE,id);location.reload();}
+  try{await window.GymStorage.flush();sessionStorage.setItem(ACTIVE,id);sessionStorage.setItem('gym-profile-return-view','settings');location.reload();}
   catch(e){changing=false;render();alert('Nie udało się przełączyć profilu. Dane zachowano.');}
  }
  document.addEventListener('change',e=>{if(e.target.id==='active-profile')void switchTo(e.target.value);});
