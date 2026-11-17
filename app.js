@@ -494,11 +494,35 @@ function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:activePlan().items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
 function render(force=false){renderSaveStatus();if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;window.GymProfiles?.render();document.getElementById('today').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'short'});document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();updateRestTimer()}
+// Warmups are optional once a work set has been started. Never drag the user
+// back to an unfinished warmup while logging working sets.
+function nextPendingSet(variant){
+ const warm=variant.warmups||[],work=variant.sets||[];
+ if(!work.some(row=>row.done)){
+  const i=warm.findIndex(row=>!row.done);
+  if(i!==-1)return {type:'warm',index:i};
+ }
+ const i=work.findIndex(row=>!row.done);
+ return i===-1?null:{type:'work',index:i};
+}
+function revealNextSet(){
+ const target=document.querySelector('.set-row.is-next')||document.querySelector('.exercise-finish');
+ if(!target)return;
+ const bounds=target.getBoundingClientRect();
+ // Keep the next touch target out of the sticky header and the save dock.
+ if(bounds.top<104||bounds.bottom>window.innerHeight-165)
+  target.scrollIntoView({block:'center',behavior:'auto'});
+}
+function revealExercise(){
+ const target=document.querySelector('.active-exercise');
+ target?.scrollIntoView({block:'start',behavior:'auto'});
+}
 function setsHTML(list,type,item){
- const previous=type==='work'?lastCompletedVariant(item,exerciseLog(item).machine):null;
+ const next=nextPendingSet(currentVariant(item));
  return (list||[]).map((s,j)=>{
   const head=type==='warm'?'R'+(j+1):String(j+1);
-  return '<div class="set-row '+(s.done?'done':'')+'"><strong>'+head+'</strong>'+
+  const active=next?.type===type&&next.index===j;
+  return '<div class="set-row '+(s.done?'done':'')+(active?' is-next':'')+'" '+(active?'aria-current="step"':'')+' data-set-row="'+type+'-'+j+'"><strong>'+head+'</strong>'+
    '<input aria-label="Ciężar '+type+' '+(j+1)+'" inputmode="decimal" type="number" min="0" step="any" placeholder="kg" data-type="'+type+'" data-field="kg" data-set="'+j+'" value="'+esc(s.kg??'')+'">'+
    '<div class="nudge-wrap"><button type="button" data-nudge="-1" data-type="'+type+'" data-set="'+j+'" aria-label="Odejmij powtórzenie">−</button><input aria-label="'+esc(measure(item))+' '+type+' '+(j+1)+'" inputmode="numeric" type="number" min="0" step="1" placeholder="'+(item.mode?.startsWith('sec')?'s':'powt.')+'" data-type="'+type+'" data-field="reps" data-set="'+j+'" value="'+esc(s.reps??'')+'"><button type="button" data-nudge="1" data-type="'+type+'" data-set="'+j+'" aria-label="Dodaj powtórzenie">+</button></div>'+
    '<button type="button" class="done-button '+(s.done?'checked':'')+'" data-done="'+j+'" data-type="'+type+'" aria-label="Seria '+(j+1)+(s.done?' wykonana':' niewykonana')+'">'+(s.done?'✓':'○')+'</button></div>';
@@ -559,13 +583,14 @@ function persistRestTimer(){try{sessionStorage.setItem(restKey,String(restUntil)
 function restOptions(){return GymProfiles.preference('restTimer')||{seconds:90,auto:false};}
 function restTimerHTML(){
  const options=restOptions();
- return '<details class="rest-timer" '+(restControlsOpen?'open':'')+'><summary>⏱ Przerwa <strong id="rest-remaining">—</strong><span class="rest-hint">Timer i ustawienia</span></summary>'+
+ return '<div class="rest-timer-bar"><details class="rest-timer" '+(restControlsOpen?'open':'')+'><summary>⏱ Przerwa <strong id="rest-remaining">—</strong><span class="rest-hint">⌄</span></summary>'+
   '<div class="rest-controls"><label>Czas <select id="rest-duration" aria-label="Czas przerwy">'+[30,60,90,120,180,240].map(n=>'<option value="'+n+'" '+(n===Number(options.seconds)?'selected':'')+'>'+n+' s</option>').join('')+'</select></label>'+
   '<label><input type="checkbox" id="rest-auto" '+(options.auto?'checked':'')+'> Auto po serii</label>'+
   '<div class="inline-actions"><button type="button" class="btn secondary small" id="rest-start">Start</button>'+
   '<button type="button" class="btn secondary small" data-rest-adjust="-15">−15 s</button>'+
   '<button type="button" class="btn secondary small" data-rest-adjust="15">+15 s</button>'+
-  '<button type="button" class="btn secondary small" id="rest-skip">Pomiń</button></div></div></details>';
+  '<button type="button" class="btn secondary small" id="rest-skip">Pomiń</button></div></div></details>'+
+  '<button type="button" class="btn secondary small" id="rest-quick-start" aria-label="Uruchom przerwę '+Number(options.seconds||90)+' sekund">Start '+Number(options.seconds||90)+' s</button></div>';
 }
 function updateRestTimer(){const label=document.getElementById('rest-remaining');if(!label)return;const left=restUntil?Math.max(0,Math.ceil((restUntil-Date.now())/1000)):0;label.textContent=restUntil?Math.floor(left/60)+':'+String(left%60).padStart(2,'0'):'—';if(restUntil&&left===0&&!restAlerted){restAlerted=true;toast('Koniec przerwy');}}
 setInterval(updateRestTimer,1000);
@@ -628,7 +653,11 @@ function trainHTML(){
   (v.warmups?.length?'<div class="section-header"><strong>Rozgrzewka</strong><span class="smallcaps">Poza licznikiem serii</span></div><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.warmups,'warm',item):'')+
   '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div><div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
   '<div class="inline-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><button type="button" class="btn secondary small" id="markall">✓ Potwierdź wszystkie wpisane</button></div>'+
-  '<div class="label">RIR ostatniej serii / ocena</div><select id="rir" class="rir-select"><option value="">— nie podano —</option>'+['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>'<option value="'+x+'" '+(v.rir===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select>';
+  '<div class="rir-quick-row"><span class="rir-short-label">RIR</span><div class="rir-shortcuts" role="group" aria-label="Szybki wybór RIR">'+
+  ['0','1','2','3+'].map(x=>'<button type="button" class="rir-chip '+(v.rir===x?'active':'')+'" data-rir-quick="'+x+'" aria-pressed="'+(v.rir===x)+'">'+x+'</button>').join('')+
+  '</div><select id="rir" class="rir-select" aria-label="RIR lub inna ocena"><option value="">Inna ocena…</option>'+
+  ['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>'<option value="'+x+'" '+(v.rir===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div>'+
+  (v.sets?.length&&v.sets.every(x=>x.done)?'<div class="exercise-finish" role="status">✓ Serie robocze ukończone. Możesz uzupełnić RIR i przejść dalej.</div>':'');
  const exercise='<div class="panel active-exercise"><div class="exercise-head"><div><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><h2 class="title">'+esc(item.title)+'</h2>'+
   '<p class="active-machine">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p></div></div>'+
   (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
@@ -830,7 +859,7 @@ document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
  if(GymPlans.click(b))return;
  if(window.GymProgress?.handleClick?.(b,render))return;
- if(b.id==='rest-start'){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();updateRestTimer();return;}
+ if(b.id==='rest-start'||b.id==='rest-quick-start'){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();updateRestTimer();return;}
  if(b.id==='rest-skip'){restUntil=0;restAlerted=false;persistRestTimer();updateRestTimer();return;}
  if(b.dataset.restAdjust!==undefined){if(restUntil){restUntil=Math.max(Date.now(),restUntil+Number(b.dataset.restAdjust)*1000);restAlerted=false;persistRestTimer();updateRestTimer();}return;}
  if(b.id==='copy-previous'){
@@ -854,12 +883,21 @@ document.addEventListener('click',async event=>{
  if(b.dataset.view){if(state.view==='plans'&&b.dataset.view!=='plans'&&!GymPlans.leave())return;if(state.view==='train'&&b.dataset.view!=='train'&&!abandonHistoryEdit())return;const previous=state.view;state.view=b.dataset.view;if(state.view==='train')state.activeDay=trainingTypeForDate(state.selectedDate);save(false);render();if(previous!==state.view&&window.GymCloud)void GymCloud.refreshAutomatically();return}
  if(b.dataset.day!==undefined){const date=b.dataset.date;if(date)selectDate(date);return}
  if(b.dataset.area){changeArea(b.dataset.area);return}
- if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);exerciseOptionsOpen=false;save(false);render();return}
- if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);exerciseOptionsOpen=false;save(false);render();return}
- if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(s.done&&restOptions().auto){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();}if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();return}
- if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;exerciseOptionsOpen=false;save(false);render();return}
- if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item,true);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();return}
- if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item,true);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession(true).coreEnabled[item.id]=true;save();render();toast(`Potwierdzono ${n} serii`);return}
+ if(b.dataset.item!==undefined){state.activeArea='main';state.activeExercise=Number(b.dataset.item);exerciseOptionsOpen=false;save(false);render();revealExercise();return}
+ if(b.dataset.core!==undefined){state.activeArea='core';state.activeCore=Number(b.dataset.core);exerciseOptionsOpen=false;save(false);render();revealExercise();return}
+ if(b.dataset.done!==undefined){const {item}=currentItem(),v=currentVariant(item,true),arr=b.dataset.type==='warm'?v.warmups:v.sets,s=arr[Number(b.dataset.done)];if(!s)return;if(!s.done&&s.reps===''){toast('Uzupełnij powtórzenia lub sekundy');return}s.done=!s.done;if(s.done&&restOptions().auto){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();}if(state.activeArea==='core'&&s.done)activeSession(true).coreEnabled[item.id]=true;save();render();revealNextSet();return}
+ if(b.id==='next'||b.id==='prev'){const k=state.activeArea==='core'?'activeCore':'activeExercise';state[k]+=b.id==='next'?1:-1;exerciseOptionsOpen=false;save(false);render();revealExercise();return}
+ if(b.id==='addset'){const {item}=currentItem(),v=currentVariant(item,true);if(v.sets.length>=15){toast('Maksymalnie 15 serii');return}v.sets.push({kg:'',reps:'',done:false});save();render();revealNextSet();return}
+ if(b.id==='markall'){const {item}=currentItem(),v=currentVariant(item,true);let n=0;for(const s of v.sets){if(!s.done&&s.reps!==''){s.done=true;n++}}if(state.activeArea==='core'&&n)activeSession(true).coreEnabled[item.id]=true;save();render();revealNextSet();toast(`Potwierdzono ${n} serii`);return}
+ if(b.dataset.rirQuick!==undefined){
+  const value=b.dataset.rirQuick;
+  if(!['0','1','2','3+'].includes(value))return;
+  currentVariant(currentItem().item,true).rir=value;
+  const select=document.getElementById('rir');
+  if(select)select.value=value;
+  document.querySelectorAll('[data-rir-quick]').forEach(chip=>{const active=chip.dataset.rirQuick===value;chip.classList.toggle('active',active);chip.setAttribute('aria-pressed',String(active));});
+  save();return;
+ }
  if(b.id==='export'){await exportDatabaseFile('json');return}
  if(b.id==='exportcsv'){await exportDatabaseFile('csv');return}
 });
@@ -871,7 +909,7 @@ document.addEventListener('change',async event=>{const el=event.target;
  if(el.id==='week-date'){selectDate(el.value);return}
  if(el.id==='workout-type'){changeTrainingType(el.value);return}
  if(el.id==='session-picker'){if(!abandonHistoryEdit()){render();return}state.selectedRecordId=el.value;save(false);render();return}
- if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;save()}
+ if(el.id==='rir'){currentVariant(currentItem().item,true).rir=el.value;document.querySelectorAll('[data-rir-quick]').forEach(chip=>{const active=chip.dataset.rirQuick===el.value;chip.classList.toggle('active',active);chip.setAttribute('aria-pressed',String(active));});save()}
  else if(el.id==='enable-core'){activeSession(true).coreEnabled[currentItem().item.id]=el.checked;save();render()}
  else if(el.id==='import-database'){
   const file=el.files?.[0];if(!file)return;
