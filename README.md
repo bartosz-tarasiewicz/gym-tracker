@@ -1,3 +1,11 @@
+## v0.19 — zwarta nawigacja daty i wybór treningu
+
+- **Nagłówek:** usunięto redundantny chip z bieżącą datą. Zostawiono wskaźniki lokalnego stanu i zapisu w Azure.
+- **Kalendarz:** pole wyboru dowolnej daty (natywny kalendarz telefonu) przeniesiono do górnego paska, bezpośrednio za strzałkami tygodnia i przyciskiem „Dziś”. Dolna część kalendarza służy wyłącznie jako legenda. Daty, oznaczenia zapisanych sesji i nawigacja bez tworzenia rekordów pozostały bez zmian.
+- **Zmień trening:** zmniejszono wysokość karty, wielkość i odstępy tytułu, rozmiar nagłówka oraz pasek postępu. Selektor wciąż zmienia **rodzaj treningu dla wybranej daty**, nie domyślny plan tygodnia.
+- **Zmień zestaw ćwiczeń:** poprzednia samodzielna sekcja „Plan na ten dzień” nie pojawia się przy jedynym planie domyślnym. Jeśli dla tego rodzaju treningu istnieje własny wariant, wewnątrz zwartej karty pojawia się zwijany selektor „Zmień zestaw ćwiczeń”. Zachowano poprzednie dane i możliwość edycji własnych planów w zakładce Plany.
+- Testy `tests/ui/compact-top.spec.mjs` i pełna regresja: wybór daty, warunkowy selektor planu, zmiana rodzaju treningu, responsywność 320–620 px, API/upsert Azure.
+
 ## v0.18 — inteligentna rozgrzewka i wskazówka następnej serii
 
 - Przy aktywnym ćwiczeniu widoczna jest wskazówka **„Teraz: Rozgrzewka R1”** albo **„Teraz: Seria robocza S2”**, wraz z planowaną wartością ciężaru i powtórzeń/czasu. Nie potwierdza serii i nie wysyła danych.
