@@ -988,7 +988,7 @@ window.addEventListener('gym-preferences-loaded',()=>{if(state.view==='plans'){i
 document.addEventListener('submit',e=>GymPlans.submit(e));
 window.addEventListener('beforeunload',e=>{if(GymPlans.dirty()){e.preventDefault();e.returnValue='';}});
 window.gymProfileCanLeave=()=>!savingWorkout&&GymPlans.leave()&&abandonHistoryEdit();
-(async()=>{try{state=normalize(await GymStorage.load(status));}catch(e){console.error(e);status('⚠ Nie można wczytać danych','warn')}render();
+(async()=>{try{state=normalize(await GymStorage.load(status));}catch(e){console.error(e);status('⚠ Nie można wczytać danych','warn')}try{if(sessionStorage.getItem('gym-profile-return-view')==='settings')state.view='settings';sessionStorage.removeItem('gym-profile-return-view');}catch{}render();
   if(window.GymCloud)await GymCloud.init({getState:()=>state,hasWorkoutData,workoutRecords,cloudState,meaningfulSignature,workoutDetails,applySnapshot:async data=>{
  const preserved={...data.sessions};
  const locallyUnsaved=new Set(state.unsavedDates||[]);
