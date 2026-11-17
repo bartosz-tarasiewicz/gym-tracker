@@ -1,6 +1,6 @@
 import {test,expect,date,weight,done,seed} from './fixtures.mjs';
-async function showAdvanced(p){const d=p.locator('.train-additional');if(!(await d.evaluate(el=>el.open)))await d.locator('summary').click();}
-async function history(p){await showAdvanced(p);const versions=p.locator('.workout-versions');if(!(await versions.evaluate(el=>el.open)))await versions.locator('summary').click();await p.locator('#load-versions').click();await expect(p.locator('[data-restore-version]')).toHaveCount(1);await p.locator('#versions-list details > summary').first().click();}
+async function showAdvanced(p){const d=p.locator('.train-additional');if(!(await d.evaluate(el=>el.open)))await p.locator('.train-additional > summary').click();}
+async function history(p){await showAdvanced(p);const versions=p.locator('.workout-versions');if(!(await versions.evaluate(el=>el.open)))await p.locator('.workout-versions > summary').click();await p.locator('#load-versions').click();await expect(p.locator('[data-restore-version]')).toHaveCount(1);await p.locator('#versions-list details > summary').first().click();}
 test('saved revision preview, canceled restore, undo, explicit restore and backup preserve other records',async({app:p,db})=>{
  const id=seed(db),other=seed(db,'2026-11-06','55');await p.reload();await date(p);await weight(p).fill('75');await expect(p.locator('#cloud-save-status')).toContainText('wybierz Zapisz');await p.locator('#save-training').click();await expect.poll(()=>db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('75');
  await history(p);await expect(p.locator('#versions-list pre')).toContainText('60');p.once('dialog',d=>d.dismiss());await p.locator('[data-restore-version]').click();await expect(weight(p)).toHaveValue('75');
