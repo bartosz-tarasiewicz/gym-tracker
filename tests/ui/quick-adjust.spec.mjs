@@ -7,6 +7,10 @@ async function openQuick(p,type='work',index=0){
  await expect(p.locator('.set-fast-edit')).toBeVisible();
 }
 const adjust=(p,field,dir)=>p.locator('.set-fast-edit [data-fast-field="'+field+'"][data-fast-dir="'+dir+'"]');
+async function openEquipmentOptions(p){
+ const d=p.locator('.exercise-options');
+ if(!(await d.evaluate(el=>el.open)))await d.locator('summary').click();
+}
 
 test('one-hand correction updates only selected row, persists after reload, and never requires keyboard',async({app:p,db})=>{
  await date(p,'2026-11-09');
@@ -42,11 +46,11 @@ test('precision step is per machine, no floating point artifacts or negative val
  await p.locator('.fast-kg-step').selectOption('2.5');
  await adjust(p,'kg','1').click();
  await expect(weight(p)).toHaveValue('73');
- await p.locator('.exercise-options > summary').click();
+ await openEquipmentOptions(p);
  await p.locator('[data-machine="DUMBBELL"]').click();
  await openQuick(p);
  await expect(p.locator('.fast-kg-step')).toHaveValue('2.5');
- await p.locator('.exercise-options > summary').click();
+ await openEquipmentOptions(p);
  await p.locator('[data-machine="MG-PL13"]').click();
  await openQuick(p);
  await expect(p.locator('.fast-kg-step')).toHaveValue('2.5');
