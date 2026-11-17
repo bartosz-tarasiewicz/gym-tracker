@@ -50,7 +50,6 @@ test('removing extra sets is scoped to the selected machine and does not touch i
  await expect(p.locator('[data-remove-set]')).toHaveCount(1);
  await p.locator('[data-remove-set="4"]').click();
  await expect(p.locator('[data-remove-set]')).toHaveCount(0);
- await p.locator('.exercise-options > summary').click();
  await p.locator('[data-machine="MG-PL13"]').click();
  await expect(p.locator('[data-remove-set]')).toHaveCount(1);
  expect(db.store.size).toBe(0);
