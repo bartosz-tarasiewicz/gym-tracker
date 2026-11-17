@@ -59,6 +59,27 @@ test('non-strength training day uses a normal-flow save action',async({app:p})=>
  expect(await p.locator('.train-save-section').evaluate(el=>getComputedStyle(el).position)).toBe('static');
 });
 
+test('switching profiles waits for a temporary cloud refresh and stays in Data',async({app:p})=>{
+ await p.locator('[data-view="settings"]').click();
+ await expect(p.locator('#active-profile')).toBeEnabled();
+ await p.locator('#add-profile').click();
+ await p.locator('#profile-name').fill('Profil testowy');
+ await p.locator('#profile-form [type="submit"]').click();
+ await expect(p.locator('#active-profile option:checked')).toHaveText('Profil testowy');
+ await expect(p.locator('#import-database')).toBeVisible();
+ await p.evaluate(()=>{
+  window.__busyForTest=true;
+  const original=GymCloud.isBusy.bind(GymCloud);
+  GymCloud.isBusy=()=>window.__busyForTest||original();
+ });
+ await p.locator('#active-profile').selectOption('default');
+ await expect(p.locator('#profiles')).toContainText('przełączę profil po jej zakończeniu');
+ await expect(p.locator('#active-profile')).toBeDisabled();
+ await p.evaluate(()=>{window.__busyForTest=false;});
+ await expect(p.locator('#active-profile option:checked')).toHaveText('Profil domyślny');
+ await expect(p.locator('#import-database')).toBeVisible();
+});
+
 test('calendar: weeks, arbitrary date, today, no writes from navigation',async({app:p,db})=>{
  await date(p,'2026-12-31');await p.locator('[data-week="7"]').click();await expect(p.locator('#week-date')).toHaveValue('2027-01-07');
  await p.locator('[data-week="-7"]').click();await expect(p.locator('#week-date')).toHaveValue('2026-12-31');
