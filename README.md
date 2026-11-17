@@ -1,3 +1,11 @@
+## v0.15 — trening w trybie focus
+
+- **Lista ćwiczeń** jest domyślnie zwinięta do jednego wiersza z liczbą ukończonych ćwiczeń i wskaźnikami postępu. Dotknięcie rozwija pełną listę. Wybór ćwiczenia zamyka listę i kieruje do jednego aktywnego formularza; stan rozwinięcia jest zachowywany podczas rejestrowania serii.
+- **Aktywne ćwiczenie** ma wyraźniejszy nagłówek, nazwę sprzętu i licznik ukończonych serii. Pola ciężaru, powtórzeń, RIR, timer, podpowiedzi oraz usuwanie dodatkowych serii działają jak wcześniej.
+- **Kalendarz i wybór obszaru** są bardziej kompaktowe. Trening/CORE korzystają z segmentowanego przełącznika (przyciski co najmniej 44 px); kalendarz pozostaje w 7 kolumnach nawet na ekranie 320 px.
+- Zapis do Azure pozostaje **ręczny i nienakładający się** na treść, a profile są wyłącznie w zakładce Dane. Nie zmieniamy formatu rekordu ani API.
+- Regresja: `tests/ui/training-focus.spec.mjs` (telefon, desktop, WebKit) i zaktualizowane dotychczasowe testy nawigacji.
+
 ## v0.14 — usuwanie dodanych serii
 
 - Pod każdą dodatkową serią roboczą (poza seriami zapisanymi w planie) widoczny jest przycisk **✕ Usuń serię S…**. Umożliwia usuwanie także wcześniejszej dodatkowej serii; pozostałe serie zostają automatycznie przenumerowane.

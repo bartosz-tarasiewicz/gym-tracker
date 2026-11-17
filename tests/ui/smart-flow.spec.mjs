@@ -1,4 +1,4 @@
-import {test,expect,date,done} from './fixtures.mjs';
+import {test,expect,date,done,chooseExercise} from './fixtures.mjs';
 
 test('guided progression highlights warmups and work sets without opening the keyboard',async({app:p})=>{
  await date(p,'2026-11-09');
@@ -53,7 +53,7 @@ test('optional timer starts with one tap while settings remain collapsed',async(
  await p.locator('#rest-skip').click();
  await p.locator('#rest-quick-start').click();
  await expect(p.locator('#rest-remaining')).toHaveText('1:00');
- await p.locator('[data-item="1"]').click();
+ await chooseExercise(p,1);
  await expect(p.locator('#rest-remaining')).toHaveText('1:00');
 });
 

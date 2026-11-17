@@ -11,6 +11,11 @@ let checks=0;
 function pass(label){checks++; console.log('PASS',label)}
 const input=(field)=>page.locator(`.set-row input[data-type="work"][data-field="${field}"]`).first();
 const done=()=>page.locator('.done-button[data-type="work"][data-done="0"]');
+async function chooseExercise(index){
+ const queue=page.locator('.exercise-queue');
+ if(!(await queue.evaluate(el=>el.open)))await queue.locator('summary').click();
+ await page.locator('[data-item="'+index+'"]').click();
+}
 async function idbSnapshot(){
  return page.evaluate(()=>new Promise((resolve,reject)=>{
   const open=indexedDB.open('zenek-gym-database');
@@ -55,9 +60,12 @@ try {
   assert.equal(await page.locator('.rest-timer-bar #rest-quick-start').isVisible(),true);
   assert.equal(await page.locator('[data-rir-quick="2"]').isVisible(),true);
   assert.equal(await page.locator('.set-row.is-next').count(),1);
+  assert.equal(await page.locator('.exercise-queue').count(),1,'Training has a compact exercise queue');
+  assert.equal(await page.locator('.exercise-queue').getAttribute('open'),null,'Queue begins closed for a shorter workout screen');
+  assert.equal(await page.locator('.exercise-set-progress').count(),1,'Active exercise has a set counter');
   pass('Published v0.11 provides guided sets, one-tap RIR and quick rest timer');
  }
- await page.locator('[data-item="1"]').click();
+ await chooseExercise(1);
  await input('kg').fill('42.5');
  await input('reps').fill('13');
  await done().click();
@@ -66,7 +74,7 @@ try {
  assert.match(await done().getAttribute('class'),/checked/);
  pass('Edited work set and completion are visible');
  await page.reload({waitUntil:'domcontentloaded'});
- await page.locator('[data-item="1"]').waitFor();
+ await page.locator('[data-item="1"]').waitFor({state:'attached'});
  assert.equal(await input('kg').inputValue(),'42.5');
  assert.equal(await input('reps').inputValue(),'13');
  assert.match(await done().getAttribute('class'),/checked/);
