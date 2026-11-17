@@ -345,4 +345,35 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
 @supports(-webkit-touch-callout:none){
  .active-exercise .set-row input{font-size:16px}
 }
-</style></head><body><div class="shell"><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div style="text-align:right"><div id="today" class="chip"></div><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.17 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
+
+/* v0.18 — a compact next-set hint and progressive disclosure for warmups. */
+.active-exercise .next-set-guide{
+ display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;
+ border:1px solid #3f7860;background:#234237;border-radius:11px;
+ padding:9px 11px;margin:11px 0 9px;font-size:12px;line-height:1.35;
+}
+.active-exercise .next-set-guide strong{color:#baf4d3;font-size:12px}
+.active-exercise .next-set-guide span{color:#c5ded3;font-size:11px}
+.active-exercise .warmup-block{
+ margin:9px 0 13px;border:1px solid #3d535b;background:#1a2c34;
+ border-radius:12px;overflow:hidden
+}
+.active-exercise .warmup-block>summary{
+ display:flex;align-items:center;justify-content:space-between;gap:12px;
+ min-height:48px;padding:9px 11px;list-style:none;cursor:pointer;
+}
+.active-exercise .warmup-block>summary::-webkit-details-marker{display:none}
+.active-exercise .warmup-block>summary span:first-child{
+ display:flex;flex-direction:column;gap:3px;min-width:0;
+}
+.active-exercise .warmup-block>summary strong{color:#e4f4ed;font-size:12px}
+.active-exercise .warmup-block>summary small{color:#a3beb9;font-size:11px}
+.active-exercise .warmup-chevron{color:#88e4b6;font-size:19px;line-height:1}
+.active-exercise .warmup-block[open] .warmup-chevron{transform:rotate(180deg)}
+.active-exercise .warmup-body{padding:4px 11px 10px;border-top:1px solid #334c53}
+.active-exercise .warmup-block>summary:focus-visible{outline:3px solid #8cf0bc;outline-offset:-3px}
+@media(max-width:380px){
+ .active-exercise .next-set-guide{padding:9px 8px;gap:4px}
+ .active-exercise .warmup-body{padding:4px 6px 9px}
+}
+</style></head><body><div class="shell"><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div style="text-align:right"><div id="today" class="chip"></div><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.18 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
