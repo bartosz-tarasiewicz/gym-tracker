@@ -544,7 +544,7 @@ function quickSetControls(type,index,item,row){
 function setsHTML(list,type,item){
  const next=nextPendingSet(currentVariant(item));
  return (list||[]).map((s,j)=>{
-  const head=type==='warm'?'R'+(j+1):String(j+1);
+  const head=(type==='warm'?'R':'S')+(j+1);
   const active=next?.type===type&&next.index===j;
   const selected=quickSetEdit?.key===quickSetKey(item)&&quickSetEdit.type===type&&quickSetEdit.index===j;
   const quick=selected?quickSetControls(type,j,item,s):'';
