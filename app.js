@@ -599,6 +599,38 @@ function lastCompletedVariant(item,machine){
  for(const record of records){const definition=record.planDefinition?.items.find(x=>x.id===item.id)||[...PLAN.flatMap(p=>p.items),...CORE].find(x=>x.id===item.id);if((definition?.mode||'reps')!==(item.mode||'reps'))continue;const log=record.exercises[item.id],variant=log?.variants?.[machine]||(log?.machine===machine?log:null);const rows=(variant?.sets||[]).filter(row=>row.done===true);if(rows.length)return {record,rows};}
  return null;
 }
+// Suggest values, never confirmation: one tap reuses the last completed set
+// for the SAME exercise and SAME equipment variant. Earlier sessions are
+// considered only when the variant has no completed preceding work set.
+function quickFillSuggestion(item,variant){
+ const index=(variant.sets||[]).findIndex(row=>!row.done);
+ if(index<0)return null;
+ let candidate=null,source='';
+ for(let i=index-1;i>=0;i--){
+  const row=variant.sets[i];
+  if(row?.done&&String(row.reps??'')!==''){candidate=row;source='serii S'+(i+1);break;}
+ }
+ if(!candidate){
+  const previous=lastCompletedVariant(item,exerciseLog(item).machine);
+  candidate=previous?.rows[index]||previous?.rows[previous.rows.length-1];
+  if(previous&&candidate)source='treningu '+previous.record.date;
+ }
+ if(!candidate)return null;
+ const kg=String(candidate.kg??''),reps=String(candidate.reps??'');
+ if(!reps)return null;
+ const row=variant.sets[index];
+ if(String(row.kg??'')===kg&&String(row.reps??'')===reps)return null;
+ return {index,kg,reps,source};
+}
+function nextUnfinishedExercise(){
+ if(state.activeArea!=='main')return null;
+ const items=activePlan().items,active=Math.min(state.activeExercise,items.length-1);
+ for(let offset=1;offset<items.length;offset++){
+  const index=(active+offset)%items.length,item=items[index];
+  if(counted(item)<item.work.length)return {index,title:item.title};
+ }
+ return null;
+}
 function machineNoteKey(item,machine){return item.id+'|'+machine;}
 let exerciseOptionsOpen=false;
 let restControlsOpen=false;
@@ -649,15 +681,23 @@ function trainHTML(){
  const chooser=coreActive?'<div class="panel"><div class="eyebrow">Wybierz ćwiczenie CORE</div><p class="hint">Ćwiczenia opcjonalne. Nieaktywne nie są liczone do planu.</p><div class="core-chooser">'+coreTabs+'</div></div>':'<div class="exercise-strip">'+tabs+'</div>';
  const photoSection=exerciseMediaHTML(item,log.machine);
  const selectedVariants='<div class="label" id="machine-label">Maszyna / hantle / zamiennik</div><div class="machine-options" role="group" aria-labelledby="machine-label">'+choices+'</div>';
+ const quickFill=quickFillSuggestion(item,v);
+ const quickFillHTML=quickFill?'<div class="quick-fill-offer"><span>Do serii S'+(quickFill.index+1)+' z '+esc(quickFill.source)+': <strong>'+esc(quickFill.kg||'0')+' kg × '+esc(quickFill.reps)+'</strong></span><button type="button" class="btn secondary small" id="quick-fill-set" data-target-set="'+quickFill.index+'" aria-label="Wstaw wartości do serii S'+(quickFill.index+1)+'">Wstaw</button></div>':'';
+ const finishedWork=v.sets?.length>0&&v.sets.every(x=>x.done);
+ const nextWork=finishedWork&&!coreActive?nextUnfinishedExercise():null;
+ const completionHTML=finishedWork?'<div class="exercise-finish" role="status">✓ Serie robocze ukończone. Uzupełnij RIR lub popraw wynik.'+
+  (nextWork?'<button type="button" class="btn full next-unfinished" data-next-unfinished="'+nextWork.index+'">Dalej: '+esc(nextWork.title)+' →</button>':
+   (!coreActive?'<p>Wszystkie główne ćwiczenia ukończone. Zapisz trening w Azure.</p>':''))+'</div>':'';
+
  const sets=restTimerHTML()+'<p class="ex-note">Jednostka: <strong>'+esc(unit(log.machine))+'</strong> · '+esc(measure(item))+'. Każdy wariant sprzętu ma osobne wyniki.</p>'+preview+
   (v.warmups?.length?'<div class="section-header"><strong>Rozgrzewka</strong><span class="smallcaps">Poza licznikiem serii</span></div><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.warmups,'warm',item):'')+
-  '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div><div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
+  '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div>'+quickFillHTML+'<div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
   '<div class="inline-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><button type="button" class="btn secondary small" id="markall">✓ Potwierdź wszystkie wpisane</button></div>'+
   '<div class="rir-quick-row"><span class="rir-short-label">RIR</span><div class="rir-shortcuts" role="group" aria-label="Szybki wybór RIR">'+
   ['0','1','2','3+'].map(x=>'<button type="button" class="rir-chip '+(v.rir===x?'active':'')+'" data-rir-quick="'+x+'" aria-pressed="'+(v.rir===x)+'">'+x+'</button>').join('')+
   '</div><select id="rir" class="rir-select" aria-label="RIR lub inna ocena"><option value="">Inna ocena…</option>'+
   ['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>'<option value="'+x+'" '+(v.rir===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div>'+
-  (v.sets?.length&&v.sets.every(x=>x.done)?'<div class="exercise-finish" role="status">✓ Serie robocze ukończone. Możesz uzupełnić RIR i przejść dalej.</div>':'');
+  completionHTML;
  const exercise='<div class="panel active-exercise"><div class="exercise-head"><div><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><h2 class="title">'+esc(item.title)+'</h2>'+
   '<p class="active-machine">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p></div></div>'+
   (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
@@ -862,6 +902,25 @@ document.addEventListener('click',async event=>{
  if(b.id==='rest-start'||b.id==='rest-quick-start'){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();updateRestTimer();return;}
  if(b.id==='rest-skip'){restUntil=0;restAlerted=false;persistRestTimer();updateRestTimer();return;}
  if(b.dataset.restAdjust!==undefined){if(restUntil){restUntil=Math.max(Date.now(),restUntil+Number(b.dataset.restAdjust)*1000);restAlerted=false;persistRestTimer();updateRestTimer();}return;}
+ if(b.id==='quick-fill-set'){
+  const {item}=currentItem(),v=currentVariant(item),suggestion=quickFillSuggestion(item,v);
+  // Re-evaluate from the current data before mutating; a stale button must
+  // never replace another row, a completed set or a different machine.
+  if(!suggestion||String(suggestion.index)!==b.dataset.targetSet)return;
+  const editable=currentVariant(item,true),row=editable.sets[suggestion.index];
+  if(!row||row.done)return;
+  row.kg=suggestion.kg;row.reps=suggestion.reps;
+  save();render();revealNextSet();
+  return;
+ }
+ if(b.dataset.nextUnfinished!==undefined){
+  const {item}=currentItem(),variant=currentVariant(item);
+  const target=nextUnfinishedExercise();
+  if(state.activeArea!=='main'||!variant.sets?.length||!variant.sets.every(row=>row.done)||!target||target.index!==Number(b.dataset.nextUnfinished))return;
+  state.activeExercise=target.index;exerciseOptionsOpen=false;
+  save(false);render();revealExercise();
+  return;
+ }
  if(b.id==='copy-previous'){
   const {item}=currentItem(),log=exerciseLog(item),previous=lastCompletedVariant(item,log.machine);
   if(!previous?.rows.length)return;
