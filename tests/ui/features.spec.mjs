@@ -24,6 +24,41 @@ test('mobile training focus: one active exercise, progressive disclosure and sav
  await expect(p.locator('.active-exercise .title')).toContainText('Wyciskanie na skosie');
 });
 
+
+test('profiles are available only in Data and the Save button never covers the workout',async({app:p})=>{
+ await date(p,'2026-11-09');
+ await expect(p.locator('#profiles')).toHaveCount(0);
+ await expect(p.locator('#add-profile')).toHaveCount(0);
+ await expect(p.locator('.train-save-dock')).toHaveCount(0);
+ const save=p.locator('.train-save-section #save-training');
+ await expect(save).toBeVisible();
+ await expect(save).toHaveCount(1);
+ const layout=await p.evaluate(()=>{
+  const section=document.querySelector('.train-save-section');
+  const exercise=document.querySelector('.active-exercise');
+  return {position:getComputedStyle(section).position,sectionTop:section.getBoundingClientRect().top+scrollY,exerciseBottom:exercise.getBoundingClientRect().bottom+scrollY};
+ });
+ expect(layout.position).not.toBe('fixed');
+ expect(layout.position).not.toBe('sticky');
+ expect(layout.sectionTop).toBeGreaterThanOrEqual(layout.exerciseBottom);
+ await p.locator('[data-view="history"]').click();
+ await expect(p.locator('#profiles')).toHaveCount(0);
+ await p.locator('[data-view="plans"]').click();
+ await expect(p.locator('#profiles')).toHaveCount(0);
+ await p.locator('[data-view="settings"]').click();
+ await expect(p.locator('#active-profile')).toBeEnabled();
+ await expect(p.locator('#add-profile')).toBeVisible();
+ await p.locator('[data-view="train"]').click();
+ await expect(p.locator('#profiles')).toHaveCount(0);
+});
+
+test('non-strength training day uses a normal-flow save action',async({app:p})=>{
+ await date(p,'2026-11-12');
+ await expect(p.locator('.train-save-section #save-training')).toBeVisible();
+ await expect(p.locator('.train-save-dock')).toHaveCount(0);
+ expect(await p.locator('.train-save-section').evaluate(el=>getComputedStyle(el).position)).toBe('static');
+});
+
 test('calendar: weeks, arbitrary date, today, no writes from navigation',async({app:p,db})=>{
  await date(p,'2026-12-31');await p.locator('[data-week="7"]').click();await expect(p.locator('#week-date')).toHaveValue('2027-01-07');
  await p.locator('[data-week="-7"]').click();await expect(p.locator('#week-date')).toHaveValue('2026-12-31');
