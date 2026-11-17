@@ -445,4 +445,18 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--safe-to
 @media(min-width:541px){
  .week-date-picker{width:126px;flex:0 0 126px}
 }
+
+/* Safari native select may render a white picker and overflow its flex item.
+   Draw our own chevron and keep a native accessible select underneath. */
+.train-type-control{position:relative;min-width:0}
+.train-type-control select{
+ display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;
+ -webkit-appearance:none;appearance:none;color-scheme:dark;
+ background:#17352e;color:#effbf5;-webkit-text-fill-color:#effbf5;
+ padding:7px 27px 7px 8px;border:1px solid #598977;border-radius:9px
+}
+.train-type-control::after{
+ content:"⌄";position:absolute;right:10px;bottom:11px;font-size:18px;
+ line-height:1;color:#c4f2d9;pointer-events:none
+}
 </style></head><body><div class="shell"><header class="top"><div class="brand">ZENEK<span> / GYM</span></div><div class="top-status"><span id="storage-status" class="status">Wczytywanie danych…</span><span id="cloud-save-status" class="status" role="status"></span></div></header><main id="app"></main><div class="footer">Offline + IndexedDB · Gym Tracker v0.19 · Azure Primary</div></div><nav class="bottomnav"><div class="bottom-inner"><button class="navitem active" data-view="train">🏋️ Trening</button><button class="navitem" data-view="history">📈 Progres</button><button class="navitem" data-view="plans">📋 Plany</button><button class="navitem" data-view="settings">⚙️ Dane</button></div></nav><div id="toast" style="display:none" class="toast"></div><script src="profiles.js"></script><script src="storage.js"></script><script src="sync.js"></script><script src="week-ui.js"></script><script src="results.js"></script><script src="progress-ui.js"></script><script src="exercise-guides.js"></script><script src="photos.js"></script><script src="plans.js"></script><script src="plan-editor.js"></script><script src="app.js"></script></body></html>
