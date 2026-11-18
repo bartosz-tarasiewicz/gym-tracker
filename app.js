@@ -765,7 +765,7 @@ let advancedOpen=false;
 let exerciseQueueOpen=false;
 function trainHTML(){
  rememberDay();
- const calendar=GymWeek.html(state)+'<div class="hint">Profil: '+esc(GymProfiles.name())+' · '+esc(state.selectedDate)+'</div>'+conflictPanel(),d=state.activeDay;
+ const calendar=GymWeek.html(state)+'<div class="hint">Profil: '+esc(GymProfiles.name())+'</div>'+conflictPanel(),d=state.activeDay;
  const standard=GymPlans.scheduled(state.selectedDate)?.dayType??GymWeek.dayIndex(state.selectedDate);
  const selectedOptions=TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+(x===standard?' (domyślnie)':'')+'</option>').join('');
  const dayProgress=[-1,3,-2].includes(d)?'':(()=>{
@@ -836,9 +836,9 @@ function trainHTML(){
   '<span class="warmup-chevron" aria-hidden="true">⌄</span></summary>'+
   '<div class="warmup-body"><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+
   setsHTML(v.warmups,'warm',item)+'</div></details>':'';
- const sets=restTimerHTML()+'<p class="ex-note">Jednostka: <strong>'+esc(unit(log.machine))+'</strong> · '+esc(measure(item))+'. Każdy wariant sprzętu ma osobne wyniki.</p>'+preview+
+ const sets=restTimerHTML()+preview+
   '<div class="next-set-guide" role="status" aria-live="polite">'+nextSetGuideHTML(item,v)+'</div>'+warmupBlock+
-  '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div><p class="fast-adjust-help">Dotknij numeru serii (S1, S2…) i zmieniaj ciężar lub powtórzenia bez klawiatury.</p>'+quickFillHTML+'<div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
+  '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div>'+quickFillHTML+'<div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
   '<div class="inline-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><button type="button" class="btn secondary small" id="markall">✓ Potwierdź wszystkie wpisane</button></div>'+
   '<div class="rir-quick-row"><span class="rir-short-label">RIR</span><div class="rir-shortcuts" role="group" aria-label="Szybki wybór RIR">'+
   ['0','1','2','3+'].map(x=>'<button type="button" class="rir-chip '+(v.rir===x?'active':'')+'" data-rir-quick="'+x+'" aria-pressed="'+(v.rir===x)+'">'+x+'</button>').join('')+
@@ -849,7 +849,7 @@ function trainHTML(){
   '<p class="active-machine">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p></div><span class="exercise-set-progress">'+(v.sets||[]).filter(x=>x.done).length+' / '+(v.sets||[]).length+' serii</span></div>'+
   (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
   '<details class="exercise-options" '+(exerciseOptionsOpen?'open':'')+'><summary>Sprzęt, zamienniki i zdjęcia</summary><div class="exercise-option-content">'+
-  selectedVariants+photoSection+machineNote+'</div></details>'+
+  '<p class="hint">Dotknij S1 lub R1, aby otworzyć szybką korektę ciężaru i powtórzeń. Każdy wariant sprzętu ma osobne wyniki.</p>'+selectedVariants+photoSection+machineNote+'</div></details>'+
   (coreActive&&!enabled?'<p class="hint">Dodaj ćwiczenie do treningu, aby zapisywać serie.</p>':sets)+
   '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Poprzednie</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
  const isHistory=!!savedHistoryRecord();
