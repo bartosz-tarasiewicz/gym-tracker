@@ -807,7 +807,7 @@ function trainHTML(){
  const choices=availableMachineOptions(item).map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" aria-pressed="'+(log.machine===k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k))+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
  const previous=lastCompletedVariant(item,log.machine),oldRows=previous?.rows||[];
  const preview=oldRows.length?'<div class="previous-compact"><div><strong>Poprzednio · '+esc(previous.record.date)+'</strong><span>'+oldRows.slice(0,4).map(x=>esc(x.kg||'0')+' kg × '+esc(x.reps)).join(' · ')+(oldRows.length>4?' …':'')+'</span></div><button type="button" class="btn secondary small" id="copy-previous">Użyj</button></div>':
-  '<p class="hint">Wartości są podpowiedzią — zaznacz ✓, aby zaliczyć serię.</p>';
+  '';
  const machineNotes=window.GymProfiles?.preference('machineNotes')||{};
  const machineNote='<label class="label" for="machine-note">Ustawienia maszyny / notatka do wariantu</label><textarea id="machine-note" class="notes" maxlength="150" placeholder="Np. wysokość siedziska, ustawienie uchwytów">'+esc(machineNotes[machineNoteKey(item,log.machine)]||'')+'</textarea><p class="hint">Zapamiętywane dla tego profilu, ćwiczenia i wariantu.</p>';
  const switcher=old.length>1?'<div class="panel"><label class="label" for="session-picker">Kilka treningów tego dnia — wybierz do edycji</label><select class="equipment" id="session-picker">'+old.map((h,i)=>'<option value="'+esc(h.syncId||'')+'" '+(s===h?'selected':'')+'>Sesja '+(i+1)+' · '+esc(h.started?.slice(11,16)||h.date)+'</option>').join('')+'</select></div>':'';
@@ -1232,7 +1232,7 @@ window.gymProfileCanLeave=()=>!savingWorkout&&GymPlans.leave()&&abandonHistoryEd
  }
  const retainedHistory=[...historyById.values()].sort((a,b)=>a.date.localeCompare(b.date));
  state=normalize({...state,history:retainedHistory,sessions:preserved,savedAt:Date.now()});
- GymStorage.save(state);await GymStorage.flush();render()
+ GymStorage.save(state);await GymStorage.flush();if(state.view!=='plans')render()
 },backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{renderSaveStatus();if(state.view==='settings')renderCloudPanel()}});
   window.GymProfiles?.ready();
   if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW:',e))})();
