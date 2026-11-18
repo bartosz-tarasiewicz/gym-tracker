@@ -136,13 +136,17 @@ async function undoSelectedDay(){
  state.sessions={...Object.fromEntries(Object.entries(state.sessions).filter(([,r])=>r.date!==date)),...cloneWorkout(original.sessions)};
  state.history=[...state.history.filter(r=>r.date!==date),...cloneWorkout(original.history)].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
  state.unsavedDates=(state.unsavedDates||[]).filter(k=>!k.startsWith(date+'|'));
- pendingHistoryEdit=null;state.selectedRecordId=original.selectedRecordId||'';
+ clearDraftFlags(date);pendingHistoryEdit=null;state.selectedRecordId=original.selectedRecordId||'';
  state.activeDay=original.day;state.activeExercise=0;state.activeCore=0;state.activeArea='main';
  save(false);await GymStorage.flush();render();toast('Przywrócono zapis z '+date+'.');
 }
 function historyEditChanged(){return !!pendingHistoryEdit&&JSON.stringify(pendingHistoryEdit.draft)!==pendingHistoryEdit.original}
 function abandonHistoryEdit(){
  if(historyEditChanged()&&!confirm('Masz niezapisane zmiany w tym treningu. Odrzucić je?'))return false;
+ if(state.historyForm&&pendingHistoryEdit){
+  delete state.historyForm;
+  if(state.editRevisions)delete state.editRevisions[pendingHistoryEdit.date];
+ }
  pendingHistoryEdit=null;
  return true;
 }
@@ -230,7 +234,7 @@ function activeSession(create=false){
 function changeTrainingType(next){
  next=Number(next);
  if(!TRAINING_TYPES.includes(next)||next===state.activeDay)return;
- const previousDay=state.activeDay,date=state.selectedDate;
+ rememberRevision();const previousDay=state.activeDay,date=state.selectedDate;
  const original=cloneWorkout(storedDay()||{
   date,day:previousDay,started:new Date().toISOString(),
   exercises:{},coreEnabled:{},notes:''
@@ -418,7 +422,10 @@ function meaningfulSignature(data){
   return JSON.stringify({history:h,drafts:p.drafts});
 }
 function save(sync=true){
- if(sync&&pendingHistoryEdit){renderSaveStatus();return;}
+ if(sync&&state.view==='train'){
+  rememberRevision();
+  if(pendingHistoryEdit){state.historyForm=cloneWorkout(pendingHistoryEdit);GymStorage.save(state);renderSaveStatus();return;}
+ }
  // Form changes stay on the device until Save is clicked.
  if(sync&&state.view==='train'&&TRAINING_TYPES.includes(state.activeDay)){
   const key=state.selectedDate+'|'+state.activeDay;
@@ -430,7 +437,61 @@ function save(sync=true){
  if(sync)window.GymCloud?.schedule?.();
 }
 let savingWorkout=false;
-async function saveSelectedWorkout(){
+window.gymSavingWorkout=()=>savingWorkout;
+function rememberRevision(){
+ const date=state.selectedDate;
+ state.editRevisions??={};
+ if(!Object.hasOwn(state.editRevisions,date)){
+  const id=selectedCloudId();
+  state.editRevisions[date]=GymCloud.rowFor(date,id)?.etag??GymCloud.knownRevision(id);
+ }
+}
+function clearDraftFlags(date){
+ state.unsavedDates=(state.unsavedDates||[]).filter(key=>!key.startsWith(date+'|'));
+ if(state.editRevisions)delete state.editRevisions[date];
+ if(state.requestedSaves)delete state.requestedSaves[date];
+ if(state.historyForm?.date===date)delete state.historyForm;
+}
+function activeConflict(){
+ const date=state.selectedDate;
+ const dirty=historyEditChanged()||(state.unsavedDates||[]).some(key=>key.startsWith(date+'|'));
+ if(!dirty)return null;
+ const row=GymCloud.rowFor(date,selectedCloudId());
+ const local=pendingHistoryEdit?.draft||storedDay();
+ if(!row||!local||row.etag===(local.restoreExpectedEtag??state.editRevisions?.[date]))return null;
+ return GymCloud.matches(row,local)?null:{row,local};
+}
+function conflictPanel(){
+ const conflict=activeConflict();if(!conflict)return '';
+ return '<section class="panel" role="region" aria-label="Konflikt treningu"><strong>Ten trening ma dwie wersje</strong><details class="conflict-details" data-revision="'+esc(conflict.row.etag)+'"><summary>Porównaj zmiany</summary>'+
+ comparisonHTML(conflict.row.record,conflict.local)+'<button class="btn secondary" id="choose-cloud">Użyj wersji z Azure</button> <button class="btn" id="choose-local">Zapisz mój szkic w Azure</button></details></section>';
+}
+function adoptSaved(result){
+ const {date}=result.record;
+ for(const [key,record] of Object.entries(state.sessions)){
+  if(record.date===date&&(!result.preserveDateRecords||'draft:'+key===result.id||record.syncId===result.id))delete state.sessions[key];
+ }
+ state.history=state.history.filter(record=>result.preserveDateRecords?record.syncId!==result.id:record.date!==date);
+ if(result.kind==='draft')state.sessions[result.id.slice(6)]=cloneWorkout(result.record);
+ else state.history.push({...cloneWorkout(result.record),syncId:result.id});
+ state.history.sort((a,b)=>a.date.localeCompare(b.date));
+ clearDraftFlags(date);
+ if(state.selectedDate===date){
+  pendingHistoryEdit=null;state.selectedRecordId=result.kind==='history'?result.id:'';
+  state.activeDay=Number(result.record.day);
+ }
+}
+window.gymCompleteQueuedSave=async(date,job,result)=>{
+ if(state.requestedSaves?.[date]!==job)return;
+ if(result.ok){
+  const current=state.historyForm?.date===date?state.historyForm.draft:dayRecord(state,date);
+  const row=GymCloud.rowFor(date,result.id);
+  if(current&&row&&GymCloud.matches(row,current))adoptSaved(result);
+  else {delete state.requestedSaves[date];(state.editRevisions??={})[date]=row?.etag??null;}
+ }else if(!result.retry)job.paused=true;
+ save(false);await GymStorage.flush();render();
+};
+async function saveSelectedWorkout(reviewedRevision){
  if(savingWorkout)return;
  const date=state.selectedDate,day=state.activeDay;
  if(!TRAINING_TYPES.includes(day)){toast('Wybierz rodzaj treningu');return;}
@@ -441,13 +502,23 @@ async function saveSelectedWorkout(){
  if(!input.syncId&&draftEntry)input.syncId='draft:'+draftEntry[0];
  if(!window.GymCloud?.saveWorkoutForDate){alert('Odśwież aplikację, żeby użyć nowego zapisu.');return;}
  savingWorkout=true;renderSaveStatus();
+ const editor=document.getElementById('app'),navigation=document.querySelector('.bottomnav');
+ editor.inert=true;navigation.inert=true;
  const button=document.getElementById('save-training');
  if(button){button.disabled=true;button.textContent='Zapisywanie w Azure…';}
  try{
-  const result=await GymCloud.saveWorkoutForDate(input);
+  const revision=reviewedRevision??input.restoreExpectedEtag??(Object.hasOwn(state.editRevisions||{},date)?state.editRevisions[date]:GymCloud.knownRevision(input.syncId));
+  if(reviewedRevision!==undefined)delete input.restoreExpectedEtag;
+  // Persist the exact click before starting the request. A closed tab or
+  // lost acknowledgement can then replay the same conditional write.
+  if(GymCloud.owner()){
+   (state.requestedSaves??={})[date]={record:input,revision,owner:GymCloud.owner()};
+   save(false);await GymStorage.flush();
+  }
+  const result=await GymCloud.saveWorkoutForDate(input,revision);
   if(!result.ok){
    // Keep the form and pending edits on the device if the network fails.
-   const draftKey=sessionKey();
+   const draftKey=draftEntry?.[0]||date+'-'+day;
    if(pendingHistoryEdit){
     const e=pendingHistoryEdit,at=e.id?state.history.findIndex(h=>h.syncId===e.id):e.index;
     if(at>=0){
@@ -459,33 +530,21 @@ async function saveSelectedWorkout(){
     state.sessions[draftKey]=cloneWorkout(input);
    }
    state.unsavedDates=[...new Set([...(state.unsavedDates||[]),date+'|'+day])];
+   (state.editRevisions??={})[date]=revision;
+   if(!result.retry&&state.requestedSaves)delete state.requestedSaves[date];
+   if(state.historyForm?.date===date)delete state.historyForm;
    save(false);await GymStorage.flush();
    render();
-   alert(result.reason+'\nZachowałem wyniki na tym urządzeniu.');
+   if(result.conflict)return;
+   alert(result.retry?'Zapisano lokalnie · oczekuje na Azure':result.reason+'\nZachowałem wyniki na tym urządzeniu.');
    return;
   }
-  // Keep only the canonical Azure record for this training day locally.
-  state.history=state.history.filter(h=>result.preserveDateRecords?h.syncId!==result.id:h.date!==date);
-  for(const [key,s] of Object.entries(state.sessions||{})){
-   if(s.syncId===result.id||(result.preserveDateRecords?'draft:'+key===result.id:s.date===date&&Number(s.day)===day))delete state.sessions[key];
-  }
-  const record=cloneWorkout(result.record);
-  if(result.kind==='history'){
-   state.history.push({...record,syncId:result.id});
-   state.history.sort((a,b)=>String(a.date).localeCompare(String(b.date))||
-     String(a.started||'').localeCompare(String(b.started||'')));
-   state.selectedRecordId=result.id;
-  }else{
-   state.sessions[result.id.slice(6)]=record;
-   state.selectedRecordId='';
-  }
-  state.unsavedDates=(state.unsavedDates||[]).filter(k=>k!==date+'|'+day);
-  pendingHistoryEdit=null;
+  adoptSaved(result);
   save(false);await GymStorage.flush();
   render();
   toast('Zapisano w Azure · '+date);
  }finally{
-  savingWorkout=false;renderSaveStatus();
+  editor.inert=false;navigation.inert=false;savingWorkout=false;renderSaveStatus();
  }
 }
 function status(str,level){const n=document.getElementById('storage-status');if(n){n.textContent=str;n.classList.toggle('warn',level==='warn')}}
@@ -706,7 +765,7 @@ let advancedOpen=false;
 let exerciseQueueOpen=false;
 function trainHTML(){
  rememberDay();
- const calendar=GymWeek.html(state),d=state.activeDay;
+ const calendar=GymWeek.html(state)+'<div class="hint">Profil: '+esc(GymProfiles.name())+' · '+esc(state.selectedDate)+'</div>'+conflictPanel(),d=state.activeDay;
  const standard=GymPlans.scheduled(state.selectedDate)?.dayType??GymWeek.dayIndex(state.selectedDate);
  const selectedOptions=TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+(x===standard?' (domyślnie)':'')+'</option>').join('');
  const dayProgress=[-1,3,-2].includes(d)?'':(()=>{
@@ -823,7 +882,7 @@ function sessionReport(s){const lines=[`Gym Tracker | ${s.date} | ${s.planDefini
  }if(s.notes)lines.push(`\nNotatka: ${s.notes}`);return lines.join('\n')}
 function historyHTML(){return GymProgress.html(state,{PLAN,CORE,MACHINE,allLogged,sessionReport,machineName,unit,measure})}
 // Cloud refresh must not detach the file input while a native file picker is open.
-function renderSaveStatus(){const el=document.getElementById('cloud-save-status');if(!el)return;const dirty=historyEditChanged()||(state.unsavedDates||[]).some(k=>k.startsWith(state.selectedDate+'|'));const cloud=window.GymCloud?.getStatus();el.textContent=savingWorkout?'Azure: zapisuję…':dirty?'Zmiany lokalne · wybierz Zapisz':cloud==='synced'?'Azure: aktualne dane':cloud==='syncing'?'Azure: synchronizacja…':cloud==='conflict'?'Azure: sprawdź konflikt w Danych':'Azure: brak potwierdzenia połączenia';el.classList.toggle('warn',dirty||cloud==='conflict');}
+function renderSaveStatus(){const el=document.getElementById('cloud-save-status');if(!el)return;const dirty=historyEditChanged()||(state.unsavedDates||[]).some(k=>k.startsWith(state.selectedDate+'|'));const cloud=window.GymCloud?.getStatus();el.textContent=savingWorkout?'Azure: zapisuję…':state.requestedSaves?.[state.selectedDate]&&!state.requestedSaves[state.selectedDate].paused?'Zapisano lokalnie · oczekuje na Azure':dirty?'Zmiany lokalne · wybierz Zapisz':cloud==='synced'?'Azure: aktualne dane':cloud==='syncing'?'Azure: synchronizacja…':cloud==='conflict'?'Azure: sprawdź konflikt w Danych':'Azure: brak potwierdzenia połączenia';el.classList.toggle('warn',dirty||cloud==='conflict');}
 function renderCloudPanel(){const panel=document.getElementById('cloud-panel');if(panel)panel.innerHTML=window.GymCloud?.html?.()||'';}
 function settingsHTML(){
  return '<section id="profiles" class="panel" aria-label="Profile użytkowników"></section>'+
@@ -906,7 +965,7 @@ async function importDatabaseFile(file){
   // Keep unrelated local days intact; imported days adopt the Azure identity.
   state.history=state.history.filter(x=>!updatedDates.has(x.date));
   state.sessions=Object.fromEntries(Object.entries(state.sessions).filter(([,x])=>!updatedDates.has(x.date)));
-  state.unsavedDates=(state.unsavedDates||[]).filter(key=>!updatedDates.has(key.split('|')[0]));
+  for(const date of updatedDates)clearDraftFlags(date);
   for(const x of result.saved){
    const record=JSON.parse(JSON.stringify(x.record));
    if(x.kind==='history')state.history.push({...record,syncId:x.id});
@@ -1027,7 +1086,21 @@ document.addEventListener('click',async event=>{
  if(b.dataset.restoreVersion){restoreVersion(b.dataset.restoreVersion);return;}
  if(b.id==='export-local'){download('gym-tracker-lokalne-'+dateKey()+'.json',JSON.stringify(state,null,2),'application/json');return;}
  if(b.id==='undo-training'){await undoSelectedDay();return;}
- if(b.id==='save-training'){await saveSelectedWorkout();return;}
+  if(b.id==='choose-cloud'||b.id==='choose-local'){
+  const conflict=activeConflict();
+  if(!conflict||conflict.row.etag!==b.closest('details').dataset.revision){render();return;}
+  if(b.id==='choose-local'){
+   if(confirm('Zapisać lokalną wersję tego treningu zamiast porównanej wersji w Azure?'))await saveSelectedWorkout(conflict.row.etag);
+  }else if(confirm('Wczytać zapis z Azure i odrzucić lokalny szkic tego treningu?')){
+   adoptSaved({...conflict.row,preserveDateRecords:GymCloud.multiple(state.selectedDate)});
+   save(false);await GymStorage.flush();render();
+  }
+  return;
+ }
+ if(b.id==='save-training'){
+  if(activeConflict()){const details=document.querySelector('.conflict-details');if(details){details.open=true;details.scrollIntoView({block:'center'});}else render();return;}
+  await saveSelectedWorkout();return;
+ }
  if(b.dataset.week!==undefined){selectDate(b.dataset.week==='today'?dateKey():GymWeek.shift(state.selectedDate,Number(b.dataset.week)));return}
  if(b.dataset.date!==undefined){selectDate(b.dataset.date);return}
  if(b.dataset.machine!==undefined){switchVariant(currentItem().item,b.dataset.machine);save();render();return}
@@ -1129,17 +1202,35 @@ window.addEventListener('gym-preferences-loaded',()=>{if(state.view==='plans'){i
 document.addEventListener('submit',e=>GymPlans.submit(e));
 window.addEventListener('beforeunload',e=>{if(GymPlans.dirty()){e.preventDefault();e.returnValue='';}});
 window.gymProfileCanLeave=()=>!savingWorkout&&GymPlans.leave()&&abandonHistoryEdit();
-(async()=>{try{state=normalize(await GymStorage.load(status));}catch(e){console.error(e);status('⚠ Nie można wczytać danych','warn')}try{if(sessionStorage.getItem('gym-profile-return-view')==='settings')state.view='settings';sessionStorage.removeItem('gym-profile-return-view');}catch{}render();
+(async()=>{try{state=normalize(await GymStorage.load(status));pendingHistoryEdit=state.historyForm||null;}catch(e){console.error(e);status('⚠ Nie można wczytać danych','warn')}try{if(sessionStorage.getItem('gym-profile-return-view')==='settings')state.view='settings';sessionStorage.removeItem('gym-profile-return-view');}catch{}render();
   if(window.GymCloud)await GymCloud.init({getState:()=>state,hasWorkoutData,workoutRecords,cloudState,meaningfulSignature,workoutDetails,applySnapshot:async data=>{
  const preserved={...data.sessions};
+  // Old clients marked some untouched forms dirty. Only real local input
+ // should cover a newer cloud workout. New edits have a pinned revision.
+ state.unsavedDates=(state.unsavedDates||[]).filter(key=>{
+  const [date,day]=key.split('|');
+  const entry=Object.values(state.sessions).find(r=>r.date===date&&String(r.day)===day)||
+   state.history.find(r=>r.date===date&&String(r.day)===day);
+  if(!entry)return false;
+  const cloud=GymCloud.rowFor(date,entry.syncId);
+  if(!cloud)return true;
+  if(GymCloud.matches(cloud,entry)&&!historyEditChanged()){if(state.editRevisions)delete state.editRevisions[date];return false;}
+  if(Object.hasOwn(state.editRevisions||{},date))return true;
+  const comparable={...entry};
+  if(comparable.planDefinition?.id==='builtin-'+day)delete comparable.planDefinition;
+  if(!hasWorkoutData({sessions:{legacy:comparable},history:[]})&&!entry.syncId)return false;
+  (state.editRevisions??={})[date]=null;
+  return true;
+ });
  const locallyUnsaved=new Set(state.unsavedDates||[]);
  for(const [key,entry] of Object.entries(state.sessions||{})){
   if(locallyUnsaved.has(entry.date+'|'+entry.day))preserved[key]=entry;
  }
- const retainedHistory=data.history.filter(entry=>!locallyUnsaved.has(entry.date+'|'+entry.day));
+ const historyById=new Map(data.history.map(entry=>[entry.syncId,entry]));
  for(const entry of state.history||[]){
-  if(locallyUnsaved.has(entry.date+'|'+entry.day))retainedHistory.push(entry);
+  if(locallyUnsaved.has(entry.date+'|'+entry.day))historyById.set(entry.syncId,entry);
  }
+ const retainedHistory=[...historyById.values()].sort((a,b)=>a.date.localeCompare(b.date));
  state=normalize({...state,history:retainedHistory,sessions:preserved,savedAt:Date.now()});
  GymStorage.save(state);await GymStorage.flush();render()
 },backup:(name,data)=>download(name,JSON.stringify(data,null,2),'application/json'),onStatusChange:()=>{renderSaveStatus();if(state.view==='settings')renderCloudPanel()}});

@@ -2,10 +2,11 @@
 window.GymProfiles=(()=>{
  const KEY='gym-profiles-v1',ACTIVE='gym-active-profile-v1';
  const valid=id=>/^(default|p-[a-f0-9-]{36})$/.test(id||'');
- let active=sessionStorage.getItem(ACTIVE)||'default',profiles=[{id:'default',name:'Profil domyślny'}],ready=false,changing=false;
+ let active=sessionStorage.getItem(ACTIVE)||localStorage.getItem(ACTIVE)||'default',profiles=[{id:'default',name:'Profil domyślny'}],ready=false,changing=false;
  if(!valid(active))active='default';
  try{const saved=JSON.parse(localStorage.getItem(KEY)||'[]');for(const p of saved)if(valid(p.id)&&p.id!=='default'&&typeof p.name==='string')profiles.push(p);}catch{}
  if(!profiles.some(p=>p.id===active))active='default';
+ sessionStorage.setItem(ACTIVE,active);
  const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const suffix=()=>active==='default'?'':':profile:'+active;
  function persist(){localStorage.setItem(KEY,JSON.stringify(profiles));}
@@ -75,7 +76,7 @@ window.GymProfiles=(()=>{
    for(let attempt=0;attempt<100&&busy();attempt++)await new Promise(resolve=>setTimeout(resolve,100));
    if(busy()){changing=false;notice='Synchronizacja nadal trwa. Spróbuj ponownie za chwilę.';render();return;}
    await window.GymStorage.flush();
-   sessionStorage.setItem(ACTIVE,id);
+   sessionStorage.setItem(ACTIVE,id);localStorage.setItem(ACTIVE,id);
    sessionStorage.setItem('gym-profile-return-view','settings');
    location.reload();
   }catch(e){changing=false;notice='Nie udało się przełączyć profilu. Dane zachowano.';render();alert(notice);}
@@ -100,5 +101,5 @@ window.GymProfiles=(()=>{
   await switchTo(profile.id);
  });
  window.addEventListener('online',()=>void sync());
- return {preference,plans,id:()=>active,suffix,render,sync,ready:()=>{ready=true;render();void sync();}};
+ return {name:()=>profiles.find(p=>p.id===active)?.name||'Profil domyślny',preference,plans,id:()=>active,suffix,render,sync,ready:()=>{ready=true;render();void sync();}};
 })();

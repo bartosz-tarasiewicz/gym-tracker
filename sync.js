@@ -302,67 +302,43 @@ window.GymCloud=(()=>{
    }
   }
  }
+ function rowFor(date,id){
+  if(id&&remote.get(id)?.record.date===date)return remote.get(id);
+  const matches=[...remote.values()].filter(row=>row.record.date===date);
+  return matches.length===1?matches[0]:null;
+ }
+ let replaying=false;
  async function sync(){
-  if(!principal||busy||blocked||importBusy)return;
+  if(!principal||busy||flushBusy||importBusy||replaying)return;
   busy=true;
-  try {
-   const snapshotBefore=dataSignature(getState());
-   const response=await request();
-   const now=serverRows(response);
-   remote=now;
-   if(!initialized){
-    const hadMeta=restore();
-    if(hadMeta){
-     if(blocked){
-      const pulled=await includeRemoteOnly(now);
-      status('conflict',pulled.added?'✓ Pobrano '+pulled.added+' brakujących treningów z Azure. Lokalne zmiany zachowano.':
-       '⚠ Istnieją różnice lokalne — niczego nie nadpisano.');
-      return;
-     }
-     // Fetch new cloud-only records first, before deriving pending local writes.
-     await includeRemoteOnly(now);
-     // Offline edits performed since the last completed read must be queued
-     // against the previously known per-workout revisions.
-     pendingSnapshot();
-    } else {
-     const own=getState(),cloud=cloudState(now);
-     const ownSignature=dataSignature(own),cloudSignature=dataSignature(cloud);
-     if(hasWorkoutData(own)&&hasWorkoutData(cloud)&&ownSignature!==cloudSignature){
-      const pulled=await includeRemoteOnly(now);
-      blocked=true;persist();
-      status('conflict',pulled.added
-       ?'✓ Pobrano '+pulled.added+' brakujących treningów z Azure; lokalne różnice zachowano.'
-       :'⚠ Dwa różne dzienniki — lokalnych wyników nie nadpisano.');
-      return;
-     }
-     if(hasWorkoutData(own)&&!hasWorkoutData(cloud)){
-      rowVersions(now);initialized=true;pendingSnapshot();await flushQueue();return;
-     }
-     rowVersions(now);initialized=true;await hydrate(cloud);status('synced','✓ Dane treningowe odczytane z Azure');return;
+  try{
+   remote=serverRows(await request());
+   const local=workoutRecords(getState()),combined=new Map(remote);
+   for(const [id,item] of local){
+    const cloud=remote.get(id);
+    if(!cloud&&!base.has(id)&&!item.isEmpty)combined.set(id,item);
+    const previous=base.get(id);
+    if(cloud&&!item.isEmpty&&cloud.sig!==item.sig&&previous?.sig!==item.sig){
+     const key=item.record.date+'|'+item.record.day;
+     const state=getState();
+     state.unsavedDates=[...new Set([...(state.unsavedDates||[]),key])];
     }
-    initialized=true;
-   } else {
-    await includeRemoteOnly(now);
-    pendingSnapshot();
    }
-   // If another device changed a record with no pending local changes, Azure
-   // wins. Pending local changes stay overlaid until their per-row ETag passes.
-   for(const [id,row] of now){if(!pending.has(id))base.set(id,{etag:row.etag,sig:row.sig,kind:row.kind});}
-   for(const id of [...base.keys()])if(!now.has(id)&&!pending.has(id))base.delete(id);
-   persist();
-   if(snapshotBefore!==dataSignature(getState())){
-    pendingSnapshot(); // incoming local edits won the race with the GET
-   }
-   const merged=overlayState(now);
-   if(dataSignature(merged)!==dataSignature(getState()))await hydrate(merged);
-   if(pending.size)await flushQueue();
-   else status('synced','✓ Aktualne dane pobrane z Azure');
+   await hydrate(cloudState(combined));
+   rowVersions(remote);initialized=true;blocked=false;
+   status('synced','✓ Aktualne dane pobrane z Azure');
   }catch(e){
-   status('offline',e.message==='AUTH_REQUIRED'
-    ?'⚠ Zaloguj się ponownie; lokalne zmiany są zachowane'
-    :'⚠ Brak połączenia z Azure — zmiany zapisują się lokalnie');
-   console.warn('Gym Cloud:',e.message);
+   status('offline','Brak połączenia z Azure. Dane na urządzeniu zostały zachowane.');
   }finally{busy=false;}
+  if(flag!=='synced'||window.gymSavingWorkout?.())return;
+  replaying=true;
+  try{
+   for(const [date,job] of Object.entries(getState().requestedSaves||{})){
+    if(job.owner!==owner||job.paused)continue;
+    const result=await saveWorkoutForDate(job.record,job.revision);
+    await window.gymCompleteQueuedSave(date,job,result);
+   }
+  }finally{replaying=false;}
  }
  async function login(){
   try {
@@ -376,7 +352,7 @@ window.GymCloud=(()=>{
    }
    principal=p;owner=id;
    localStorage.setItem(LAST_OWNER,owner);
-   if(blocked)await refreshMissingFromAzure();else await sync();
+   await sync();
   }catch{
    status('offline','Dane zapisane lokalnie · chmura niedostępna lub brak logowania');
   }
@@ -510,8 +486,8 @@ window.GymCloud=(()=>{
   owner=localStorage.getItem(LAST_OWNER)||null;
   if(owner){restore();await recoverPendingCache();}
   await login();
-  window.addEventListener('online',()=>{if(!principal)void login();else if(blocked)void refreshMissingFromAzure();else void sync();});
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(!principal)void login();else if(blocked)void refreshMissingFromAzure();else void sync();}});
+  window.addEventListener('online',()=>{if(!principal)void login();else void sync();});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(!principal)void login();else void sync();}});
  }
 
  // Standalone import: does not reconcile, delete, hydrate or overwrite the
@@ -641,8 +617,8 @@ window.GymCloud=(()=>{
 
  // A regular form Save: find the server record by workout date/day, not
  // by whatever historical identifier the browser happened to cache.
- async function saveWorkoutForDate(workout){
-  if(!principal)return {ok:false,reason:'Zaloguj się przez GitHub w zakładce Dane.'};
+ async function saveWorkoutForDate(workout,expectedRevision){
+  if(!principal)return {ok:false,retry:!!owner&&!navigator.onLine,reason:'Zaloguj się przez GitHub w zakładce Dane.'};
   if(!(await waitUntilAvailable()))return {ok:false,reason:'Trwa synchronizacja. Spróbuj ponownie.'};
   if(!workout||!/^\d{4}-\d{2}-\d{2}$/.test(workout.date||'')||
       ![-2,-1,0,1,2,3,5].includes(Number(workout.day)))
@@ -653,6 +629,7 @@ window.GymCloud=(()=>{
   importBusy=true;
   try{
    const snapshot=serverRows(await request());
+   remote=snapshot;
    const sameDay=[...snapshot.values()].filter(x=>x.record?.date===date);
    const selected=sameDay.find(x=>x.id===sourceId);
    if(sameDay.length>1&&!selected)
@@ -664,11 +641,15 @@ window.GymCloud=(()=>{
    const kind=existing?.kind||(id.startsWith('history:')?'history':'draft');
    const sig=recordSignature(id,kind,record);
    if(!existing||existing.sig!==sig){
+    if((existing?.etag??null)!==expectedRevision)
+     return {ok:false,conflict:true,reason:'Ten trening ma dwie wersje. Porównaj zmiany przed zapisem.'};
     try{
      await request('PUT',id,{record,expectedEtag:existing?.etag||null});
     }catch(e){
-     if(e.message==='REVISION_CONFLICT')
-      return {ok:false,reason:'Ten trening zmienił się właśnie na drugim urządzeniu. Otwórz go ponownie i zapisz aktualne wyniki.'};
+     if(e.message==='REVISION_CONFLICT'){
+      remote=serverRows(await request());
+      return {ok:false,conflict:true,reason:'Ten trening zmienił się na drugim urządzeniu. Porównaj zmiany.'};
+     }
      throw e;
     }
    }
@@ -689,7 +670,7 @@ window.GymCloud=(()=>{
    return {ok:true,id,kind,record,preserveDateRecords:sameDay.length>1,already:existing?.sig===sig};
   }catch(e){
    console.warn('Form workout save failed',e.message);
-   return {ok:false,reason:'Zapis do Azure nie powiódł się. Wyniki na tym urządzeniu pozostają bez zmian.'};
+   return {ok:false,retry:e.message!=='AUTH_REQUIRED'&&!/^HTTP_4/.test(e.message),reason:'Zapis do Azure nie powiódł się. Wyniki na tym urządzeniu pozostają bez zmian.'};
   }finally{importBusy=false;}
  }
 
@@ -820,8 +801,7 @@ window.GymCloud=(()=>{
  }
  async function refreshAutomatically(){
   if(!principal)return;
-  if(blocked)await refreshMissingFromAzure();
-  else await sync();
+  await sync();
  }
 
  async function prepareHistoryImport(){
@@ -840,5 +820,5 @@ window.GymCloud=(()=>{
    if(!response.ok)throw Error('unavailable');return {ok:true,...await response.json()};
   }catch{return {ok:false,reason:'Nie udało się pobrać wersji z Azure. Spróbuj ponownie po połączeniu.'};}
  }
- return {versions,isBusy:()=>busy||flushBusy||importBusy,init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,saveWorkoutForDate,exportDatabase,importDatabase,refreshAutomatically,getStatus:()=>flag};
+ return {rowFor,multiple:date=>[...remote.values()].filter(row=>row.record.date===date).length>1,matches:(row,record)=>{const copy=clone(record);delete copy.syncId;delete copy.restoreExpectedEtag;return row.sig===recordSignature(row.id,row.kind,copy);},owner:()=>owner,knownRevision:id=>base.get(id)?.etag??null,versions,isBusy:()=>busy||flushBusy||importBusy,init,schedule,markDeleted,action,html,prepareHistoryImport,importMissingHistory,uploadWorkoutById,saveWorkoutForDate,exportDatabase,importDatabase,refreshAutomatically,getStatus:()=>flag};
 })();
