@@ -719,7 +719,16 @@ function restTimerHTML(){
   '<button type="button" class="btn secondary small" id="rest-skip">Pomiń</button></div></div></details>'+
   '<button type="button" class="btn secondary small" id="rest-quick-start" aria-label="Uruchom przerwę '+Number(options.seconds||90)+' sekund">Start '+Number(options.seconds||90)+' s</button></div>';
 }
-function updateRestTimer(){const label=document.getElementById('rest-remaining');if(!label)return;const left=restUntil?Math.max(0,Math.ceil((restUntil-Date.now())/1000)):0;label.textContent=restUntil?Math.floor(left/60)+':'+String(left%60).padStart(2,'0'):'—';if(restUntil&&left===0&&!restAlerted){restAlerted=true;toast('Koniec przerwy');}}
+function updateRestTimer(){
+ const left=restUntil?Math.max(0,Math.ceil((restUntil-Date.now())/1000)):0;
+ const text=restUntil?Math.floor(left/60)+':'+String(left%60).padStart(2,'0'):'—';
+ for(const id of ['rest-remaining','active-rest-remaining']){
+  const label=document.getElementById(id);if(label)label.textContent=text;
+ }
+ const bar=document.getElementById('active-rest-bar');
+ if(bar)bar.hidden=left===0;
+ if(restUntil&&left===0&&!restAlerted){restAlerted=true;toast('Koniec przerwy');}
+}
 setInterval(updateRestTimer,1000);
 function lastCompletedVariant(item,machine){
  const records=[...state.history,...Object.values(state.sessions)].filter(h=>h.date<state.selectedDate&&h.exercises?.[item.id]).sort((a,b)=>b.date.localeCompare(a.date)||String(b.started||'').localeCompare(String(a.started||'')));
@@ -765,7 +774,7 @@ let advancedOpen=false;
 let exerciseQueueOpen=false;
 function trainHTML(){
  rememberDay();
- const calendar=GymWeek.html(state)+'<div class="hint">Profil: '+esc(GymProfiles.name())+'</div>'+conflictPanel(),d=state.activeDay;
+ const calendar=GymWeek.html(state)+conflictPanel(),d=state.activeDay;
  const standard=GymPlans.scheduled(state.selectedDate)?.dayType??GymWeek.dayIndex(state.selectedDate);
  const selectedOptions=TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+(x===standard?' (domyślnie)':'')+'</option>').join('');
  const dayProgress=[-1,3,-2].includes(d)?'':(()=>{
@@ -1050,10 +1059,11 @@ document.addEventListener('toggle',event=>{
 },true);
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
+ if(b.id==='profile-badge'){if(!savingWorkout)document.querySelector('.navitem[data-view="settings"]').click();return;}
  if(GymPlans.click(b))return;
  if(window.GymProgress?.handleClick?.(b,render))return;
  if(b.id==='rest-start'||b.id==='rest-quick-start'){restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();updateRestTimer();return;}
- if(b.id==='rest-skip'){restUntil=0;restAlerted=false;persistRestTimer();updateRestTimer();return;}
+ if(b.id==='rest-skip'||b.id==='active-rest-skip'){restUntil=0;restAlerted=false;persistRestTimer();updateRestTimer();return;}
  if(b.dataset.restAdjust!==undefined){if(restUntil){restUntil=Math.max(Date.now(),restUntil+Number(b.dataset.restAdjust)*1000);restAlerted=false;persistRestTimer();updateRestTimer();}return;}
  if(b.id==='quick-fill-set'){
   const {item}=currentItem(),v=currentVariant(item),suggestion=quickFillSuggestion(item,v);

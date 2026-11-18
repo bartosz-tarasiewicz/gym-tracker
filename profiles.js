@@ -44,6 +44,8 @@ window.GymProfiles=(()=>{
   settings=next;settingsDirty=true;clearTimeout(settingsTimer);settingsTimer=setTimeout(()=>void syncSettings(),500);
  }
  function render(){
+  const badge=document.getElementById('profile-badge'),name=profiles.find(p=>p.id===active)?.name||'Profil domyślny';
+  if(badge){badge.setAttribute('aria-label','Profil: '+name+'. Zmień profil');badge.title='Profil: '+name;document.getElementById('profile-badge-name').textContent=name;}
   const root=document.getElementById('profiles');if(!root)return;
   root.innerHTML='<label class="label" for="active-profile">Profil użytkownika</label><div class="inline-actions"><select class="equipment" id="active-profile" '+(!ready||changing?'disabled':'')+'>'+profiles.map(p=>'<option value="'+p.id+'" '+(p.id===active?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select><button type="button" class="btn secondary" id="add-profile" aria-expanded="'+formOpen+'" '+(changing?'disabled':'')+'>+ Dodaj profil</button></div><p class="hint">Treningi, historia i ustawienia dotyczą wybranego profilu.</p><p class="hint" role="status">'+esc(notice)+'</p>'+(formOpen?'<form id="profile-form"><label class="label" for="profile-name">Nazwa nowego profilu</label><input class="equipment" id="profile-name" name="profile-name" maxlength="60" required autocomplete="off" value="'+esc(profileName)+'"><p class="hint" id="profile-error" role="status">'+esc(formError||(!ready?'Wczytywanie danych. Za chwilę będzie można utworzyć profil.':''))+'</p><div class="inline-actions"><button class="btn" type="submit" '+(!ready||changing?'disabled':'')+'>Utwórz profil</button><button class="btn secondary" type="button" id="cancel-profile">Anuluj</button></div></form>':'');
  }
