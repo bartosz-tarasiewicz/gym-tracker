@@ -142,7 +142,9 @@ input::file-selector-button{background:var(--card);color:var(--ink);border:1px s
  background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:999px;min-height:44px;font-size:16px;font-weight:400;
 }
 .active-exercise .set-row>.set-edit-toggle{background:transparent;border:0;color:var(--muted);font-weight:400;border-radius:999px}
-.active-exercise .set-row>.set-edit-toggle::after{color:#85888c;font-size:10px}
+.active-exercise .set-row>.set-edit-toggle::after{content:"\270E\FE0E";color:#85888c;font-size:10px}
+.active-exercise input[type="number"]{appearance:textfield;-moz-appearance:textfield}
+.active-exercise input::-webkit-inner-spin-button,.active-exercise input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .active-exercise .set-row>.set-edit-toggle.selected{background:#e7e7e7;color:var(--ink)}
 .active-exercise .set-row .nudge-wrap button{background:var(--soft);color:var(--muted);border:0}
 .active-exercise .done-button,.active-exercise .set-row.is-next .done-button{
