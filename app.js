@@ -210,7 +210,7 @@ function selectDate(date){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime()))return;
  if(date===state.selectedDate)return;
  if(!abandonHistoryEdit())return;
- state.selectedDate=date;state.selectedRecordId='';exerciseOptionsOpen=false;restControlsOpen=false;advancedOpen=false;exerciseQueueOpen=false;
+ state.selectedDate=date;state.selectedRecordId='';exerciseOptionsOpen=false;advancedOpen=false;exerciseQueueOpen=false;
  state.activeDay=trainingTypeForDate(date,state);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
  save(false);render();
 }
@@ -723,12 +723,7 @@ function prepareRestAudio(){GymRestAlert.prepare();}
 function playRestSound(){GymRestAlert.play();}
 function restTimerHTML(){
  const options=restOptions();
- return '<div class="rest-timer-bar"><details class="rest-timer" '+(restControlsOpen?'open':'')+'><summary>⏱ Przerwa <strong id="rest-remaining">—</strong><span class="rest-hint">⌄</span></summary>'+
-  '<div class="rest-controls"><div class="inline-actions">'+
-  '<button type="button" class="btn secondary small" data-rest-adjust="-15">−15 s</button>'+
-  '<button type="button" class="btn secondary small" data-rest-adjust="15">+15 s</button>'+
-  '<button type="button" class="btn secondary small" id="rest-skip">Zakończ</button></div><button type="button" class="btn secondary small" id="open-rest-settings">Ustawienia przerw</button></div></details>'+
-  '<button type="button" class="btn secondary small" id="rest-quick-start" aria-label="Uruchom przerwę '+Number(options.seconds||90)+' sekund">Start '+Number(options.seconds||90)+' s</button></div>';
+ return '<div class="rest-timer-bar"><button type="button" class="btn secondary small" id="rest-quick-start" aria-label="Uruchom przerwę '+Number(options.seconds||90)+' sekund">Start '+Number(options.seconds||90)+' s</button></div>';
 }
 function restSettingsHTML(){
  const options=restOptions();
@@ -736,7 +731,8 @@ function restSettingsHTML(){
   '<label>Czas <select id="rest-duration" aria-label="Czas przerwy">'+[30,60,90,120,180,240].map(n=>'<option value="'+n+'" '+(n===Number(options.seconds)?'selected':'')+'>'+n+' s</option>').join('')+'</select></label>'+
   '<label><input type="checkbox" id="rest-auto" '+(options.auto?'checked':'')+'> Uruchamiaj po serii</label>'+
   '<label><input type="checkbox" id="rest-sound" '+(GymRestAlert.enabled()?'checked':'')+'> Dźwięk po przerwie</label></div>'+
-  '<div class="inline-actions"><button type="button" class="btn secondary small" id="rest-sound-test" '+(!GymRestAlert.enabled()?'disabled':'')+'>Sprawdź dźwięk</button><button type="button" class="btn secondary small" id="rest-sound-stop">Wycisz alarm</button></div></section>';
+  '<div class="inline-actions"><button type="button" class="btn secondary small" id="rest-sound-test" '+(!GymRestAlert.enabled()?'disabled':'')+'>Sprawdź dźwięk</button><button type="button" class="btn secondary small" id="rest-sound-stop">Wycisz alarm</button></div>'+
+  '<div id="rest-active-controls" hidden><p>Bieżąca przerwa <strong id="rest-remaining" role="timer" aria-live="off">—</strong></p><div class="inline-actions"><button type="button" class="btn secondary small" data-rest-adjust="-15">−15 s</button><button type="button" class="btn secondary small" data-rest-adjust="15">+15 s</button><button type="button" class="btn secondary small" id="rest-skip">Zakończ</button></div></div></section>';
 }
 function updateRestTimer(){
  const left=restUntil?Math.max(0,Math.ceil((restUntil-Date.now())/1000)):0;
@@ -746,6 +742,8 @@ function updateRestTimer(){
  }
  const bar=document.getElementById('active-rest-bar');
  if(bar)bar.hidden=left===0&&!GymRestAlert.isPlaying();
+ const controls=document.getElementById('rest-active-controls');
+ if(controls)controls.hidden=left===0;
  if(restUntil&&left===0&&!restAlerted){
   restAlerted=true;
   try{sessionStorage.setItem(restKey+'-alerted',String(restUntil));}catch{}
@@ -793,7 +791,6 @@ function nextUnfinishedExercise(){
 }
 function machineNoteKey(item,machine){return item.id+'|'+machine;}
 let exerciseOptionsOpen=false;
-let restControlsOpen=false;
 let advancedOpen=false;
 let exerciseQueueOpen=false;
 function trainHTML(){
@@ -1064,7 +1061,6 @@ function changeArea(area){state.activeArea=area;exerciseOptionsOpen=false;save(f
 document.addEventListener('toggle',event=>{
  if(!event.target.isConnected)return;
  if(event.target.matches('.exercise-options'))exerciseOptionsOpen=event.target.open;
- if(event.target.matches('.rest-timer'))restControlsOpen=event.target.open;
  if(event.target.matches('.train-additional'))advancedOpen=event.target.open;
  if(event.target.matches('.warmup-block')){
   warmupManual={key:quickSetKey(currentItem().item),open:event.target.open};
@@ -1077,7 +1073,6 @@ document.addEventListener('toggle',event=>{
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
  if(b.id==='profile-badge'){if(!savingWorkout)document.querySelector('.navitem[data-view="settings"]').click();return;}
- if(b.id==='open-rest-settings'){document.querySelector('.navitem[data-view="settings"]').click();document.getElementById('rest-settings')?.scrollIntoView({block:'start'});return;}
  if(GymPlans.click(b))return;
  if(window.GymProgress?.handleClick?.(b,render))return;
  if(b.id==='rest-sound-test'){GymRestAlert.play();updateRestTimer();return;}

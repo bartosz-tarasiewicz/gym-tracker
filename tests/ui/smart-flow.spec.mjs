@@ -40,21 +40,20 @@ test('starting work skips optional warmups and finishing preserves RIR and manua
  expect(db.store.size).toBe(0);
 });
 
-test('optional timer starts with one tap while settings remain collapsed',async({app:p})=>{
+test('optional timer starts with one tap while settings are available only in Data',async({app:p})=>{
  await date(p,'2026-11-09');
- await expect(p.locator('.rest-timer')).not.toHaveAttribute('open','');
+ await expect(p.locator('.rest-timer')).toHaveCount(0);
  await p.clock.install();
  await p.clock.pauseAt(new Date());
  await p.locator('#rest-quick-start').click();
- await expect(p.locator('#rest-remaining')).toHaveText('1:30');
- await expect(p.locator('.rest-timer')).not.toHaveAttribute('open','');
- await p.locator('.rest-timer > summary').click();
- await p.locator('#open-rest-settings').click();await p.locator('#rest-duration').selectOption('60');
+ await expect(p.locator('#active-rest-remaining')).toHaveText('1:30');
+ await expect(p.locator('.rest-timer')).toHaveCount(0);
+ await p.locator('[data-view="settings"]').click();await p.locator('#rest-duration').selectOption('60');
  await p.locator('#active-rest-skip').click();await p.locator('[data-view="train"]').click();
  await p.locator('#rest-quick-start').click();
- await expect(p.locator('#rest-remaining')).toHaveText('1:00');
+ await expect(p.locator('#active-rest-remaining')).toHaveText('1:00');
  await chooseExercise(p,1);
- await expect(p.locator('#rest-remaining')).toHaveText('1:00');
+ await expect(p.locator('#active-rest-remaining')).toHaveText('1:00');
 });
 
 test('quick controls fit a narrow phone viewport',async({app:p})=>{

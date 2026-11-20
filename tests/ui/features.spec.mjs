@@ -267,9 +267,9 @@ test('previous results ignore empty newer sessions and copying never confirms wo
 });
 
 test('rest timer is optional, starts after completion, survives rerenders and counts real elapsed time',async({app:p,db})=>{
- await date(p);await openRestControls(p);await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-auto').check();await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.restTimer?.auto).toBe(true);await p.locator('[data-view="train"]').click();await p.locator('.rest-timer>summary').click();await p.clock.install();await p.clock.pauseAt(new Date());
- await done(p).click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');await p.clock.fastForward(15000);await p.evaluate(()=>updateRestTimer());await expect(p.locator('#rest-remaining')).toHaveText('0:45');await p.locator('[data-rest-adjust="15"]').click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');
- await chooseExercise(p,1);await expect(p.locator('#rest-remaining')).toHaveText(/^(1:00|0:5[5-9])$/);await p.locator('#rest-skip').click();await expect(p.locator('#rest-remaining')).toHaveText('—');
+ await date(p);await openRestControls(p);await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-auto').check();await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.restTimer?.auto).toBe(true);await p.locator('[data-view="train"]').click();await p.clock.install();await p.clock.pauseAt(new Date());
+ await done(p).click();await expect(p.locator('#active-rest-remaining')).toHaveText('1:00');await p.clock.fastForward(15000);await p.evaluate(()=>updateRestTimer());await expect(p.locator('#active-rest-remaining')).toHaveText('0:45');await p.locator('[data-view="settings"]').click();await p.locator('[data-rest-adjust="15"]').click();await expect(p.locator('#active-rest-remaining')).toHaveText('1:00');
+ await p.locator('[data-view="train"]').click();await chooseExercise(p,1);await expect(p.locator('#active-rest-remaining')).toHaveText(/^(1:00|0:5[5-9])$/);await p.locator('#active-rest-skip').click();await expect(p.locator('#active-rest-bar')).toBeHidden();
 });
 
 test('machine note edited during synchronization is sent after the first save',async({app:p,db})=>{

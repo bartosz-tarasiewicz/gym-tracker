@@ -22,7 +22,7 @@ test('profile moves to header, status moves to footer, active rest stays visible
  await expect(p.locator('#active-rest-bar')).toBeVisible();
  await p.reload();await expect(p.locator('#active-rest-bar')).toBeVisible();
  await p.locator('#active-rest-skip').click();await expect(p.locator('#active-rest-bar')).toBeHidden();
- await p.locator('[data-view="train"]').click();await expect(p.locator('#rest-remaining')).toHaveText('—');
+ await p.locator('[data-view="train"]').click();await expect(p.locator('#active-rest-bar')).toBeHidden();
 });
 test('rest banner disappears at zero and respects safe area',async({app:p})=>{
  await date(p,'2026-11-09');await p.clock.install();

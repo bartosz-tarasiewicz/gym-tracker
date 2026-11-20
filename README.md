@@ -1,3 +1,8 @@
+## v0.27 — tylko Start przy ćwiczeniu
+
+- Przy ćwiczeniu pozostał wyłącznie przycisk Start. Ustawienia dźwięku, czasu i autostartu są w Danych. Tam również można skorygować bieżącą przerwę o 15 sekund; jej licznik i zatrzymywanie pozostają w nagłówku.
+- Usunięto stary ciemny styl sekcji „Poprzednio”; zwinięte i rozwinięte poprzednie wyniki mają jasne tło i czytelny tekst.
+
 ## v0.26 — mniej tekstu podczas treningu
 
 - Trening ma jeden licznik serii. Usunięto powtórzone nagłówki, procent, legendę kalendarza i opisy pod zapisem. Kolejna seria nadal jest podświetlana; wskazówka pozostaje dostępna dla czytników ekranu.

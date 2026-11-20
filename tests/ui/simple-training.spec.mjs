@@ -5,6 +5,8 @@ test('training shows essential controls and discloses rare actions deliberately'
  await expect(p.locator('#app')).not.toContainText(/Wybierz dzień treningu|domyślnie|wykonano|serii wykonanych/);
  await expect(p.locator('.week-bottom,.exercise-set-progress,.quick-fill-offer')).toHaveCount(0);
  await expect(p.locator('#rest-duration,#rest-auto,#rest-sound')).toHaveCount(0);
+ await expect(p.locator('.rest-timer-bar button')).toHaveCount(1);
+ await expect(p.locator('.rest-timer-bar details,.rest-timer-bar input,.rest-timer-bar select,#open-rest-settings')).toHaveCount(0);
  await expect(p.locator('.active-machine')).toBeVisible();
  await expect(p.locator('.active-machine')).toContainText('Talerze łącznie');
  await expect(p.locator('#markall')).toBeHidden();
@@ -25,7 +27,7 @@ test('training shows essential controls and discloses rare actions deliberately'
 
 test('rest preferences live in Data and drive training timer without changing workout',async({app:p,db})=>{
  await date(p,'2026-11-09');
- await p.locator('.rest-timer>summary').click();await p.locator('#open-rest-settings').click();
+ await p.locator('[data-view="settings"]').click();
  await expect(p.locator('#screen-title')).toHaveText('Dane');
  await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-auto').check();
  await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.restTimer?.seconds).toBe(60);
@@ -42,8 +44,11 @@ test('rest preferences live in Data and drive training timer without changing wo
 test('previous results start collapsed and copying still requires review and does not confirm sets',async({app:p,db})=>{
  seed(db);await p.reload();await date(p,'2026-11-20');
  await expect(p.locator('.previous-results')).not.toHaveAttribute('open','');
+ await expect(p.locator('.previous-results')).toHaveCSS('background-color','rgb(255, 255, 255)');
+ await expect(p.locator('.previous-results>summary')).toHaveCSS('color','rgb(101, 104, 108)');
  await expect(p.locator('#copy-previous')).toBeHidden();
  await p.locator('.previous-results>summary').click();await expect(p.locator('.previous-compact')).toContainText('60 kg × 12');
+ await p.screenshot({path:'test-results/previous-results-light.png'});
  p.once('dialog',d=>d.accept());await p.locator('#copy-previous').click();
  await expect(weight(p)).toHaveValue('60');await expect(reps(p)).toHaveValue('12');await expect(done(p)).not.toHaveClass(/checked/);
  expect(db.operations).toEqual([]);
