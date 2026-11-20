@@ -25,7 +25,7 @@ test('starting work skips optional warmups and finishing preserves RIR and manua
  const rows=p.locator('.done-button[data-type="work"]'),n=await rows.count();
  for(let i=1;i<n;i++)await rows.nth(i).click();
  await expect(p.locator('.set-row.is-next')).toHaveCount(0);
- await expect(p.locator('.exercise-finish')).toContainText('Serie robocze ukończone');
+ await expect(p.locator('.exercise-finish')).toContainText('Serie ukończone');
  await p.locator('[data-rir-quick="2"]').click();
  await expect(p.locator('[data-rir-quick="2"]')).toHaveAttribute('aria-pressed','true');
  await expect(p.locator('#rir')).toHaveValue('2');
@@ -49,8 +49,8 @@ test('optional timer starts with one tap while settings remain collapsed',async(
  await expect(p.locator('#rest-remaining')).toHaveText('1:30');
  await expect(p.locator('.rest-timer')).not.toHaveAttribute('open','');
  await p.locator('.rest-timer > summary').click();
- await p.locator('#rest-duration').selectOption('60');
- await p.locator('#rest-skip').click();
+ await p.locator('#open-rest-settings').click();await p.locator('#rest-duration').selectOption('60');
+ await p.locator('#active-rest-skip').click();await p.locator('[data-view="train"]').click();
  await p.locator('#rest-quick-start').click();
  await expect(p.locator('#rest-remaining')).toHaveText('1:00');
  await chooseExercise(p,1);

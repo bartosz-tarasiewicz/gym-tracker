@@ -1,6 +1,6 @@
 import {test,expect,date} from './fixtures.mjs';
 async function controls(p){
- await date(p,'2026-11-09');await p.locator('.rest-timer>summary').click();
+ await expect.poll(()=>p.evaluate(()=>GymCloud.isBusy())).toBe(false);await p.locator('[data-view="settings"]').click();
 }
 test('old audio opt-in is disabled; finite clip stops naturally and can be muted immediately',async({app:p,browserName})=>{
  await p.evaluate(()=>GymProfiles.preference('restTimer',{seconds:90,sound:true}));
@@ -52,7 +52,7 @@ test('stalled playback has a hard deadline and late promises cannot restart it',
 test('timer completion is consumed once and overdue background timers do not replay an alarm',async({app:p})=>{
  await controls(p);await p.clock.install();await p.locator('#rest-sound').check();
  await p.evaluate(()=>{window.alarmCalls=0;GymRestAlert.play=()=>{window.alarmCalls++;};});
- await p.locator('#rest-quick-start').click();
+ await p.locator('[data-view="train"]').click();await date(p,'2026-11-09');await p.locator('#rest-quick-start').click();
  await p.clock.fastForward(90000);
  expect(await p.evaluate(()=>alarmCalls)).toBe(1);
  await p.clock.fastForward(10000);expect(await p.evaluate(()=>alarmCalls)).toBe(1);

@@ -7,15 +7,13 @@ test('mobile focus: compact navigation keeps one active exercise visible',async(
  await expect(queue).not.toHaveAttribute('open','');
  await expect(p.locator('.exercise-tab:visible')).toHaveCount(0);
  await expect(p.locator('.active-exercise')).toHaveCount(1);
- await expect(p.locator('.exercise-set-progress')).toContainText('0 / 4 serii');
- await expect(queue.locator('.queue-dot')).toHaveCount(4);
- await expect(queue.locator('summary')).toContainText('0 z 4 ukończonych');
- await expect(p.locator('.train-area-switch [data-area="main"]')).toHaveAttribute('aria-pressed','true');
- await expect(p.locator('.train-area-switch [data-area="core"]')).toHaveAttribute('aria-pressed','false');
+ await expect(p.locator('.day-progress')).toContainText('0 / 12 serii');
+ await expect(p.locator('.exercise-set-progress')).toHaveCount(0);
+ await expect(queue.locator('summary')).toContainText('1 / 4');
  await chooseExercise(p,1);
  await expect(queue).not.toHaveAttribute('open','');
  await expect(p.locator('.active-exercise .title')).toContainText('Wyciskanie na skosie');
- await expect(p.locator('.exercise-set-progress')).toContainText('0 / 3 serii');
+ await expect(queue.locator('summary')).toContainText('2 / 4');
  expect(db.store.size).toBe(0);
 });
 
@@ -26,12 +24,12 @@ test('expanding the exercise list survives series completion but selecting a new
  await expect(queue).toHaveAttribute('open','');
  await done(p).click();
  await expect(queue).toHaveAttribute('open','');
- await expect(p.locator('.exercise-set-progress')).toContainText('1 / 4 serii');
+ await expect(p.locator('.day-progress')).toContainText('1 / 12 serii');
  await p.locator('[data-item="2"]').click();
  await expect(queue).not.toHaveAttribute('open','');
  await expect(p.locator('.active-exercise .title')).toContainText('Rozpiętki');
  await queue.locator('summary').click();
- await expect(queue.locator('.queue-dot.selected')).toHaveCount(1);
+ await expect(queue.locator('[aria-current="step"]')).toHaveCount(1);
  await date(p,'2026-11-10');
  await expect(queue).not.toHaveAttribute('open','');
  expect(db.store.size).toBe(0);
@@ -39,10 +37,9 @@ test('expanding the exercise list survives series completion but selecting a new
 
 test('focus mode works with CORE and no overlaying Save button',async({app:p})=>{
  await date(p,'2026-11-09');
- await p.locator('[data-area="core"]').click();
+ await p.locator('.training-more>summary').click();await p.locator('[data-area="core"]').click();
  await expect(p.locator('.exercise-queue')).toHaveCount(0);
  await expect(p.locator('.core-choice')).toHaveCount(10);
- await expect(p.locator('.train-area-switch [data-area="core"]')).toHaveAttribute('aria-pressed','true');
  await expect(p.locator('.active-exercise')).toHaveCount(1);
  await expect(p.locator('.train-save-dock')).toHaveCount(0);
  await expect(p.locator('.train-save-section #save-training')).toBeVisible();

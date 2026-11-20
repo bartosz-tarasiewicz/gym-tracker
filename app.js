@@ -122,7 +122,7 @@ function rememberDay(){
  state.undoDays=state.undoDays||{};
  if(!dirty)state.undoDays[date]=cloneWorkout(dayCopy(date));
 }
-function undoDayHTML(){return '<button type="button" id="undo-training" class="btn secondary full" style="margin-top:8px" '+(!state.undoDays?.[state.selectedDate]?'disabled':'')+'>↶ Cofnij zmiany</button><p class="hint">Przywraca ostatni zapis wybranego dnia. Nie zmienia danych w Azure.</p>';}
+function undoDayHTML(){return '<button type="button" id="undo-training" class="btn secondary full" '+(!state.undoDays?.[state.selectedDate]?'disabled':'')+'>Cofnij zmiany</button>';}
 async function undoSelectedDay(){
  if(savingWorkout)return;
  const requestedDate=state.selectedDate;
@@ -724,16 +724,19 @@ function playRestSound(){GymRestAlert.play();}
 function restTimerHTML(){
  const options=restOptions();
  return '<div class="rest-timer-bar"><details class="rest-timer" '+(restControlsOpen?'open':'')+'><summary>⏱ Przerwa <strong id="rest-remaining">—</strong><span class="rest-hint">⌄</span></summary>'+
-  '<div class="rest-controls"><label>Czas <select id="rest-duration" aria-label="Czas przerwy">'+[30,60,90,120,180,240].map(n=>'<option value="'+n+'" '+(n===Number(options.seconds)?'selected':'')+'>'+n+' s</option>').join('')+'</select></label>'+
-  '<label><input type="checkbox" id="rest-auto" '+(options.auto?'checked':'')+'> Auto po serii</label>'+
-  '<label><input type="checkbox" id="rest-sound" '+(GymRestAlert.enabled()?'checked':'')+'> Dźwięk po przerwie</label>'+
-  '<div class="inline-actions"><button type="button" class="btn secondary small" id="rest-sound-test" '+(!GymRestAlert.enabled()?'disabled':'')+'>Sprawdź dźwięk</button><button type="button" class="btn secondary small" id="rest-sound-stop">Wycisz alarm</button></div>'+
-  '<p class="hint">Dźwięk wymaga ponownego włączenia po aktualizacji. Najpierw sprawdź go na tym telefonie.</p>'+
-  '<div class="inline-actions"><button type="button" class="btn secondary small" id="rest-start">Start</button>'+
+  '<div class="rest-controls"><div class="inline-actions">'+
   '<button type="button" class="btn secondary small" data-rest-adjust="-15">−15 s</button>'+
   '<button type="button" class="btn secondary small" data-rest-adjust="15">+15 s</button>'+
-  '<button type="button" class="btn secondary small" id="rest-skip">Pomiń</button></div></div></details>'+
+  '<button type="button" class="btn secondary small" id="rest-skip">Zakończ</button></div><button type="button" class="btn secondary small" id="open-rest-settings">Ustawienia przerw</button></div></details>'+
   '<button type="button" class="btn secondary small" id="rest-quick-start" aria-label="Uruchom przerwę '+Number(options.seconds||90)+' sekund">Start '+Number(options.seconds||90)+' s</button></div>';
+}
+function restSettingsHTML(){
+ const options=restOptions();
+ return '<section class="panel data-rest" id="rest-settings"><h2>Przerwy</h2><div class="rest-settings-controls">'+
+  '<label>Czas <select id="rest-duration" aria-label="Czas przerwy">'+[30,60,90,120,180,240].map(n=>'<option value="'+n+'" '+(n===Number(options.seconds)?'selected':'')+'>'+n+' s</option>').join('')+'</select></label>'+
+  '<label><input type="checkbox" id="rest-auto" '+(options.auto?'checked':'')+'> Uruchamiaj po serii</label>'+
+  '<label><input type="checkbox" id="rest-sound" '+(GymRestAlert.enabled()?'checked':'')+'> Dźwięk po przerwie</label></div>'+
+  '<div class="inline-actions"><button type="button" class="btn secondary small" id="rest-sound-test" '+(!GymRestAlert.enabled()?'disabled':'')+'>Sprawdź dźwięk</button><button type="button" class="btn secondary small" id="rest-sound-stop">Wycisz alarm</button></div></section>';
 }
 function updateRestTimer(){
  const left=restUntil?Math.max(0,Math.ceil((restUntil-Date.now())/1000)):0;
@@ -796,11 +799,10 @@ let exerciseQueueOpen=false;
 function trainHTML(){
  rememberDay();
  const calendar=GymWeek.html(state)+conflictPanel(),d=state.activeDay;
- const standard=GymPlans.scheduled(state.selectedDate)?.dayType??GymWeek.dayIndex(state.selectedDate);
- const selectedOptions=TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+(x===standard?' (domyślnie)':'')+'</option>').join('');
+ const selectedOptions=TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+'</option>').join('');
  const dayProgress=[-1,3,-2].includes(d)?'':(()=>{
   const progress=summary(),percent=progress.planned?Math.round(progress.done/progress.planned*100):0;
-  return '<div class="day-progress"><span>'+progress.done+' / '+progress.planned+' serii wykonanych</span><div class="meter"><div style="width:'+percent+'%"></div></div><strong>'+percent+'%</strong></div>';
+  return '<div class="day-progress"><span>'+progress.done+' / '+progress.planned+' serii</span><div class="meter"><div style="width:'+percent+'%"></div></div></div>';
  })();
  // Workout type changes the activity on this date; plan variants change only the exercise list.
  // Hide the latter unless the user has an alternative plan for the active day type.
@@ -812,7 +814,7 @@ function trainHTML(){
   '<details class="train-plan-choices"><summary>Zmień zestaw ćwiczeń</summary>'+planSelector()+'</details>':'';
  const typeSelector='<section class="panel train-day-summary"><div class="train-day-header"><div class="day-title">'+
   '<h1>'+esc([-1,3,-2].includes(d)?trainingName(d):currentPlan.name)+'</h1></div>'+
-  '<label class="train-type-control"><span>Zmień trening</span><select id="workout-type" aria-label="Rodzaj treningu">'+selectedOptions+'</select></label></div>'+
+  '<label class="train-type-control"><span>Zmień</span><select id="workout-type" aria-label="Rodzaj treningu">'+selectedOptions+'</select></label></div>'+
   dayProgress+variantControl+'</section>';
  if([-1,3,-2].includes(d)){
   const note=storedDay()?.notes||'';
@@ -821,10 +823,10 @@ function trainHTML(){
   return calendar+typeSelector+'<p class="hint">'+esc(details)+'</p>'+
    '<div class="panel training-notes"><label class="label" for="notes">Notatka do dnia</label>'+
    '<textarea class="notes" id="notes" placeholder="Opcjonalny opis dnia lub aktywności…">'+esc(note)+'</textarea>'+
-   '<details class="train-additional" '+(advancedOpen?'open':'')+' ><summary>Cofnij zmiany i historia wersji</summary>'+undoDayHTML()+versionsHTML()+'</details></div>'+
-   '<section class="panel train-save-section" aria-label="Zapis dnia"><button type="button" id="save-training" class="btn full save-training-btn">✓ Zapisz dzień w Azure</button><p class="hint">Zapisz dzień w bazie, gdy skończysz edycję.</p></section>';
+   '<details class="train-additional" '+(advancedOpen?'open':'')+' ><summary>Historia zapisów</summary>'+versionsHTML()+'</details></div>'+
+   '<section class="panel train-save-section" aria-label="Zapis dnia"><button type="button" id="save-training" class="btn full save-training-btn">Zapisz dzień</button>'+undoDayHTML()+'</section>';
  }
- const s=activeSession(),day=activePlan(),{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item),m=MACHINE[log.machine]||MACHINE.BODY,sum=summary();
+ const s=activeSession(),day=activePlan(),{item,index,list}=currentItem(),log=exerciseLog(item),v=currentVariant(item);
  const old=selectedDayReports(),saved=storedDay(),coreActive=state.activeArea==='core',enabled=isCoreEnabled(item);
  const tabs=day.items.map((e,i)=>{
   const done=counted(e);
@@ -836,58 +838,52 @@ function trainHTML(){
  const coreTabs=CORE.map((e,i)=>'<button type="button" class="core-choice '+(coreActive&&index===i?'active':'')+'" data-core="'+i+'">'+(isCoreEnabled(e)?'✓ ':'＋ ')+esc(e.title)+'</button>').join('');
  const choices=availableMachineOptions(item).map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" aria-pressed="'+(log.machine===k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k))+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
  const previous=lastCompletedVariant(item,log.machine),oldRows=previous?.rows||[];
- const preview=oldRows.length?'<div class="previous-compact"><div><strong>Poprzednio · '+esc(previous.record.date)+'</strong><span>'+oldRows.slice(0,4).map(x=>esc(x.kg||'0')+' kg × '+esc(x.reps)).join(' · ')+(oldRows.length>4?' …':'')+'</span></div><button type="button" class="btn secondary small" id="copy-previous">Użyj</button></div>':
+ const preview=oldRows.length?'<details class="previous-results"><summary>Poprzednio <span>'+esc(previous.record.date)+'</span></summary><div class="previous-compact"><div><span>'+oldRows.slice(0,4).map(x=>esc(x.kg||'0')+' kg × '+esc(x.reps)).join(' · ')+(oldRows.length>4?' …':'')+'</span></div><button type="button" class="btn secondary small" id="copy-previous">Uzupełnij pola</button></div></details>':
   '';
  const machineNotes=window.GymProfiles?.preference('machineNotes')||{};
- const machineNote='<label class="label" for="machine-note">Ustawienia maszyny / notatka do wariantu</label><textarea id="machine-note" class="notes" maxlength="150" placeholder="Np. wysokość siedziska, ustawienie uchwytów">'+esc(machineNotes[machineNoteKey(item,log.machine)]||'')+'</textarea><p class="hint">Zapamiętywane dla tego profilu, ćwiczenia i wariantu.</p>';
+ const machineNote='<label class="label" for="machine-note">Ustawienia maszyny</label><textarea id="machine-note" class="notes" maxlength="150" placeholder="Np. wysokość siedziska, ustawienie uchwytów">'+esc(machineNotes[machineNoteKey(item,log.machine)]||'')+'</textarea>';
  const switcher=old.length>1?'<div class="panel"><label class="label" for="session-picker">Kilka treningów tego dnia — wybierz do edycji</label><select class="equipment" id="session-picker">'+old.map((h,i)=>'<option value="'+esc(h.syncId||'')+'" '+(s===h?'selected':'')+'>Sesja '+(i+1)+' · '+esc(h.started?.slice(11,16)||h.date)+'</option>').join('')+'</select></div>':'';
- const todayBlock='<section class="hero compact-hero"><div class="eyebrow">'+esc(state.selectedDate)+' · '+(saved?'Istniejący zapis':'Nowy trening')+'</div><h1>'+esc(day.name)+'</h1><p class="muted">'+(savedHistoryRecord()?'Popraw wyniki i wybierz „Zapisz zmiany”. Zastąpisz istniejący wpis bez duplikatu.':saved?'Rozpoczęte serie zapisują się automatycznie.':'Wartości startowe są podpowiedzią. Dopiero wpisana zmiana lub potwierdzona seria utworzy zapis.')+'</p></section>';
- const overview='<div class="panel workout-overview"><div class="flex"><div><div class="eyebrow">Wykonane serie</div><div class="title">'+sum.done+'<span class="muted"> / '+sum.planned+'</span></div></div><span class="chip">'+esc(state.selectedDate)+'</span></div><div class="meter"><div style="width:'+(sum.planned?Math.round(100*sum.done/sum.planned):0)+'%"></div></div><p class="hint">Główne: '+sum.mainDone+' · CORE: '+sum.coreDone+'</p></div>';
  const chooseArea='<div class="train-area-switch" role="group" aria-label="Obszar treningu"><button class="btn '+(coreActive?'secondary':'')+'" data-area="main" aria-pressed="'+!coreActive+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 5v14M3 8v8M18 5v14M21 8v8M6 12h12"/></svg> Trening</button><button class="btn '+(!coreActive?'secondary':'')+'" data-area="core" aria-pressed="'+coreActive+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="5"/><path d="M6 9h12M6 15h12M12 3v18"/></svg> CORE</button></div>';
- const completeExercises=day.items.filter(e=>counted(e)>=e.work.length).length;
- const queueDots=day.items.map((e,i)=>'<span class="queue-dot '+(counted(e)>=e.work.length?'complete':'')+(i===state.activeExercise?' selected':'')+'"></span>').join('');
- const queueSummary='<summary><span class="queue-summary-text"><strong>Lista ćwiczeń</strong><small>'+completeExercises+' z '+day.items.length+' ukończonych · wybrane '+(state.activeExercise+1)+'/'+day.items.length+'</small></span>'+
-  '<span class="queue-dots" aria-hidden="true">'+queueDots+'</span><span class="queue-chevron" aria-hidden="true">⌄</span></summary>';
- const chooser=coreActive?'<div class="panel core-choice-panel"><div class="eyebrow">Wybierz ćwiczenie CORE</div><p class="hint">Ćwiczenia opcjonalne. Nieaktywne nie są liczone do planu.</p><div class="core-chooser">'+coreTabs+'</div></div>':
+ const queueSummary='<summary><span class="queue-summary-text"><strong>Ćwiczenia</strong><small>'+(state.activeExercise+1)+' / '+day.items.length+'</small></span><span class="queue-chevron" aria-hidden="true">⌄</span></summary>';
+ const chooser=coreActive?'<div class="panel core-choice-panel"><div class="eyebrow">CORE</div><div class="core-chooser">'+coreTabs+'</div></div>':
   '<details class="exercise-queue" '+(exerciseQueueOpen?'open':'')+'>'+queueSummary+'<div class="exercise-strip">'+tabs+'</div></details>';
  const photoSection=exerciseMediaHTML(item,log.machine);
  const selectedVariants='<div class="label" id="machine-label">Maszyna / hantle / zamiennik</div><div class="machine-options" role="group" aria-labelledby="machine-label">'+choices+'</div>';
  const quickFill=quickFillSuggestion(item,v);
- const quickFillHTML=quickFill?'<div class="quick-fill-offer"><span>Do serii S'+(quickFill.index+1)+' z '+esc(quickFill.source)+': <strong>'+esc(quickFill.kg||'0')+' kg × '+esc(quickFill.reps)+'</strong></span><button type="button" class="btn secondary small" id="quick-fill-set" data-target-set="'+quickFill.index+'" aria-label="Wstaw wartości do serii S'+(quickFill.index+1)+'">Wstaw</button></div>':'';
+ const quickFillHTML=quickFill?'<button type="button" class="btn secondary small" id="quick-fill-set" data-target-set="'+quickFill.index+'" title="Z '+esc(quickFill.source)+'" aria-label="Wstaw wartości do serii S'+(quickFill.index+1)+'">Powtórz do S'+(quickFill.index+1)+': '+esc(quickFill.kg||'0')+' kg × '+esc(quickFill.reps)+'</button>':'';
  const finishedWork=v.sets?.length>0&&v.sets.every(x=>x.done);
  const nextWork=finishedWork&&!coreActive?nextUnfinishedExercise():null;
- const completionHTML=finishedWork?'<div class="exercise-finish" role="status">✓ Serie robocze ukończone. Uzupełnij RIR lub popraw wynik.'+
+ const completionHTML=finishedWork?'<div class="exercise-finish" role="status">✓ Serie ukończone'+
   (nextWork?'<button type="button" class="btn full next-unfinished" data-next-unfinished="'+nextWork.index+'">Dalej: '+esc(nextWork.title)+' →</button>':
-   (!coreActive?'<p>Wszystkie główne ćwiczenia ukończone. Zapisz trening w Azure.</p>':''))+'</div>':'';
+   (!coreActive?'<p>Trening ukończony. Zapisz wyniki.</p>':''))+'</div>':'';
 
  const warmDone=(v.warmups||[]).filter(x=>x.done).length,showWarmups=warmupOpenFor(item,v);
  const warmupBlock=v.warmups?.length?'<details class="warmup-block" '+(showWarmups?'open':'')+'>'+
-  '<summary><span><strong>Rozgrzewka</strong><small>'+warmDone+' / '+v.warmups.length+' ukończonych · opcjonalna</small></span>'+
+  '<summary><span><strong>Rozgrzewka</strong><small>'+warmDone+' / '+v.warmups.length+'</small></span>'+
   '<span class="warmup-chevron" aria-hidden="true">⌄</span></summary>'+
-  '<div class="warmup-body"><div class="set-head"><span>R</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+
+  '<div class="warmup-body"><div class="set-head"><span>R</span><span>kg</span><span>'+esc(measure(item))+'</span><span>✓</span></div>'+
   setsHTML(v.warmups,'warm',item)+'</div></details>':'';
  const sets=restTimerHTML()+preview+
-  '<div class="next-set-guide" role="status" aria-live="polite">'+nextSetGuideHTML(item,v)+'</div>'+warmupBlock+
-  '<div class="section-header"><strong>Serie robocze</strong><span class="smallcaps">'+v.sets.filter(x=>x.done).length+' wykonano</span></div>'+quickFillHTML+'<div class="set-head"><span>S</span><span>Ciężar, kg</span><span>Powt./czas</span><span>OK</span></div>'+setsHTML(v.sets,'work',item)+
-  '<div class="inline-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><button type="button" class="btn secondary small" id="markall">✓ Potwierdź wszystkie wpisane</button></div>'+
+  '<div class="next-set-guide sr-only" role="status" aria-live="polite">'+nextSetGuideHTML(item,v)+'</div>'+warmupBlock+
+  '<div class="set-head"><span>Seria</span><span>kg</span><span>'+esc(measure(item))+'</span><span>✓</span></div>'+setsHTML(v.sets,'work',item)+
+  '<div class="inline-actions set-extra-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><details class="training-more"><summary>Więcej</summary><div class="more-actions">'+quickFillHTML+'<button type="button" class="btn secondary small" id="markall">Potwierdź wszystkie</button>'+(!coreActive?'<button type="button" class="btn secondary small" data-area="core">Dodaj CORE</button>':'')+'</div></details></div>'+
   '<div class="rir-quick-row"><span class="rir-short-label">RIR</span><div class="rir-shortcuts" role="group" aria-label="Szybki wybór RIR">'+
   ['0','1','2','3+'].map(x=>'<button type="button" class="rir-chip '+(v.rir===x?'active':'')+'" data-rir-quick="'+x+'" aria-pressed="'+(v.rir===x)+'">'+x+'</button>').join('')+
   '</div><select id="rir" class="rir-select" aria-label="RIR lub inna ocena"><option value="">Inna ocena…</option>'+
   ['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>'<option value="'+x+'" '+(v.rir===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div>'+
   completionHTML;
- const exercise='<div class="panel active-exercise"><div class="exercise-head"><span class="exercise-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 5v14M3 8v8M18 5v14M21 8v8M6 12h12"/></svg></span><div class="exercise-identity"><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><h2 class="title">'+esc(item.title)+'</h2>'+
-  '<p class="active-machine">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p></div><span class="exercise-set-progress">'+(v.sets||[]).filter(x=>x.done).length+' / '+(v.sets||[]).length+' serii</span></div>'+
+ const exercise='<div class="panel active-exercise"><div class="exercise-head"><span class="exercise-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 5v14M3 8v8M18 5v14M21 8v8M6 12h12"/></svg></span><div class="exercise-identity"><h2 class="title">'+esc(item.title)+'</h2>'+
+  '<p class="active-machine">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p></div></div>'+
   (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
-  '<details class="exercise-options" '+(exerciseOptionsOpen?'open':'')+'><summary>Sprzęt, zamienniki i zdjęcia</summary><div class="exercise-option-content">'+
-  '<p class="hint">Dotknij S1 lub R1, aby otworzyć szybką korektę ciężaru i powtórzeń. Każdy wariant sprzętu ma osobne wyniki.</p>'+selectedVariants+photoSection+machineNote+'</div></details>'+
+  '<details class="exercise-options" '+(exerciseOptionsOpen?'open':'')+'><summary aria-label="Sprzęt, zamienniki, zdjęcia i notatka" title="Opcje ćwiczenia">⋯</summary><div class="exercise-option-content">'+
+  selectedVariants+photoSection+machineNote+'</div></details>'+
   (coreActive&&!enabled?'<p class="hint">Dodaj ćwiczenie do treningu, aby zapisywać serie.</p>':sets)+
   '<div class="stepper"><button class="btn secondary" id="prev" aria-label="Poprzednie ćwiczenie" '+(index===0?'disabled':'')+'>←</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne ćwiczenie →</button></div></div>';
- const isHistory=!!savedHistoryRecord();
  const notes='<div class="panel training-notes"><details class="train-additional" '+(advancedOpen?'open':'')+' ><summary>Notatki i historia zapisów</summary>'+
   '<label class="label" for="notes">Notatki do treningu</label><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, uwagi…">'+esc(s.notes||'')+'</textarea>'+
-  undoDayHTML()+versionsHTML()+'</details></div>';
- const saveSection='<section class="panel train-save-section" aria-label="Zapis treningu"><button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'✓ Zapisz zmiany w Azure':'✓ Zapisz trening w Azure')+'</button><p class="hint">Zmiany są lokalne, dopóki nie zapiszesz ich w Azure.</p></section>';
- return calendar+typeSelector+switcher+chooseArea+chooser+exercise+notes+saveSection;
+  versionsHTML()+'</details></div>';
+ const saveSection='<section class="panel train-save-section" aria-label="Zapis treningu"><button type="button" id="save-training" class="btn full save-training-btn">'+(saved?'Zapisz zmiany':'Zapisz trening')+'</button>'+undoDayHTML()+'</section>';
+ return calendar+typeSelector+switcher+(coreActive?chooseArea:'')+chooser+exercise+notes+saveSection;
 }
 let versionHistory=null;
 function selectedCloudId(){const record=storedDay();if(!record)return '';if(record.syncId)return record.syncId;const entry=Object.entries(state.sessions).find(([,r])=>r===record);return entry?'draft:'+entry[0]:'';}
@@ -916,19 +912,19 @@ function renderSaveStatus(){const el=document.getElementById('cloud-save-status'
 function renderCloudPanel(){const panel=document.getElementById('cloud-panel');if(panel)panel.innerHTML=window.GymCloud?.html?.()||'';}
 function settingsHTML(){
  return '<section id="profiles" class="panel" aria-label="Profile użytkowników"></section>'+
-  '<section class="hero"><div class="eyebrow">Dane</div><h1>Import i eksport</h1>'+
-  '<p class="muted">Dane treningów przechowujemy w Azure. Poniższe operacje dotyczą wyłącznie bazy aktywnego profilu.</p></section>'+
-  '<div class="panel"><h2>Import danych</h2>'+
-  '<p class="muted">Treningi z pliku <strong>nadpiszą treningi o tych samych datach</strong>. Brakujące zostaną dodane. Daty, których nie ma w pliku, pozostaną bez zmian.</p>'+
-  '<label class="label" for="import-database">Wybierz plik JSON</label>'+
-  '<input type="file" id="import-database" accept="application/json,.json" style="width:100%;margin:12px 0">'+
-  '<p class="hint">Przed importem zobaczysz liczbę aktualizowanych i dodawanych treningów. Import nigdy nie usuwa innych dat.</p></div>'+
-  '<div class="panel"><h2>Eksport bazy aktywnego profilu</h2>'+
-  '<p class="muted">Pobieramy aktualne rekordy bezpośrednio z Azure, a nie wyłącznie dane przechowywane na tym urządzeniu.</p>'+
+  restSettingsHTML()+
+  '<section class="panel"><h2>Kopie danych</h2>'+
   '<div class="inline-actions"><button class="btn" id="export">↓ Baza profilu JSON</button>'+
   '<button class="btn secondary" id="exportcsv">↓ Baza profilu CSV</button></div>'+
-  '<p class="hint">JSON zachowuje bieżące treningi i nadaje się do późniejszego importu. CSV zawiera ćwiczenia, serie i notatki. Historia wcześniejszych zapisów pozostaje w Azure; kopię biblioteki planów pobierzesz w zakładce Plany.</p></div>'+
-  '<div class="panel"><h2>Kopia z tego urządzenia</h2><p class="hint">Działa także offline. Zawiera zapisane lokalnie treningi i niezapisane zmiany nowych treningów. Otwarte poprawki historycznego treningu wymagają wcześniejszego zapisu.</p><button class="btn secondary" id="export-local">↓ Kopia lokalna JSON</button></div>'+
+  '<button class="btn secondary" id="export-local">↓ Kopia lokalna JSON</button>'+
+  '<details class="data-help"><summary>Co zawierają kopie?</summary><p>JSON i CSV pobierają bieżące treningi aktywnego profilu z Azure. JSON można ponownie importować; CSV zawiera ćwiczenia, serie i notatki. Historia wersji pozostaje w Azure. Biblioteka planów jest w zakładce Plany.</p><p>Kopia lokalna działa offline. Zawiera zapisane na urządzeniu treningi i szkice nowych treningów. Poprawki otwartego historycznego treningu wymagają wcześniejszego zapisu.</p></details></section>'+
+  '<section class="panel"><h2>Import danych</h2><label class="label" for="import-database">Plik JSON</label>'+
+  '<input type="file" id="import-database" accept="application/json,.json" style="width:100%;margin:12px 0">'+
+  '<details class="data-help"><summary>Jak działa import?</summary><p>Dotyczy aktywnego profilu. Treningi z pliku nadpiszą treningi o tych samych datach; brakujące zostaną dodane. Pozostałe daty pozostaną bez zmian. Przed zatwierdzeniem zobaczysz zakres zmian.</p></details></section>'+
+  '<section class="panel"><h2>Pomoc</h2><details class="data-help"><summary>Serie, ciężar i RIR</summary><p>Wartości w polach są podpowiedzią. Zaznacz ✓ po wykonaniu serii. Rozgrzewka jest opcjonalna. Dotknij numeru serii, aby otworzyć szybką korektę.</p><p>Sposób liczenia ciężaru widzisz przy sprzęcie. Każdy wariant sprzętu ma osobne wyniki. Ustawienia maszyny są zapamiętywane dla profilu i wariantu.</p><p>RIR to liczba powtórzeń, które zostały w zapasie po ostatniej serii: 0 oznacza brak zapasu, 3+ — co najmniej trzy.</p></details>'+
+  '<details class="data-help"><summary>Zapis i synchronizacja</summary><p>Edycja pozostaje na urządzeniu, dopóki nie wybierzesz Zapisz. Bez internetu żądanie zapisu czeka na połączenie. Cofnij zmiany przywraca ostatni zapis dnia; nie zmienia Azure.</p><p>Gdy dwa urządzenia zmienią ten sam trening, aplikacja pokaże porównanie przed nadpisaniem. Informacje o konflikcie i nieudanym zapisie zobaczysz przy treningu.</p></details>'+
+  '<details class="data-help"><summary>Przerwy i dźwięk</summary><p>Start uruchamia przerwę z wybranym czasem. Aktywny timer pozostaje u góry podczas przewijania i zmiany zakładek. Zakończ zatrzymuje timer i wycisza alarm.</p><p>Dźwięk to pojedynczy krótki sygnał. Po włączeniu sprawdź go na swoim telefonie.</p></details>'+
+  '<details class="data-help"><summary>Oznaczenia kalendarza</summary><p>● Zapisane serie · ↔ zmieniony trening · ☾ dzień wolny · ⚡ GRIT</p></details></section>'+
   '<div id="cloud-panel">'+(window.GymCloud?.html?.()||'')+'</div>';
 }
 
@@ -1081,6 +1077,7 @@ document.addEventListener('toggle',event=>{
 document.addEventListener('click',async event=>{
  const b=event.target.closest('button');if(!b)return;
  if(b.id==='profile-badge'){if(!savingWorkout)document.querySelector('.navitem[data-view="settings"]').click();return;}
+ if(b.id==='open-rest-settings'){document.querySelector('.navitem[data-view="settings"]').click();document.getElementById('rest-settings')?.scrollIntoView({block:'start'});return;}
  if(GymPlans.click(b))return;
  if(window.GymProgress?.handleClick?.(b,render))return;
  if(b.id==='rest-sound-test'){GymRestAlert.play();updateRestTimer();return;}

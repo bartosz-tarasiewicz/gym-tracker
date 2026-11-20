@@ -444,12 +444,12 @@ window.GymCloud=(()=>{
   }
  }
  function html(){
-  return '<div class="panel"><h2>☁️ Połączenie z bazą</h2>'+
+  return '<div class="panel"><h2>Połączenie</h2>'+
    '<div class="detail" id="cloud-info" role="status">'+esc(message)+'</div>'+
    (principal?'<p class="hint">Zalogowano: '+esc(principal.userDetails||principal.identityProvider)+'</p>'+
     '<a class="btn ghost" href="/.auth/logout?post_logout_redirect_uri=/" style="text-decoration:none">Wyloguj</a>':
     '<a class="btn" href="/.auth/login/github?post_login_redirect_uri=/" style="text-decoration:none">Zaloguj przez GitHub</a>')+
-   '<p class="hint">Treningi pobierają się automatycznie po otwarciu aplikacji, jej ponownym uaktywnieniu lub powrocie internetu. Zapisywanie zmian wykonuje przycisk Zapisz w treningu.</p>'+
+   '<details class="data-help"><summary>Szczegóły synchronizacji</summary><p>Treningi pobierają się po otwarciu aplikacji, powrocie do niej lub odzyskaniu internetu. Zmiany wysyłasz przyciskiem Zapisz w treningu.</p></details>'+
    (blocked?'<p class="hint">Uwaga: część dawnych lokalnych zmian różni się od Azure. Nie będą automatycznie nadpisywane. Import i eksport działają niezależnie od tej blokady.</p>':'')+
    '</div>';
  }

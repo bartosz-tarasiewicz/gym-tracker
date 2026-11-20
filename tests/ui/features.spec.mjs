@@ -5,8 +5,7 @@ async function openExerciseOptions(p){
  if(!await details.evaluate(el=>el.open))await p.locator('.exercise-options > summary').click();
 }
 async function openRestControls(p){
- const details=p.locator('.rest-timer');
- if(!await details.evaluate(el=>el.open))await p.locator('.rest-timer > summary').click();
+ await p.locator('[data-view="settings"]').click();
 }
 
 test('mobile training focus: one active exercise, progressive disclosure and save control',async({app:p})=>{
@@ -16,7 +15,7 @@ test('mobile training focus: one active exercise, progressive disclosure and sav
  await expect(p.locator('.exercise-options')).not.toHaveAttribute('open','');
  await expect(p.locator('.movement-img:visible')).toHaveCount(0);
  await expect(p.locator('#save-training')).toBeVisible();
- await expect(p.locator('.day-progress')).toContainText('serii wykonanych');
+ await expect(p.locator('.day-progress')).toContainText('serii');
  await openExerciseOptions(p);
  await expect(p.locator('[data-machine="MG-PL13"]')).toBeVisible();
  await chooseExercise(p,1);
@@ -97,7 +96,7 @@ test('sets: require reps, toggle completion, nudge floor, RIR and added set pers
 });
 
 test('sets: mark all skips empty rows and additional sets stop at fifteen',async({app:p})=>{
- await date(p);await p.locator('#addset').click();await p.locator('#markall').click();
+ await date(p);await p.locator('#addset').click();await p.locator('.training-more>summary').click();await p.locator('#markall').click();
  const rows=p.locator('.done-button[data-type="work"]');await expect(rows.last()).not.toHaveClass(/checked/);await expect(rows.first()).toHaveClass(/checked/);
  for(let n=await rows.count();n<16;n++)await p.locator('#addset').click();await expect(rows).toHaveCount(15);await expect(p.locator('#toast')).toContainText('Maksymalnie 15');
 });
@@ -164,7 +163,7 @@ test('mobile layout: safe area, horizontal overflow and bottom navigation',async
 
 test('warmups and core: independent completion, seconds nudge and enabled state survive reload',async({app:p})=>{
  await date(p);const warm=p.locator('.done-button[data-type="warm"]').first();await warm.click();await expect(warm).toHaveClass(/checked/);await expect(done(p)).not.toHaveClass(/checked/);
- await p.locator('[data-area="core"]').click();await p.locator('[data-core="4"]').click();await p.locator('#enable-core').check();await reps(p).fill('30');await p.locator('[data-nudge="1"][data-type="work"]').first().click();await expect(reps(p)).toHaveValue('35');
+ await p.locator('.training-more>summary').click();await p.locator('[data-area="core"]').click();await p.locator('[data-core="4"]').click();await p.locator('#enable-core').check();await reps(p).fill('30');await p.locator('[data-nudge="1"][data-type="work"]').first().click();await expect(reps(p)).toHaveValue('35');
  await done(p).click();await p.reload();await expect(reps(p)).toHaveValue('35');await expect(p.locator('#enable-core')).toBeChecked();await expect(done(p)).toHaveClass(/checked/);await done(p).click();await p.locator('#enable-core').uncheck();await p.reload();await expect(p.locator('#enable-core')).not.toBeChecked();
 });
 
@@ -210,7 +209,7 @@ test('offline PWA: cached shell, offline edits and persistence without caching p
 });
 
 test('catalogue core: every optional exercise, variants and units',async({app:p})=>{
- test.setTimeout(90000);await date(p);await p.locator('[data-area="core"]').click();
+ test.setTimeout(90000);await date(p);await p.locator('.training-more>summary').click();await p.locator('[data-area="core"]').click();
  const n=await p.locator('[data-core]').count();expect(n).toBeGreaterThan(0);
  for(let i=0;i<n;i++){
   await p.locator('[data-core="'+i+'"]').click();await expect(p.locator('#enable-core')).toBeVisible();
@@ -262,13 +261,13 @@ test('machine settings stay separate by profile, exercise and variant and sync t
 
 test('previous results ignore empty newer sessions and copying never confirms work sets',async({app:p,db})=>{
  seed(db,'2026-11-13','60');const empty=record('2026-11-20','80');empty.exercises.legpress.variants['MG-PL70'].sets.forEach(s=>s.done=false);db.store.set('history:empty',{kind:'history',record:empty,etag:'"empty"'});
- await p.reload();await date(p,'2026-11-27');await expect(p.locator('.previous-compact')).toContainText('2026-11-13');await expect(p.locator('.previous-compact')).toContainText('60 kg × 12');
+ await p.reload();await date(p,'2026-11-27');await expect(p.locator('.previous-results')).toContainText('2026-11-13');await p.locator('.previous-results>summary').click();await expect(p.locator('.previous-compact')).toContainText('60 kg × 12');
  p.once('dialog',d=>d.dismiss());await p.locator('#copy-previous').click();await expect(weight(p)).not.toHaveValue('60');expect(await p.evaluate(()=>Object.values(state.sessions).some(s=>s.date==='2026-11-27'))).toBe(false);
  p.once('dialog',d=>d.accept());await p.locator('#copy-previous').click();await expect(weight(p)).toHaveValue('60');await expect(reps(p)).toHaveValue('12');await expect(done(p)).not.toHaveClass(/checked/);await p.reload();await expect(weight(p)).toHaveValue('60');await expect(done(p)).not.toHaveClass(/checked/);
 });
 
 test('rest timer is optional, starts after completion, survives rerenders and counts real elapsed time',async({app:p,db})=>{
- await date(p);await openRestControls(p);await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-auto').check();await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.restTimer?.auto).toBe(true);await p.clock.install();await p.clock.pauseAt(new Date());
+ await date(p);await openRestControls(p);await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-auto').check();await expect.poll(()=>db.profileSettings.get('default')?.settings.preferences.restTimer?.auto).toBe(true);await p.locator('[data-view="train"]').click();await p.locator('.rest-timer>summary').click();await p.clock.install();await p.clock.pauseAt(new Date());
  await done(p).click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');await p.clock.fastForward(15000);await p.evaluate(()=>updateRestTimer());await expect(p.locator('#rest-remaining')).toHaveText('0:45');await p.locator('[data-rest-adjust="15"]').click();await expect(p.locator('#rest-remaining')).toHaveText('1:00');
  await chooseExercise(p,1);await expect(p.locator('#rest-remaining')).toHaveText(/^(1:00|0:5[5-9])$/);await p.locator('#rest-skip').click();await expect(p.locator('#rest-remaining')).toHaveText('—');
 });

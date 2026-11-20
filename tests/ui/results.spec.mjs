@@ -12,5 +12,5 @@ test('the same custom exercise measured in seconds and reps has separate records
 });
 
 test('timer survives reload, stops explicitly, and previous values appear beside each working set',async({app:p,db})=>{
- seed(db);await p.reload();await date(p,'2026-11-20');await expect(p.locator('.previous-compact')).toContainText('60 kg × 12');await p.locator('.rest-timer > summary').click();await p.locator('#rest-duration').selectOption('60');await p.locator('#rest-start').click();await p.reload();await expect(p.locator('#rest-remaining')).toHaveText(/^(1:00|0:5\d)$/);await p.locator('.rest-timer > summary').click();await p.locator('#rest-skip').click();await p.reload();await expect(p.locator('#rest-remaining')).toHaveText('—');
+ seed(db);await p.reload();await date(p,'2026-11-20');await expect(p.locator('.previous-compact')).toContainText('60 kg × 12');await p.locator('[data-view="settings"]').click();await p.locator('#rest-duration').selectOption('60');await p.locator('[data-view="train"]').click();await p.locator('#rest-quick-start').click();await p.reload();await expect(p.locator('#rest-remaining')).toHaveText(/^(1:00|0:5\d)$/);await p.locator('.rest-timer > summary').click();await p.locator('#rest-skip').click();await p.reload();await expect(p.locator('#rest-remaining')).toHaveText('—');
 });

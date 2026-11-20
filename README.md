@@ -1,3 +1,10 @@
+## v0.26 — mniej tekstu podczas treningu
+
+- Trening ma jeden licznik serii. Usunięto powtórzone nagłówki, procent, legendę kalendarza i opisy pod zapisem. Kolejna seria nadal jest podświetlana; wskazówka pozostaje dostępna dla czytników ekranu.
+- Poprzednie wyniki są zwinięte. Sprzęt, zdjęcia i notatka do maszyny otwierają się przez „⋯”. „Więcej” zawiera kopiowanie wartości do kolejnej serii, potwierdzanie wszystkich i dodawanie CORE.
+- Zakładka Dane mieści czas przerw, autostart, dźwięk i zwijaną pomoc. Start i korekta bieżącej przerwy pozostają przy ćwiczeniu; aktywny timer i wyciszanie pozostają u góry.
+- Zapis i cofanie są obok siebie. Potwierdzenia importu i ostrzeżenia o konfliktach nadal pokazują się przed zmianą danych.
+
 ## v0.19 — zwarta nawigacja daty i wybór treningu
 
 - **Nagłówek:** usunięto redundantny chip z bieżącą datą. Zostawiono wskaźniki lokalnego stanu i zapisu w Azure.

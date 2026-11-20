@@ -85,7 +85,7 @@ test('warmup and timed CORE sets use the appropriate repetition increments',asyn
  await expect(p.locator('input[data-field="kg"][data-type="warm"]').first()).toHaveValue('32.5');
  await adjust(p,'reps','1').click();
  await expect(p.locator('input[data-field="reps"][data-type="warm"]').first()).toHaveValue('9');
- await p.locator('[data-area="core"]').click();
+ await p.locator('.training-more>summary').click();await p.locator('[data-area="core"]').click();
  await p.locator('[data-core="4"]').click();
  await p.locator('#enable-core').check();
  await reps(p).fill('30');

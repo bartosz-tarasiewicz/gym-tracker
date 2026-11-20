@@ -62,7 +62,8 @@ try {
   assert.equal(await page.locator('.set-row.is-next').count(),1);
   assert.equal(await page.locator('.exercise-queue').count(),1,'Training has a compact exercise queue');
   assert.equal(await page.locator('.exercise-queue').getAttribute('open'),null,'Queue begins closed for a shorter workout screen');
-  assert.equal(await page.locator('.exercise-set-progress').count(),1,'Active exercise has a set counter');
+  assert.equal(await page.locator('.day-progress').count(),1,'Workout has one overall set counter');
+  assert.equal(await page.locator('#rest-duration').count(),0,'Timer settings are kept in Data');
   pass('Published v0.11 provides guided sets, one-tap RIR and quick rest timer');
  }
  await chooseExercise(1);
@@ -88,7 +89,7 @@ try {
  await page.locator('[data-machine="DUMBBELL"]').click();
  assert.equal(await input('kg').inputValue(),'15');
  pass('Changing machine preserves each variant separately');
- await page.locator('[data-area="core"]').click();
+ await page.locator('.training-more>summary').click();await page.locator('[data-area="core"]').click();
  await page.locator('[data-core="0"]').click();
  await page.locator('#enable-core').check();
  await input('kg').fill('20');

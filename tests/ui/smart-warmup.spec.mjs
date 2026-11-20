@@ -5,14 +5,14 @@ test('warmups start expanded and automatically collapse after the last warmup se
  const warm=p.locator('.warmup-block'),guide=p.locator('.next-set-guide');
  await expect(warm).toBeVisible();
  await expect(warm).toHaveAttribute('open','');
- await expect(warm.locator('summary')).toContainText('0 / 3 ukończonych');
+ await expect(warm.locator('summary')).toContainText('0 / 3');
  await expect(guide).toContainText('Teraz: Rozgrzewka R1');
  await expect(p.locator('.set-row.is-next')).toHaveAttribute('data-set-row','warm-0');
  for(let i=0;i<3;i++){
   await p.locator('.done-button[data-type="warm"]').nth(i).click();
  }
  await expect(warm).not.toHaveAttribute('open','');
- await expect(warm.locator('summary')).toContainText('3 / 3 ukończonych');
+ await expect(warm.locator('summary')).toContainText('3 / 3');
  await expect(guide).toContainText('Teraz: Seria robocza S1');
  await expect(guide).toContainText('70 kg');
  await expect(p.locator('.set-row.is-next')).toHaveAttribute('data-set-row','work-0');
@@ -31,7 +31,7 @@ test('starting work without warmup closes optional warmups and keeps work sets i
  await expect(warm).toHaveAttribute('open','');
  await done(p).click();
  await expect(warm).not.toHaveAttribute('open','');
- await expect(warm.locator('summary')).toContainText('0 / 3 ukończonych');
+ await expect(warm.locator('summary')).toContainText('0 / 3');
  await expect(guide).toContainText('Teraz: Seria robocza S2');
  await expect(p.locator('.set-row.is-next')).toHaveAttribute('data-set-row','work-1');
  await expect(p.locator('.done-button[data-type="work"]').first()).toHaveClass(/checked/);
