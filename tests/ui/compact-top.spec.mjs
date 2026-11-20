@@ -1,27 +1,24 @@
 import {test,expect,date,done,weight} from './fixtures.mjs';
 
-test('top date chip is removed and native calendar is next to the week arrows and Today',async({app:p,db})=>{
+test('single-day calendar is next to profile with no week navigation or extra date controls',async({app:p,db})=>{
  await date(p,'2026-11-09');
  await expect(p.locator('#today')).toHaveCount(0);
  await expect(p.locator('.top .chip')).toHaveCount(0);
- await expect(p.locator('.week-actions #week-date')).toBeVisible();
- await expect(p.locator('.week-bottom #week-date')).toHaveCount(0);
- await expect(p.locator('.week-date-picker input[type="date"]')).toHaveCount(1);
- await expect(p.locator('.week-actions button')).toHaveCount(3);
+ await expect(p.locator('.header-actions #week-date')).toBeVisible();
+ await expect(p.locator('#app input[type="date"],.week-panel,[data-week],.week-day')).toHaveCount(0);
+ await expect(p.locator('#selected-date-label')).toContainText('9 lis');
  const positions=await p.evaluate(()=>{
-  const arrows=[...document.querySelectorAll('.week-actions button')];
-  const picker=document.querySelector('.week-date-picker input');
-  const a=arrows.at(-1).getBoundingClientRect(),b=picker.getBoundingClientRect();
-  return {afterArrow:b.left>=a.right,nearArrow:Math.abs(b.top-a.top)<3,height:b.height};
+  const a=document.querySelector('#header-date-control').getBoundingClientRect(),b=document.querySelector('#profile-badge').getBoundingClientRect();
+  return {adjacent:b.left>=a.right&&b.left-a.right<12,sameRow:Math.abs(b.top-a.top)<3,height:a.height};
  });
- expect(positions.afterArrow).toBe(true);
- expect(positions.nearArrow).toBe(true);
+ expect(positions.adjacent).toBe(true);
+ expect(positions.sameRow).toBe(true);
  expect(positions.height).toBeGreaterThanOrEqual(44);
- await p.locator('[data-week="7"]').click();
- await expect(p.locator('#week-date')).toHaveValue('2026-11-16');
  await p.locator('#week-date').fill('2026-11-20');
  await p.locator('#week-date').dispatchEvent('change');
  await expect(p.locator('#week-date')).toHaveValue('2026-11-20');
+ await expect(p.locator('#selected-date-label')).toContainText('20 lis');
+ await expect(p.locator('#week-date')).toHaveAccessibleName(/20 listopada 2026/);
  await expect(p.locator('#workout-type')).toHaveValue('5');
  expect(db.store.size).toBe(0);
 });
@@ -41,6 +38,18 @@ test('compact workout selector preserves per-date changes and has no separate de
  await date(p,'2026-11-10');
  await expect(p.locator('#workout-type')).toHaveValue('1');
  expect(db.store.size).toBe(0);
+});
+
+test('header date cannot change while the selected workout is being saved',async({app:p,db})=>{
+ await date(p,'2026-11-13');await weight(p).fill('73');await done(p).click();
+ let release;const gate=new Promise(resolve=>release=resolve);
+ await p.route('**/api/workouts/**',async route=>{if(route.request().method()==='PUT')await gate;await route.continue();});
+ try{
+  await p.locator('#save-training').click();await expect(p.locator('#week-date')).toBeDisabled();
+  await expect(p.locator('#week-date')).toHaveValue('2026-11-13');
+ }finally{release();}
+ await expect(p.locator('#week-date')).toBeEnabled();await expect(p.locator('#toast')).toContainText('Zapisano w Azure');
+ expect([...db.store.values()].every(row=>row.record.date==='2026-11-13')).toBe(true);
 });
 
 test('custom plan switcher appears only when a compatible alternative exists and stays inside header',async({app:p,db})=>{
@@ -75,8 +84,8 @@ test('date header and type switcher stay compact without overflow on small iPhon
  for(const width of [320,375,390,430,620]){
   await p.setViewportSize({width,height:780});
   const geometry=await p.evaluate(()=>{
-   const controls=[...document.querySelectorAll('.week-actions button, .week-date-picker input')];
-   const week=document.querySelector('.week-panel').getBoundingClientRect();
+   const controls=[...document.querySelectorAll('#header-date-control,#profile-badge')];
+   const week=document.querySelector('.header-actions').getBoundingClientRect();
    const card=document.querySelector('.train-day-summary').getBoundingClientRect();
    const select=document.querySelector('#workout-type').getBoundingClientRect();
    const all=[...document.querySelectorAll('body *')];

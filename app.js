@@ -207,9 +207,9 @@ function normalize(data){if(!data||typeof data!=='object'||!Array.isArray(data.h
  s.version=2;s.selectedDate=/^\d{4}-\d{2}-\d{2}$/.test(s.selectedDate||'')?s.selectedDate:dateKey();s.activeDay=trainingTypeForDate(s.selectedDate,s);s.selectedRecordId=String(s.selectedRecordId||'');s.activeExercise=Math.max(0,Number(s.activeExercise)||0);s.activeCore=Math.max(0,Math.min(9,Number(s.activeCore)||0));return s;
 }
 function selectDate(date){
- if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime()))return;
+ if(savingWorkout||!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(new Date(date+'T12:00:00').getTime())){GymWeek.renderHeader(state,savingWorkout);return;}
  if(date===state.selectedDate)return;
- if(!abandonHistoryEdit())return;
+ if(!abandonHistoryEdit()){GymWeek.renderHeader(state);return;}
  state.selectedDate=date;state.selectedRecordId='';exerciseOptionsOpen=false;advancedOpen=false;exerciseQueueOpen=false;
  state.activeDay=trainingTypeForDate(date,state);state.activeExercise=0;state.activeCore=0;state.activeArea='main';
  save(false);render();
@@ -501,7 +501,7 @@ async function saveSelectedWorkout(reviewedRevision){
  const draftEntry=Object.entries(state.sessions).find(([,record])=>record===previous);
  if(!input.syncId&&draftEntry)input.syncId='draft:'+draftEntry[0];
  if(!window.GymCloud?.saveWorkoutForDate){alert('Odśwież aplikację, żeby użyć nowego zapisu.');return;}
- savingWorkout=true;renderSaveStatus();
+ savingWorkout=true;renderSaveStatus();GymWeek.renderHeader(state,true);
  const editor=document.getElementById('app'),navigation=document.querySelector('.bottomnav');
  editor.inert=true;navigation.inert=true;
  const button=document.getElementById('save-training');
@@ -544,7 +544,7 @@ async function saveSelectedWorkout(reviewedRevision){
   render();
   toast('Zapisano w Azure · '+date);
  }finally{
-  editor.inert=false;navigation.inert=false;savingWorkout=false;renderSaveStatus();
+  editor.inert=false;navigation.inert=false;savingWorkout=false;renderSaveStatus();GymWeek.renderHeader(state);
  }
 }
 function status(str,level){const n=document.getElementById('storage-status');if(n){n.textContent=str;n.classList.toggle('warn',level==='warn')}}
@@ -553,6 +553,7 @@ function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:activePlan().items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
 function render(force=false){
+ GymWeek.renderHeader(state,savingWorkout);
  const screenTitle=document.getElementById('screen-title');
  if(screenTitle)screenTitle.textContent=({train:'Trening',history:'Progres',plans:'Plany',settings:'Dane'})[state.view]||'Trening';
  renderSaveStatus();
@@ -721,9 +722,9 @@ function persistRestTimer(){try{sessionStorage.setItem(restKey,String(restUntil)
 function restOptions(){return GymProfiles.preference('restTimer')||{seconds:90,auto:false};}
 function prepareRestAudio(){GymRestAlert.prepare();}
 function playRestSound(){GymRestAlert.play();}
-function restTimerHTML(){
+function restTimerHTML(previousAvailable=false){
  const options=restOptions();
- return '<div class="rest-timer-bar"><button type="button" class="btn secondary small" id="rest-quick-start" aria-label="Uruchom przerwę '+Number(options.seconds||90)+' sekund">Start '+Number(options.seconds||90)+' s</button></div>';
+ return '<div class="rest-timer-bar"><button type="button" class="btn secondary small" id="rest-quick-start" aria-label="Uruchom przerwę '+Number(options.seconds||90)+' sekund">Start '+Number(options.seconds||90)+' s</button><button type="button" class="btn secondary small" id="show-previous" aria-haspopup="dialog" '+(!previousAvailable?'disabled title="Brak poprzednich wyników dla tego sprzętu"':'')+'>Poprzednio</button></div>';
 }
 function restSettingsHTML(){
  const options=restOptions();
@@ -795,7 +796,7 @@ let advancedOpen=false;
 let exerciseQueueOpen=false;
 function trainHTML(){
  rememberDay();
- const calendar=GymWeek.html(state)+conflictPanel(),d=state.activeDay;
+ const calendar=conflictPanel(),d=state.activeDay;
  const selectedOptions=TRAINING_TYPES.map(x=>'<option value="'+x+'" '+(x===d?'selected':'')+'>'+esc(trainingName(x))+'</option>').join('');
  const dayProgress=[-1,3,-2].includes(d)?'':(()=>{
   const progress=summary(),percent=progress.planned?Math.round(progress.done/progress.planned*100):0;
@@ -835,7 +836,7 @@ function trainHTML(){
  const coreTabs=CORE.map((e,i)=>'<button type="button" class="core-choice '+(coreActive&&index===i?'active':'')+'" data-core="'+i+'">'+(isCoreEnabled(e)?'✓ ':'＋ ')+esc(e.title)+'</button>').join('');
  const choices=availableMachineOptions(item).map(k=>'<button type="button" class="machine-choice '+(log.machine===k?'active':'')+'" data-machine="'+esc(k)+'" aria-pressed="'+(log.machine===k)+'" title="'+esc(machineName(k))+'">'+esc(machineName(k))+(log.variants?.[k]?.sets?.some(x=>x.done)?' ✓':'')+'</button>').join('');
  const previous=lastCompletedVariant(item,log.machine),oldRows=previous?.rows||[];
- const preview=oldRows.length?'<details class="previous-results"><summary>Poprzednio <span>'+esc(previous.record.date)+'</span></summary><div class="previous-compact"><div><span>'+oldRows.slice(0,4).map(x=>esc(x.kg||'0')+' kg × '+esc(x.reps)).join(' · ')+(oldRows.length>4?' …':'')+'</span></div><button type="button" class="btn secondary small" id="copy-previous">Uzupełnij pola</button></div></details>':
+ const preview=oldRows.length?'<dialog id="previous-dialog" class="previous-dialog" aria-labelledby="previous-title"><div class="previous-dialog-head"><h2 id="previous-title">Poprzedni trening</h2><button type="button" id="close-previous" aria-label="Zamknij poprzednie wyniki">×</button></div><p>'+esc(previous.record.date)+' · '+esc(item.title)+'</p><p class="hint">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p><div class="previous-values">'+oldRows.map((row,i)=>'<div><span>S'+(i+1)+'</span><strong>'+esc(row.kg||'0')+' kg × '+esc(row.reps)+' '+esc(measure(item))+'</strong></div>').join('')+'</div><button type="button" class="btn full" id="copy-previous">Uzupełnij pola</button></dialog>':
   '';
  const machineNotes=window.GymProfiles?.preference('machineNotes')||{};
  const machineNote='<label class="label" for="machine-note">Ustawienia maszyny</label><textarea id="machine-note" class="notes" maxlength="150" placeholder="Np. wysokość siedziska, ustawienie uchwytów">'+esc(machineNotes[machineNoteKey(item,log.machine)]||'')+'</textarea>';
@@ -860,7 +861,7 @@ function trainHTML(){
   '<span class="warmup-chevron" aria-hidden="true">⌄</span></summary>'+
   '<div class="warmup-body"><div class="set-head"><span>R</span><span>kg</span><span>'+esc(measure(item))+'</span><span>✓</span></div>'+
   setsHTML(v.warmups,'warm',item)+'</div></details>':'';
- const sets=restTimerHTML()+preview+
+ const sets=restTimerHTML(oldRows.length>0)+preview+
   '<div class="next-set-guide sr-only" role="status" aria-live="polite">'+nextSetGuideHTML(item,v)+'</div>'+warmupBlock+
   '<div class="set-head"><span>Seria</span><span>kg</span><span>'+esc(measure(item))+'</span><span>✓</span></div>'+setsHTML(v.sets,'work',item)+
   '<div class="inline-actions set-extra-actions"><button type="button" class="btn secondary small" id="addset">+ Seria</button><details class="training-more"><summary>Więcej</summary><div class="more-actions">'+quickFillHTML+'<button type="button" class="btn secondary small" id="markall">Potwierdź wszystkie</button>'+(!coreActive?'<button type="button" class="btn secondary small" data-area="core">Dodaj CORE</button>':'')+'</div></details></div>'+
@@ -921,7 +922,7 @@ function settingsHTML(){
   '<section class="panel"><h2>Pomoc</h2><details class="data-help"><summary>Serie, ciężar i RIR</summary><p>Wartości w polach są podpowiedzią. Zaznacz ✓ po wykonaniu serii. Rozgrzewka jest opcjonalna. Dotknij numeru serii, aby otworzyć szybką korektę.</p><p>Sposób liczenia ciężaru widzisz przy sprzęcie. Każdy wariant sprzętu ma osobne wyniki. Ustawienia maszyny są zapamiętywane dla profilu i wariantu.</p><p>RIR to liczba powtórzeń, które zostały w zapasie po ostatniej serii: 0 oznacza brak zapasu, 3+ — co najmniej trzy.</p></details>'+
   '<details class="data-help"><summary>Zapis i synchronizacja</summary><p>Edycja pozostaje na urządzeniu, dopóki nie wybierzesz Zapisz. Bez internetu żądanie zapisu czeka na połączenie. Cofnij zmiany przywraca ostatni zapis dnia; nie zmienia Azure.</p><p>Gdy dwa urządzenia zmienią ten sam trening, aplikacja pokaże porównanie przed nadpisaniem. Informacje o konflikcie i nieudanym zapisie zobaczysz przy treningu.</p></details>'+
   '<details class="data-help"><summary>Przerwy i dźwięk</summary><p>Start uruchamia przerwę z wybranym czasem. Aktywny timer pozostaje u góry podczas przewijania i zmiany zakładek. Zakończ zatrzymuje timer i wycisza alarm.</p><p>Dźwięk to pojedynczy krótki sygnał. Po włączeniu sprawdź go na swoim telefonie.</p></details>'+
-  '<details class="data-help"><summary>Oznaczenia kalendarza</summary><p>● Zapisane serie · ↔ zmieniony trening · ☾ dzień wolny · ⚡ GRIT</p></details></section>'+
+  '</section>'+
   '<div id="cloud-panel">'+(window.GymCloud?.html?.()||'')+'</div>';
 }
 
@@ -1077,6 +1078,8 @@ document.addEventListener('click',async event=>{
  if(window.GymProgress?.handleClick?.(b,render))return;
  if(b.id==='rest-sound-test'){GymRestAlert.play();updateRestTimer();return;}
  if(b.id==='rest-sound-stop'){GymRestAlert.stop();updateRestTimer();return;}
+ if(b.id==='show-previous'){document.getElementById('previous-dialog')?.showModal();return;}
+ if(b.id==='close-previous'){document.getElementById('previous-dialog')?.close();return;}
  if(b.id==='rest-start'||b.id==='rest-quick-start'){prepareRestAudio();restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();updateRestTimer();return;}
  if(b.id==='rest-skip'||b.id==='active-rest-skip'){GymRestAlert.stop();restUntil=0;restAlerted=false;persistRestTimer();updateRestTimer();return;}
  if(b.dataset.restAdjust!==undefined){if(restUntil){restUntil=Math.max(Date.now(),restUntil+Number(b.dataset.restAdjust)*1000);restAlerted=false;persistRestTimer();updateRestTimer();}return;}
@@ -1126,7 +1129,6 @@ document.addEventListener('click',async event=>{
   if(activeConflict()){const details=document.querySelector('.conflict-details');if(details){details.open=true;details.scrollIntoView({block:'center'});}else render();return;}
   await saveSelectedWorkout();return;
  }
- if(b.dataset.week!==undefined){selectDate(b.dataset.week==='today'?dateKey():GymWeek.shift(state.selectedDate,Number(b.dataset.week)));return}
  if(b.dataset.date!==undefined){selectDate(b.dataset.date);return}
  if(b.dataset.machine!==undefined){switchVariant(currentItem().item,b.dataset.machine);save();render();return}
  if(b.dataset.quickEdit!==undefined){

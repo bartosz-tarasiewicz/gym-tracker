@@ -79,11 +79,10 @@ test('switching profiles waits for a temporary cloud refresh and stays in Data',
  await expect(p.locator('#import-database')).toBeVisible();
 });
 
-test('calendar: weeks, arbitrary date, today, no writes from navigation',async({app:p,db})=>{
- await date(p,'2026-12-31');await p.locator('[data-week="7"]').click();await expect(p.locator('#week-date')).toHaveValue('2027-01-07');
- await p.locator('[data-week="-7"]').click();await expect(p.locator('#week-date')).toHaveValue('2026-12-31');
- await p.locator('[data-week="today"]').click();const today=await p.evaluate(()=>GymWeek.iso(new Date()));await expect(p.locator('#week-date')).toHaveValue(today);
- await expect(p.locator('.week-day')).toHaveCount(7);expect(db.operations).toEqual([]);
+test('calendar: arbitrary single date across years without writes from navigation',async({app:p,db})=>{
+ await date(p,'2026-12-31');await date(p,'2027-01-07');await expect(p.locator('#selected-date-label')).toContainText('7 sty');
+ await date(p,'2026-11-13');await expect(p.locator('#workout-type')).toHaveValue('5');
+ await expect(p.locator('.week-day,[data-week]')).toHaveCount(0);expect(db.operations).toEqual([]);
 });
 
 test('sets: require reps, toggle completion, nudge floor, RIR and added set persist',async({app:p})=>{
@@ -131,6 +130,8 @@ test('import cancellation keeps cloud and local training unchanged',async({app:p
 
 test('historical edit: reject leaving, discard leaving, source never changes',async({app:p,db})=>{
  const id=seed(db);await p.reload();await date(p);await weight(p).fill('77');
+ p.once('dialog',d=>d.dismiss());await p.locator('#week-date').fill('2026-11-20');await p.locator('#week-date').dispatchEvent('change');
+ await expect(p.locator('#week-date')).toHaveValue('2026-11-13');await expect(p.locator('#selected-date-label')).toContainText('13 lis');await expect(weight(p)).toHaveValue('77');
  p.once('dialog',d=>d.dismiss());await p.locator('[data-view="history"]').click();await expect(weight(p)).toHaveValue('77');
  p.once('dialog',d=>d.accept());await p.locator('[data-view="history"]').click();await expect(p.locator('#trend-exercise')).toBeVisible();await p.locator('[data-view="train"]').click();await expect(weight(p)).toHaveValue('60');expect(db.store.get(id).record.exercises.legpress.variants['MG-PL70'].sets[0].kg).toBe('60');expect(db.operations).toEqual([]);
 });
@@ -261,7 +262,7 @@ test('machine settings stay separate by profile, exercise and variant and sync t
 
 test('previous results ignore empty newer sessions and copying never confirms work sets',async({app:p,db})=>{
  seed(db,'2026-11-13','60');const empty=record('2026-11-20','80');empty.exercises.legpress.variants['MG-PL70'].sets.forEach(s=>s.done=false);db.store.set('history:empty',{kind:'history',record:empty,etag:'"empty"'});
- await p.reload();await date(p,'2026-11-27');await expect(p.locator('.previous-results')).toContainText('2026-11-13');await p.locator('.previous-results>summary').click();await expect(p.locator('.previous-compact')).toContainText('60 kg × 12');
+ await p.reload();await date(p,'2026-11-27');await p.locator('#show-previous').click();await expect(p.locator('#previous-dialog')).toContainText('2026-11-13');await expect(p.locator('.previous-values')).toContainText('60 kg × 12');
  p.once('dialog',d=>d.dismiss());await p.locator('#copy-previous').click();await expect(weight(p)).not.toHaveValue('60');expect(await p.evaluate(()=>Object.values(state.sessions).some(s=>s.date==='2026-11-27'))).toBe(false);
  p.once('dialog',d=>d.accept());await p.locator('#copy-previous').click();await expect(weight(p)).toHaveValue('60');await expect(reps(p)).toHaveValue('12');await expect(done(p)).not.toHaveClass(/checked/);await p.reload();await expect(weight(p)).toHaveValue('60');await expect(done(p)).not.toHaveClass(/checked/);
 });

@@ -5,7 +5,8 @@ test('training shows essential controls and discloses rare actions deliberately'
  await expect(p.locator('#app')).not.toContainText(/Wybierz dzień treningu|domyślnie|wykonano|serii wykonanych/);
  await expect(p.locator('.week-bottom,.exercise-set-progress,.quick-fill-offer')).toHaveCount(0);
  await expect(p.locator('#rest-duration,#rest-auto,#rest-sound')).toHaveCount(0);
- await expect(p.locator('.rest-timer-bar button')).toHaveCount(1);
+ await expect(p.locator('.rest-timer-bar button')).toHaveCount(2);
+ await expect(p.locator('.rest-timer-bar #show-previous')).toBeDisabled();
  await expect(p.locator('.rest-timer-bar details,.rest-timer-bar input,.rest-timer-bar select,#open-rest-settings')).toHaveCount(0);
  await expect(p.locator('.active-machine')).toBeVisible();
  await expect(p.locator('.active-machine')).toContainText('Talerze łącznie');
@@ -41,14 +42,18 @@ test('rest preferences live in Data and drive training timer without changing wo
  expect(db.store.size).toBe(0);
 });
 
-test('previous results start collapsed and copying still requires review and does not confirm sets',async({app:p,db})=>{
+test('previous results open from the button beside Start; copying requires review and never confirms sets',async({app:p,db})=>{
  seed(db);await p.reload();await date(p,'2026-11-20');
- await expect(p.locator('.previous-results')).not.toHaveAttribute('open','');
- await expect(p.locator('.previous-results')).toHaveCSS('background-color','rgb(255, 255, 255)');
- await expect(p.locator('.previous-results>summary')).toHaveCSS('color','rgb(101, 104, 108)');
+ await expect(p.locator('.previous-results')).toHaveCount(0);
+ await expect(p.locator('.rest-timer-bar #show-previous')).toBeEnabled();
+ await expect(p.locator('#previous-dialog')).toBeHidden();
  await expect(p.locator('#copy-previous')).toBeHidden();
- await p.locator('.previous-results>summary').click();await expect(p.locator('.previous-compact')).toContainText('60 kg × 12');
- await p.screenshot({path:'test-results/previous-results-light.png'});
+ await p.locator('#show-previous').click();await expect(p.getByRole('dialog',{name:'Poprzedni trening'})).toBeVisible();
+ await expect(p.locator('#previous-dialog')).toHaveCSS('background-color','rgb(255, 255, 255)');
+ await expect(p.locator('.previous-values')).toContainText('60 kg × 12');
+ await p.locator('#close-previous').click();await expect(p.locator('#previous-dialog')).toBeHidden();
+ await p.locator('#show-previous').click();await p.keyboard.press('Escape');await expect(p.locator('#previous-dialog')).toBeHidden();
+ await p.locator('#show-previous').click();await p.screenshot({path:'test-results/previous-results-dialog.png'});
  p.once('dialog',d=>d.accept());await p.locator('#copy-previous').click();
  await expect(weight(p)).toHaveValue('60');await expect(reps(p)).toHaveValue('12');await expect(done(p)).not.toHaveClass(/checked/);
  expect(db.operations).toEqual([]);

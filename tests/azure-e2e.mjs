@@ -30,7 +30,7 @@ async function idbSnapshot(){
 }
 try {
  await page.goto(URL,{waitUntil:'domcontentloaded',timeout:60000});
- await page.locator('[data-day="2"]').waitFor({timeout:20000});
+ await page.locator('#week-date').waitFor({timeout:20000});
  assert.match(await page.title(),/Gym Tracker/);
  pass('Public Azure site loads at the supplied URL');
  if(process.env.GYM_REQUIRE_LATEST_UI==='1'){
@@ -55,7 +55,7 @@ try {
   await page.locator('.navitem[data-view="train"]').click();
   pass('Published plan editor opens, edits and cancels without saving test data');
  }
- await page.locator('[data-day="2"]').click();
+ await page.locator('#week-date').fill('2026-11-18');await page.locator('#week-date').dispatchEvent('change');
  if(process.env.GYM_REQUIRE_LATEST_UI==='1'){
   assert.equal(await page.locator('.rest-timer-bar #rest-quick-start').isVisible(),true);
   assert.equal(await page.locator('[data-rir-quick="2"]').isVisible(),true);
@@ -115,7 +115,8 @@ try {
  assert.equal(await page.locator('#cloud-sync').count(),0,'Manual refresh button removed');
  pass('Simplified Data tab renders Import, Export and a cloud connection status');
  await page.locator('[data-view="train"]').click();
- assert.equal(await page.locator('.week-grid .week-day').count(),7,'Seven-day calendar is available on Azure');
+ assert.equal(await page.locator('.header-actions #week-date').count(),1,'Single-day calendar is next to profile');
+ assert.equal(await page.locator('.week-panel,[data-week]').count(),0,'Weekly date controls are removed');
  assert.equal(await page.locator('#save-training').count(),1,'One explicit Save action is displayed');
  assert.equal(await page.locator('.train-save-dock').count(),0,'No fixed Save button overlays exercises');
  assert.equal(await page.locator('.train-save-section #save-training').count(),1,'Save is available inside the workout flow');

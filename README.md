@@ -1,3 +1,9 @@
+## v0.28 — wybór dnia w nagłówku i przycisk Poprzednio
+
+- Kalendarz jest obok profilu, z krótką etykietą wybranego dnia. Otwiera natywny wybór jednej daty. Usunięto pasek tygodnia, strzałki i przycisk Dziś.
+- Zmiana daty zachowuje ochronę niezapisanych poprawek. Wybór dnia jest zablokowany podczas zapisu, ponieważ znajduje się teraz poza formularzem treningu.
+- Obok Startu znajduje się przycisk Poprzednio. Otwiera jasne okno z ostatnimi potwierdzonymi seriami danego ćwiczenia i sprzętu oraz opcją uzupełnienia pól. Kopiowanie wymaga potwierdzenia i nie zaznacza serii jako wykonanych.
+
 ## v0.27 — tylko Start przy ćwiczeniu
 
 - Przy ćwiczeniu pozostał wyłącznie przycisk Start. Ustawienia dźwięku, czasu i autostartu są w Danych. Tam również można skorygować bieżącą przerwę o 15 sekund; jej licznik i zatrzymywanie pozostają w nagłówku.
