@@ -43,9 +43,9 @@ const server=http.createServer(async(req,res)=>{
   operations.push({id,method:'PUT'});
   return json(res,200,{ok:true,id,etag});
  }
- const file=files[url.pathname]||(['/workout-conflicts.js','/profiles.js','/photos.js','/exercise-guides.js','/plans.js','/plan-editor.js','/results.js'].includes(url.pathname)?url.pathname.slice(1):url.pathname.startsWith('/assets/')&&!url.pathname.includes('..')?url.pathname.slice(1):null);if(!file){res.writeHead(404);return res.end('Not Found')}
+ const file=files[url.pathname]||(['/rest-alert.js','/workout-conflicts.js','/profiles.js','/photos.js','/exercise-guides.js','/plans.js','/plan-editor.js','/results.js'].includes(url.pathname)?url.pathname.slice(1):url.pathname.startsWith('/assets/')&&!url.pathname.includes('..')?url.pathname.slice(1):null);if(!file){res.writeHead(404);return res.end('Not Found')}
  res.writeHead(200,{'content-type':({'.html':'text/html','.js':'application/javascript','.svg':'image/svg+xml',
-  '.jpg':'image/jpeg','.webp':'image/webp','.png':'image/png','.webmanifest':'application/manifest+json'})[path.extname(file)]||'text/plain'});
+  '.wav':'audio/wav','.jpg':'image/jpeg','.webp':'image/webp','.png':'image/png','.webmanifest':'application/manifest+json'})[path.extname(file)]||'text/plain'});
  res.end(fs.readFileSync(file));
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));

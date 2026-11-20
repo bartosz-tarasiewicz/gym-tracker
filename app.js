@@ -708,40 +708,16 @@ const restKey='gym-rest-timer'+GymProfiles.suffix();
 try{restUntil=Number(sessionStorage.getItem(restKey))||0;restAlerted=sessionStorage.getItem(restKey+'-alerted')===String(restUntil);}catch{}
 function persistRestTimer(){try{sessionStorage.setItem(restKey,String(restUntil));}catch{}}
 function restOptions(){return GymProfiles.preference('restTimer')||{seconds:90,auto:false};}
-let restAudio=null;
-function prepareRestAudio(){
- if(restOptions().sound===false)return;
- try{
-  const Audio=window.AudioContext||window.webkitAudioContext;
-  if(!Audio)return;
-  if(!restAudio||restAudio.state==='closed')restAudio=new Audio();
-  // Resume from a user gesture so Safari permits the later timer signal.
-  if(restAudio.state!=='running')void restAudio.resume().catch(()=>{});
- }catch{}
-}
-function playRestSound(){
- if(restOptions().sound===false||restAudio?.state!=='running')return;
- try{
-  const start=restAudio.currentTime;
-  for(let i=0;i<3;i++){
-   const tone=restAudio.createOscillator(),gain=restAudio.createGain(),at=start+i*.22;
-   tone.type='sine';tone.frequency.value=i===2?1046.5:880;
-   gain.gain.setValueAtTime(0,at);
-   gain.gain.linearRampToValueAtTime(.18,at+.015);
-   gain.gain.linearRampToValueAtTime(0,at+.16);
-   tone.connect(gain);gain.connect(restAudio.destination);
-   tone.onended=()=>{tone.disconnect();gain.disconnect();};
-   tone.start(at);tone.stop(at+.18);
-  }
- }catch{}
-}
-document.addEventListener('pointerdown',()=>{if(restUntil>Date.now())prepareRestAudio();},{passive:true});
+function prepareRestAudio(){GymRestAlert.prepare();}
+function playRestSound(){GymRestAlert.play();}
 function restTimerHTML(){
  const options=restOptions();
  return '<div class="rest-timer-bar"><details class="rest-timer" '+(restControlsOpen?'open':'')+'><summary>⏱ Przerwa <strong id="rest-remaining">—</strong><span class="rest-hint">⌄</span></summary>'+
   '<div class="rest-controls"><label>Czas <select id="rest-duration" aria-label="Czas przerwy">'+[30,60,90,120,180,240].map(n=>'<option value="'+n+'" '+(n===Number(options.seconds)?'selected':'')+'>'+n+' s</option>').join('')+'</select></label>'+
   '<label><input type="checkbox" id="rest-auto" '+(options.auto?'checked':'')+'> Auto po serii</label>'+
-  '<label><input type="checkbox" id="rest-sound" '+(options.sound!==false?'checked':'')+'> Dźwięk po przerwie</label>'+
+  '<label><input type="checkbox" id="rest-sound" '+(GymRestAlert.enabled()?'checked':'')+'> Dźwięk po przerwie</label>'+
+  '<div class="inline-actions"><button type="button" class="btn secondary small" id="rest-sound-test" '+(!GymRestAlert.enabled()?'disabled':'')+'>Sprawdź dźwięk</button><button type="button" class="btn secondary small" id="rest-sound-stop">Wycisz alarm</button></div>'+
+  '<p class="hint">Dźwięk wymaga ponownego włączenia po aktualizacji. Najpierw sprawdź go na tym telefonie.</p>'+
   '<div class="inline-actions"><button type="button" class="btn secondary small" id="rest-start">Start</button>'+
   '<button type="button" class="btn secondary small" data-rest-adjust="-15">−15 s</button>'+
   '<button type="button" class="btn secondary small" data-rest-adjust="15">+15 s</button>'+
@@ -755,11 +731,12 @@ function updateRestTimer(){
   const label=document.getElementById(id);if(label)label.textContent=text;
  }
  const bar=document.getElementById('active-rest-bar');
- if(bar)bar.hidden=left===0;
+ if(bar)bar.hidden=left===0&&!GymRestAlert.isPlaying();
  if(restUntil&&left===0&&!restAlerted){
   restAlerted=true;
   try{sessionStorage.setItem(restKey+'-alerted',String(restUntil));}catch{}
-  playRestSound();toast('Koniec przerwy');
+  if(Date.now()-restUntil<2000)playRestSound();toast('Koniec przerwy');
+  if(bar)bar.hidden=!GymRestAlert.isPlaying();
  }
 }
 setInterval(updateRestTimer,1000);
@@ -1095,8 +1072,10 @@ document.addEventListener('click',async event=>{
  if(b.id==='profile-badge'){if(!savingWorkout)document.querySelector('.navitem[data-view="settings"]').click();return;}
  if(GymPlans.click(b))return;
  if(window.GymProgress?.handleClick?.(b,render))return;
+ if(b.id==='rest-sound-test'){GymRestAlert.play();updateRestTimer();return;}
+ if(b.id==='rest-sound-stop'){GymRestAlert.stop();updateRestTimer();return;}
  if(b.id==='rest-start'||b.id==='rest-quick-start'){prepareRestAudio();restUntil=Date.now()+Number(restOptions().seconds||90)*1000;restAlerted=false;persistRestTimer();updateRestTimer();return;}
- if(b.id==='rest-skip'||b.id==='active-rest-skip'){restUntil=0;restAlerted=false;persistRestTimer();updateRestTimer();return;}
+ if(b.id==='rest-skip'||b.id==='active-rest-skip'){GymRestAlert.stop();restUntil=0;restAlerted=false;persistRestTimer();updateRestTimer();return;}
  if(b.dataset.restAdjust!==undefined){if(restUntil){restUntil=Math.max(Date.now(),restUntil+Number(b.dataset.restAdjust)*1000);restAlerted=false;persistRestTimer();updateRestTimer();}return;}
  if(b.id==='quick-fill-set'){
   const {item}=currentItem(),v=currentVariant(item),suggestion=quickFillSuggestion(item,v);
@@ -1211,7 +1190,7 @@ document.addEventListener('change',async event=>{const el=event.target;
  if(await GymPlans.change(el))return;
  if(el.id==='workout-plan'){changeWorkoutPlan(el.value);return;}
  if(window.GymProgress?.handleChange?.(el,render))return;
- if(el.id==='rest-duration'||el.id==='rest-auto'||el.id==='rest-sound'){const options=restOptions();if(el.id==='rest-duration')options.seconds=Number(el.value);else if(el.id==='rest-sound')options.sound=el.checked;else options.auto=el.checked;GymProfiles.preference('restTimer',options);if(el.id==='rest-sound'&&el.checked)prepareRestAudio();const quick=document.getElementById('rest-quick-start');if(quick){quick.textContent='Start '+Number(options.seconds||90)+' s';quick.setAttribute('aria-label','Uruchom przerwę '+Number(options.seconds||90)+' sekund');}return;}
+ if(el.id==='rest-duration'||el.id==='rest-auto'||el.id==='rest-sound'){const options=restOptions();if(el.id==='rest-duration')options.seconds=Number(el.value);else if(el.id==='rest-sound'){options.sound=el.checked;options.soundFormat='clip-v1';GymRestAlert.stop();}else options.auto=el.checked;GymProfiles.preference('restTimer',options);if(el.id==='rest-sound'){const test=document.getElementById('rest-sound-test');if(test)test.disabled=!el.checked;updateRestTimer();}const quick=document.getElementById('rest-quick-start');if(quick){quick.textContent='Start '+Number(options.seconds||90)+' s';quick.setAttribute('aria-label','Uruchom przerwę '+Number(options.seconds||90)+' sekund');}return;}
  if(el.dataset.fastStep!==undefined){
   const machine=exerciseLog(currentItem().item).machine,step=Number(el.value);
   if(machine!==el.dataset.fastStep||!quickKgSteps.includes(step))return;
@@ -1241,7 +1220,7 @@ document.addEventListener('input',event=>{const t=event.target;
  else if(t.id==='machine-note'){const {item}=currentItem(),machine=exerciseLog(item).machine,notes={...(GymProfiles.preference('machineNotes')||{})};if(t.value)notes[machineNoteKey(item,machine)]=t.value;else delete notes[machineNoteKey(item,machine)];GymProfiles.preference('machineNotes',notes);}
  else if(t.id==='notes'){activeSession(true).notes=t.value;save()}
 });
-window.addEventListener('gym-preferences-loaded',()=>{if(state.view==='plans'){if(!GymPlans.editing())render();return;}if(state.view==='train'&&!storedDay()){state.activeDay=trainingTypeForDate(state.selectedDate);render();}const input=document.getElementById('machine-note');if(input&&input!==document.activeElement){const {item}=currentItem();input.value=GymProfiles.preference('machineNotes')?.[machineNoteKey(item,exerciseLog(item).machine)]||'';}const duration=document.getElementById('rest-duration'),auto=document.getElementById('rest-auto');if(duration&&duration!==document.activeElement)duration.value=String(restOptions().seconds||90);if(auto&&auto!==document.activeElement)auto.checked=!!restOptions().auto;const sound=document.getElementById('rest-sound');if(sound&&sound!==document.activeElement)sound.checked=restOptions().sound!==false;const quick=document.getElementById('rest-quick-start');if(quick){quick.textContent='Start '+Number(restOptions().seconds||90)+' s';quick.setAttribute('aria-label','Uruchom przerwę '+Number(restOptions().seconds||90)+' sekund');}});
+window.addEventListener('gym-preferences-loaded',()=>{if(state.view==='plans'){if(!GymPlans.editing())render();return;}if(state.view==='train'&&!storedDay()){state.activeDay=trainingTypeForDate(state.selectedDate);render();}const input=document.getElementById('machine-note');if(input&&input!==document.activeElement){const {item}=currentItem();input.value=GymProfiles.preference('machineNotes')?.[machineNoteKey(item,exerciseLog(item).machine)]||'';}const duration=document.getElementById('rest-duration'),auto=document.getElementById('rest-auto');if(duration&&duration!==document.activeElement)duration.value=String(restOptions().seconds||90);if(auto&&auto!==document.activeElement)auto.checked=!!restOptions().auto;const sound=document.getElementById('rest-sound');if(sound&&sound!==document.activeElement)sound.checked=GymRestAlert.enabled();const quick=document.getElementById('rest-quick-start');if(quick){quick.textContent='Start '+Number(restOptions().seconds||90)+' s';quick.setAttribute('aria-label','Uruchom przerwę '+Number(restOptions().seconds||90)+' sekund');}});
 document.addEventListener('submit',e=>GymPlans.submit(e));
 window.addEventListener('beforeunload',e=>{if(GymPlans.dirty()){e.preventDefault();e.returnValue='';}});
 window.gymProfileCanLeave=()=>!savingWorkout&&GymPlans.leave()&&abandonHistoryEdit();
