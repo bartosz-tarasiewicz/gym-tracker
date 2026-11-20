@@ -552,7 +552,18 @@ function toast(str){const t=document.getElementById('toast');t.textContent=str;t
 function measure(item){return {side:'Powt. / stronę',secSide:'Sekundy / stronę',sec:'Sekundy',stepsSide:'Kroki / stronę'}[item.mode]||'Powt.'}
 function unit(machine){return {plates:'Talerze łącznie',perSide:'Talerze NA STRONĘ',stack:'Wskazanie stosu',dumbbell:'Jeden hantel',single:'Jeden hantel',body:'Masa ciała',kb:'Jeden kettlebell',plate:'Jeden talerz',band:'Guma',unknown:'Jednostka do ustalenia',extra:'Dodatkowy ciężar'}[MACHINE[machine]?.type]||'kg'}
 function currentItem(){const list=state.activeArea==='core'?CORE:activePlan().items;const index=state.activeArea==='core'?state.activeCore:state.activeExercise;return {item:list[Math.min(index,list.length-1)],index,list}}
-function render(force=false){renderSaveStatus();if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));if(state.view==='settings'&&document.getElementById('import-database')){window.GymProfiles?.render();renderCloudPanel();return}document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();window.GymProfiles?.render();updateRestTimer()}
+function render(force=false){
+ const screenTitle=document.getElementById('screen-title');
+ if(screenTitle)screenTitle.textContent=({train:'Trening',history:'Progres',plans:'Plany',settings:'Dane'})[state.view]||'Trening';
+ renderSaveStatus();
+ if(state.view==='plans'&&GymPlans.editing()&&document.getElementById('plan-form')&&!force)return;
+ document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===state.view));
+ if(state.view==='settings'&&document.getElementById('import-database')){
+  window.GymProfiles?.render();renderCloudPanel();return;
+ }
+ document.getElementById('app').innerHTML=state.view==='train'?trainHTML():state.view==='history'?historyHTML():state.view==='plans'?GymPlans.html():settingsHTML();
+ window.GymProfiles?.render();updateRestTimer();
+}
 // Warmups are optional once a work set has been started. Never drag the user
 // back to an unfinished warmup while logging working sets.
 function nextPendingSet(variant){
@@ -832,7 +843,7 @@ function trainHTML(){
  const switcher=old.length>1?'<div class="panel"><label class="label" for="session-picker">Kilka treningów tego dnia — wybierz do edycji</label><select class="equipment" id="session-picker">'+old.map((h,i)=>'<option value="'+esc(h.syncId||'')+'" '+(s===h?'selected':'')+'>Sesja '+(i+1)+' · '+esc(h.started?.slice(11,16)||h.date)+'</option>').join('')+'</select></div>':'';
  const todayBlock='<section class="hero compact-hero"><div class="eyebrow">'+esc(state.selectedDate)+' · '+(saved?'Istniejący zapis':'Nowy trening')+'</div><h1>'+esc(day.name)+'</h1><p class="muted">'+(savedHistoryRecord()?'Popraw wyniki i wybierz „Zapisz zmiany”. Zastąpisz istniejący wpis bez duplikatu.':saved?'Rozpoczęte serie zapisują się automatycznie.':'Wartości startowe są podpowiedzią. Dopiero wpisana zmiana lub potwierdzona seria utworzy zapis.')+'</p></section>';
  const overview='<div class="panel workout-overview"><div class="flex"><div><div class="eyebrow">Wykonane serie</div><div class="title">'+sum.done+'<span class="muted"> / '+sum.planned+'</span></div></div><span class="chip">'+esc(state.selectedDate)+'</span></div><div class="meter"><div style="width:'+(sum.planned?Math.round(100*sum.done/sum.planned):0)+'%"></div></div><p class="hint">Główne: '+sum.mainDone+' · CORE: '+sum.coreDone+'</p></div>';
- const chooseArea='<div class="train-area-switch" role="group" aria-label="Obszar treningu"><button class="btn '+(coreActive?'secondary':'')+'" data-area="main" aria-pressed="'+!coreActive+'">🏋️ Trening</button><button class="btn '+(!coreActive?'secondary':'')+'" data-area="core" aria-pressed="'+coreActive+'">🧱 CORE BONUS</button></div>';
+ const chooseArea='<div class="train-area-switch" role="group" aria-label="Obszar treningu"><button class="btn '+(coreActive?'secondary':'')+'" data-area="main" aria-pressed="'+!coreActive+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 5v14M3 8v8M18 5v14M21 8v8M6 12h12"/></svg> Trening</button><button class="btn '+(!coreActive?'secondary':'')+'" data-area="core" aria-pressed="'+coreActive+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="5"/><path d="M6 9h12M6 15h12M12 3v18"/></svg> CORE</button></div>';
  const completeExercises=day.items.filter(e=>counted(e)>=e.work.length).length;
  const queueDots=day.items.map((e,i)=>'<span class="queue-dot '+(counted(e)>=e.work.length?'complete':'')+(i===state.activeExercise?' selected':'')+'"></span>').join('');
  const queueSummary='<summary><span class="queue-summary-text"><strong>Lista ćwiczeń</strong><small>'+completeExercises+' z '+day.items.length+' ukończonych · wybrane '+(state.activeExercise+1)+'/'+day.items.length+'</small></span>'+
@@ -864,13 +875,13 @@ function trainHTML(){
   '</div><select id="rir" class="rir-select" aria-label="RIR lub inna ocena"><option value="">Inna ocena…</option>'+
   ['0','1','2','3+','Technika OK','Dyskomfort'].map(x=>'<option value="'+x+'" '+(v.rir===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div>'+
   completionHTML;
- const exercise='<div class="panel active-exercise"><div class="exercise-head"><div class="exercise-identity"><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><h2 class="title">'+esc(item.title)+'</h2>'+
+ const exercise='<div class="panel active-exercise"><div class="exercise-head"><span class="exercise-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 5v14M3 8v8M18 5v14M21 8v8M6 12h12"/></svg></span><div class="exercise-identity"><div class="number">'+(coreActive?'CORE BONUS':'ĆWICZENIE')+' '+(index+1)+' / '+list.length+'</div><h2 class="title">'+esc(item.title)+'</h2>'+
   '<p class="active-machine">'+esc(machineName(log.machine))+' · '+esc(unit(log.machine))+'</p></div><span class="exercise-set-progress">'+(v.sets||[]).filter(x=>x.done).length+' / '+(v.sets||[]).length+' serii</span></div>'+
   (coreActive?'<label class="core-toggle"><input type="checkbox" id="enable-core" '+(enabled?'checked':'')+'><strong>Dodaj do treningu</strong></label>':'')+
   '<details class="exercise-options" '+(exerciseOptionsOpen?'open':'')+'><summary>Sprzęt, zamienniki i zdjęcia</summary><div class="exercise-option-content">'+
   '<p class="hint">Dotknij S1 lub R1, aby otworzyć szybką korektę ciężaru i powtórzeń. Każdy wariant sprzętu ma osobne wyniki.</p>'+selectedVariants+photoSection+machineNote+'</div></details>'+
   (coreActive&&!enabled?'<p class="hint">Dodaj ćwiczenie do treningu, aby zapisywać serie.</p>':sets)+
-  '<div class="stepper"><button class="btn secondary" id="prev" '+(index===0?'disabled':'')+'>← Poprzednie</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne →</button></div></div>';
+  '<div class="stepper"><button class="btn secondary" id="prev" aria-label="Poprzednie ćwiczenie" '+(index===0?'disabled':'')+'>←</button><button class="btn" id="next" '+(index===list.length-1?'disabled':'')+'>Następne ćwiczenie →</button></div></div>';
  const isHistory=!!savedHistoryRecord();
  const notes='<div class="panel training-notes"><details class="train-additional" '+(advancedOpen?'open':'')+' ><summary>Notatki i historia zapisów</summary>'+
   '<label class="label" for="notes">Notatki do treningu</label><textarea class="notes" id="notes" placeholder="Maszyna, RIR, samopoczucie, uwagi…">'+esc(s.notes||'')+'</textarea>'+
@@ -910,7 +921,7 @@ function settingsHTML(){
   '<div class="panel"><h2>Import danych</h2>'+
   '<p class="muted">Treningi z pliku <strong>nadpiszą treningi o tych samych datach</strong>. Brakujące zostaną dodane. Daty, których nie ma w pliku, pozostaną bez zmian.</p>'+
   '<label class="label" for="import-database">Wybierz plik JSON</label>'+
-  '<input type="file" id="import-database" accept="application/json,.json" style="width:100%;margin:12px 0;color:#ccd8e1">'+
+  '<input type="file" id="import-database" accept="application/json,.json" style="width:100%;margin:12px 0">'+
   '<p class="hint">Przed importem zobaczysz liczbę aktualizowanych i dodawanych treningów. Import nigdy nie usuwa innych dat.</p></div>'+
   '<div class="panel"><h2>Eksport bazy aktywnego profilu</h2>'+
   '<p class="muted">Pobieramy aktualne rekordy bezpośrednio z Azure, a nie wyłącznie dane przechowywane na tym urządzeniu.</p>'+

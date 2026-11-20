@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 export async function startServer(){
-const files={'/':'index.html','/index.html':'index.html','/storage.js':'storage.js','/sync.js':'sync.js',
+const files={'/light.css':'light.css','/':'index.html','/index.html':'index.html','/storage.js':'storage.js','/sync.js':'sync.js',
  '/week-ui.js':'week-ui.js','/progress-ui.js':'progress-ui.js','/app.js':'app.js','/sw.js':'sw.js',
  '/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/icon-apple.png':'icon-apple.png'};
 const store=new Map(),profileStores=new Map(),profileRegistry=[{id:'default',name:'Profil domyślny'}],profileSettings=new Map(),operations=[];let etagCounter=10;
@@ -44,7 +44,7 @@ const server=http.createServer(async(req,res)=>{
   return json(res,200,{ok:true,id,etag});
  }
  const file=files[url.pathname]||(['/rest-alert.js','/workout-conflicts.js','/profiles.js','/photos.js','/exercise-guides.js','/plans.js','/plan-editor.js','/results.js'].includes(url.pathname)?url.pathname.slice(1):url.pathname.startsWith('/assets/')&&!url.pathname.includes('..')?url.pathname.slice(1):null);if(!file){res.writeHead(404);return res.end('Not Found')}
- res.writeHead(200,{'content-type':({'.html':'text/html','.js':'application/javascript','.svg':'image/svg+xml',
+ res.writeHead(200,{'content-type':({'.css':'text/css','.html':'text/html','.js':'application/javascript','.svg':'image/svg+xml',
   '.wav':'audio/wav','.jpg':'image/jpeg','.webp':'image/webp','.png':'image/png','.webmanifest':'application/manifest+json'})[path.extname(file)]||'text/plain'});
  res.end(fs.readFileSync(file));
 });
